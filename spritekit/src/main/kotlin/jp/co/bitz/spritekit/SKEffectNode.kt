@@ -12,7 +12,12 @@ package jp.co.bitz.spritekit
  * isn't worth the churn unless a real filter/offscreen-rendering pipeline lands later.
  */
 public open class SKEffectNode : SKNode() {
+    /** Stored for API parity; no observable effect without a filter — see this class's KDoc. */
     public var shouldEnableEffects: Boolean = true
+
+    /** Stored for API parity; no observable effect without a filter — see this class's KDoc. */
     public var shouldRasterize: Boolean = false
+
+    /** Stored for API parity; no observable effect without a filter — see this class's KDoc. */
     public var shouldCenterFilter: Boolean = true
 }

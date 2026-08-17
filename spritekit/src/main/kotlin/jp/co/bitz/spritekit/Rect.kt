@@ -39,6 +39,7 @@ public data class Rect(
     }
 
     public companion object {
+        /** A zero-area rectangle at the origin. */
         public val Zero: Rect = Rect(0f, 0f, 0f, 0f)
     }
 }

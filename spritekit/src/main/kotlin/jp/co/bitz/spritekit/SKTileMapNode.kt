@@ -35,6 +35,7 @@ public class SKTileMapNode(
     public var tileSet: SKTileSet,
     public val numberOfColumns: Int,
     public val numberOfRows: Int,
+    /** Each cell's footprint, in this node's own local space. Defaults to [SKTileSet.defaultTileSize]. */
     public val tileSize: Vector2 = tileSet.defaultTileSize,
     fillWith: SKTileGroup? = null,
 ) : SKNode() {

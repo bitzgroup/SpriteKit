@@ -14,15 +14,19 @@ public class SKConstraint internal constructor(
     public var enabled: Boolean = true
 
     public companion object {
+        /** Keeps [SKNode.position]'s x component within [range] (measured in the node's parent's coordinate space). */
         public fun positionX(range: SKRange): SKConstraint = SKConstraint(SKConstraintKind.PositionX(range))
 
+        /** Keeps [SKNode.position]'s y component within [range] (measured in the node's parent's coordinate space). */
         public fun positionY(range: SKRange): SKConstraint = SKConstraint(SKConstraintKind.PositionY(range))
 
+        /** Keeps [SKNode.position] within [x]/[y] — equivalent to combining [positionX] and [positionY]. */
         public fun position(
             x: SKRange,
             y: SKRange,
         ): SKConstraint = SKConstraint(SKConstraintKind.Position(x, y))
 
+        /** Keeps [SKNode.zRotation] within [range]. */
         public fun zRotation(range: SKRange): SKConstraint = SKConstraint(SKConstraintKind.ZRotation(range))
 
         /** Keeps this node's distance from [to] within [range] (measured in the node's parent's coordinate space). */

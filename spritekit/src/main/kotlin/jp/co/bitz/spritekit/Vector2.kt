@@ -44,6 +44,7 @@ public data class Vector2(
     }
 
     public companion object {
+        /** The zero vector/origin point. */
         public val Zero: Vector2 = Vector2(0f, 0f)
     }
 }

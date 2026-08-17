@@ -37,32 +37,38 @@ public class SKAction internal constructor(
         }
 
     public companion object {
+        /** Moves this node to [position] (in its parent's coordinate space) over [duration]. */
         public fun moveTo(
             position: Vector2,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.MoveTo(position))
 
+        /** Moves this node by [delta], relative to wherever it is when this action starts, over [duration]. */
         public fun moveBy(
             delta: Vector2,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.MoveBy(delta))
 
+        /** Scales this node uniformly to [scale] on both axes over [duration]. */
         public fun scaleTo(
             scale: Float,
             duration: Duration,
         ): SKAction = scaleTo(scale, scale, duration)
 
+        /** Scales this node to [xScale]/[yScale] independently over [duration]. */
         public fun scaleTo(
             xScale: Float,
             yScale: Float,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.ScaleTo(xScale, yScale))
 
+        /** Scales this node uniformly by [scale] (relative to its current scale) on both axes over [duration]. */
         public fun scaleBy(
             scale: Float,
             duration: Duration,
         ): SKAction = scaleBy(scale, scale, duration)
 
+        /** Scales this node by [dx]/[dy] (relative to its current scale) independently over [duration]. */
         public fun scaleBy(
             dx: Float,
             dy: Float,
@@ -75,6 +81,7 @@ public class SKAction internal constructor(
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.RotateTo(angle))
 
+        /** Rotates by [delta] radians, relative to this node's current rotation, over [duration]. */
         public fun rotateBy(
             delta: Float,
             duration: Duration,
@@ -92,8 +99,10 @@ public class SKAction internal constructor(
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.ResizeBy(delta))
 
+        /** Fades [SKNode.alpha] to `1` (fully opaque) over [duration]. */
         public fun fadeIn(duration: Duration): SKAction = fadeAlphaTo(1f, duration)
 
+        /** Fades [SKNode.alpha] to `0` (fully transparent) over [duration]. */
         public fun fadeOut(duration: Duration): SKAction = fadeAlphaTo(0f, duration)
 
         /**
@@ -107,13 +116,16 @@ public class SKAction internal constructor(
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.FadeAlphaTo(alpha))
 
+        /** Fades [SKNode.alpha] by [delta], relative to its current value, over [duration]. */
         public fun fadeAlphaBy(
             delta: Float,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.FadeAlphaBy(delta))
 
+        /** Sets [SKNode.isHidden] to `true`, instantly. */
         public fun hide(): SKAction = SKAction(Duration.ZERO, SKActionKind.Hide)
 
+        /** Sets [SKNode.isHidden] to `false`, instantly. */
         public fun unhide(): SKAction = SKAction(Duration.ZERO, SKActionKind.Unhide)
 
         /** No-op on nodes other than [SKSpriteNode]. */
@@ -132,6 +144,7 @@ public class SKAction internal constructor(
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.Colorize(null, colorBlendFactor))
 
+        /** Does nothing for [duration], then finishes. */
         public fun wait(duration: Duration): SKAction = SKAction(duration, SKActionKind.Wait)
 
         /**
@@ -155,6 +168,7 @@ public class SKAction internal constructor(
         /** Runs [block] once, taking no time. */
         public fun run(block: () -> Unit): SKAction = SKAction(Duration.ZERO, SKActionKind.RunBlock(block))
 
+        /** Removes this node from its parent, instantly — see [SKNode.removeFromParent]. */
         public fun removeFromParent(): SKAction = SKAction(Duration.ZERO, SKActionKind.RemoveFromParent)
 
         /** Runs [actions] one after another, each starting once the previous finishes. */
@@ -169,11 +183,13 @@ public class SKAction internal constructor(
             return SKAction(total, SKActionKind.Group(actions))
         }
 
+        /** Runs [action] [count] times in a row. */
         public fun repeat(
             action: SKAction,
             count: Int,
         ): SKAction = SKAction(action.duration * count, SKActionKind.Repeat(action, count))
 
+        /** Runs [action] over and over, indefinitely — never finishes on its own. */
         public fun repeatForever(action: SKAction): SKAction =
             SKAction(
                 Duration.INFINITE,

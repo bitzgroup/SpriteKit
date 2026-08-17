@@ -8,9 +8,13 @@ package jp.co.bitz.spritekit
  * out to the notification path; see `docs/API_COMPATIBILITY.md`.
  */
 public class SKPhysicsContact internal constructor(
+    /** One of the two touching bodies. Order is arbitrary — not necessarily the order either was added to the world. */
     public val bodyA: SKPhysicsBody,
+    /** The other touching body. */
     public val bodyB: SKPhysicsBody,
+    /** Where [bodyA] and [bodyB] touch, in world space. */
     public val contactPoint: Vector2,
+    /** The contact surface's normal at [contactPoint], in world space, pointing from [bodyA] towards [bodyB]. */
     public val contactNormal: Vector2,
     public val collisionImpulse: Float,
 )
