@@ -4,8 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (project scaffolding) is complete: a Gradle Android library project builds, lints, and has
-a `maven-publish` scaffold. No `SK*` source classes are implemented yet. See
+Phase 0 (project scaffolding), Phase 1 (threading & view foundation), Phase 2 (scene graph core:
+`SKNode`/`SKScene`), Phase 3 (textures & sprite rendering: `SKTexture`, `SKTextureAtlas`,
+`SKSpriteNode`), Phase 4 (shapes & labels: `SKShapeNode`, `SKLabelNode`), Phase 5 (actions:
+`SKAction`'s factory surface plus the frame-stepped `stepAction` executor, wired into
+`SKNode.run`/`SKView`'s frame loop), Phase 6 (camera, effects, crop, constraints: `SKCameraNode`,
+`SKEffectNode`, `SKCropNode`, `SKConstraint`/`SKRange`), Phase 7 (physics, complete:
+`SKPhysicsWorld`/`SKPhysicsBody` — a from-scratch semi-implicit-Euler/SAT rigid-body solver wired
+into `SKView`'s frame loop; `SKPhysicsContact`/`SKPhysicsContactDelegate` — contact-test bitmasks
+decoupled from collision bitmasks; the `SKPhysicsJoint` family — pin/spring/fixed/sliding/limit,
+lazily-bound anchors, a two-stage velocity-then-position solver; `SKFieldNode` — radial/linear
+gravity, drag, velocity fields), Phase 8 (particles: `SKEmitterNode`/`SKKeyframeSequence`,
+stepped once per frame independent of `SKPhysicsWorld`, rendering through the same render-command
+pipeline sprites/labels/shapes already use), Phase 9 (tile maps: `SKTileSet`/`SKTileGroup`/
+`SKTileGroupRule`/`SKTileDefinition`/`SKTileMapNode`, grid-only, with adjacency-rule-based
+automapping and its own per-map animation clock), Phase 10 (input: full `SKNode` touch
+dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, one `SKTouch` at a
+time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKScene`), and Phase
+11 (transitions: `SKTransition` fade/crossFade/moveIn/push/reveal/doorway/flip,
+`SKView.presentScene(_:transition:)` — no offscreen-framebuffer support, so every effect reduces
+to `glViewport` offset/size, a whole-scene alpha multiplier, and (`doorway` only) a scissor clip),
+Phase 12 (audio: `SKAudioNode` — one persistent `android.media.MediaPlayer` per node, addressed
+by a plain path/URL string rather than an app-bundle `fileNamed:` lookup, driven by
+`play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate` `SKAction`s reusing the existing
+frame-stepped action machinery; `SKAction.playSoundFileNamed` is a fire-and-forget `MediaPlayer`
+clip special-cased in the action executor since its real duration isn't known ahead of time; real
+playback is isolated behind an `SKAudioPlaybackHandle`/`SKAudioPlaybackFactory` seam so
+`SKAudioNode` itself stays pure/unit-testable), Phase 13 (shaders: `SKShader`/`SKUniform` on
+`SKSpriteNode` only — `SKShader.source` is a complete GLSL ES fragment shader compiled in place of
+the renderer's default one, rather than Apple's unspecified shader-modifier snippet system;
+`SKUniform` is a Kotlin sealed-value shape covering `float`/`vector_float2`/`texture`; every
+batched run of render commands now also shares a shader identity, resolved to a lazily-(re)compiled
+`SKProgramBinding` the same way `SKTexture` lazily re-uploads; a shader that fails to compile falls
+back to the default program rather than crashing the render thread; ships with one built-in example,
+`SKShader.grayscale`), and Phase 14 (documentation: full public-API KDoc coverage,
+`docs/API_COMPATIBILITY.md`, and README usage examples per subsystem) are complete — the internal
+renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile maps through one
+generalized triangle-list pipeline,
+camera-relative and crop-clipped via `glScissor` when applicable. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
 
 ## Intent
@@ -68,9 +104,9 @@ now — see `docs/ROADMAP.md` Phase 0.
 - `spritekit/` — the core library module (`jp.co.bitz.spritekit`), zero third-party dependencies;
   `SKView` here is a plain `GLSurfaceView` subclass. Namespace/group configured via
   `gradle.properties` (`GROUP`, `VERSION_NAME`) and `spritekit/build.gradle.kts`.
-- `spritekit-compose/` — (Phase 1) thin Jetpack Compose wrapper module, depends on `:spritekit` +
-  Compose; exposes `SKView` as a `@Composable` via `AndroidView`. The documented, recommended way
-  to use this library, but not the only way — see `docs/ARCHITECTURE.md`.
+- `spritekit-compose/` — thin Jetpack Compose wrapper module, depends on `:spritekit` + Compose;
+  exposes `SKView` as a `@Composable` via `AndroidView`. The documented, recommended way to use
+  this library, but not the only way — see `docs/ARCHITECTURE.md`.
 - `gradle/libs.versions.toml` — version catalog; add new dependencies/plugins here, not as
   hardcoded version strings in build files.
 - `config/detekt/detekt.yml` — detekt rule overrides (builds upon detekt's default ruleset).
@@ -98,7 +134,9 @@ branching model.
   (`ktlintCheck detekt assemble testDebugUnitTest`) must pass first.
 - `release/*`/`hotfix/*` don't exist yet: the first release (`release/0.1.0`, tagged on `main`) is cut
   once the full `docs/ROADMAP.md` plan is complete. Until then, all work happens on `feature/*`
-  branches merged into `develop`.
+  branches merged into `develop` — `main` is not touched again until that first release; PRs #2 and
+  #4 (bootstrapping `main` from an empty initial state early in Phase 0) were a one-time exception,
+  not an ongoing pattern.
 
 ## Working in this repo
 

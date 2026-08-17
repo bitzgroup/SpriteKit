@@ -77,72 +77,143 @@ Compose wrapper" section for the full rationale and API shape.
 *No GameplayKit precedent — this is the Android-specific infrastructure layer everything else is
 built on. See `docs/ARCHITECTURE.md` for the full design.*
 
-- [ ] `SKView` (`:spritekit`) — `GLSurfaceView` subclass hosting a scene (`presentScene`), owns the
+- [x] `SKScene` — minimal Phase 1 shell: just the per-frame lifecycle callbacks
+      (`update`/`didEvaluateActions`/`didSimulatePhysics`/`didApplyConstraints`/`didFinishUpdate`)
+      and `isPaused`. Apple's `SKScene` also extends `SKNode` for the scene graph (`size`/
+      `scaleMode`/`anchorPoint`/background/children) — Phase 2 extends this class to subclass
+      `SKNode` once it exists, rather than introducing a throwaway placeholder type
+- [x] `SKView` (`:spritekit`) — `GLSurfaceView` subclass hosting a scene (`presentScene`), owns the
       `GLSurfaceView.Renderer` that drives the frame loop; works directly in XML/View apps
-- [ ] Frame loop: `RENDERMODE_CONTINUOUSLY`; per-frame order matches SpriteKit's documented
+- [x] Frame loop: `RENDERMODE_CONTINUOUSLY`; per-frame order matches SpriteKit's documented
       sequence — `update(deltaTime)` → evaluate actions → simulate physics → apply constraints →
-      render → `didFinishUpdate()`
-- [ ] `SKView.runOnGLThread { }` / `SKView.runOnUiThread { }` — the UI-thread ↔ render-thread bridge
+      render → `didFinishUpdate()` (render step is just a `glClear` until Phase 3's pipeline lands)
+- [x] `SKView.runOnGLThread { }` / `SKView.runOnUiThread { }` — the UI-thread ↔ render-thread bridge
       utilities
-- [ ] Touch-event marshaling: UI-thread `MotionEvent` snapshotted into an immutable value, handed
-      to the render thread via `runOnGLThread`
-- [ ] `SKResourceRegistry` — render-thread-confined GPU resource lifecycle groundwork (context-loss
-      recovery on `onSurfaceCreated`); no actual GPU resources yet (those start in Phase 3)
-- [ ] Classic-View lifecycle: `SKView.onPause()`/`onResume()`, callable from `Activity`/`Fragment`
+- [x] Touch-event marshaling: UI-thread `MotionEvent` snapshotted into an immutable `SKTouchEvent`,
+      handed to the render thread via `runOnGLThread` and delivered through a settable
+      `SKView.onTouch` callback; real `SKNode`/`SKScene` touch dispatch replaces that callback in
+      Phase 10 once nodes exist. Coordinates stay in view space (pixels, y-down) at this stage —
+      converting to the scene's y-up space needs the scene size/scale Phase 2/3 add
+- [x] `SKResourceRegistry` — render-thread-confined GPU resource lifecycle groundwork (reload hook
+      for context loss, via `SKReloadableResource`); no actual GPU resources yet (those start in
+      Phase 3)
+- [x] Classic-View lifecycle: `SKView.onPause()`/`onResume()`, callable from `Activity`/`Fragment`
       callbacks (plain `GLSurfaceView.onPause`/`onResume` + `scene.isPaused`)
-- [ ] `:spritekit-compose` module — `@Composable fun SKView(scene, modifier, state)` via
+- [x] `:spritekit-compose` module — `@Composable fun SKView(scene, modifier, state)` via
       `AndroidView(factory = { context -> SKView(context) })`, `rememberSKViewState()` delegating
       to the wrapped `SKView`'s bridge utilities, and a `DisposableEffect` on `LocalLifecycleOwner`
       that calls the wrapped view's `onPause`/`onResume` automatically
 
 ## Phase 2 — Scene Graph Core
 
-- [ ] `SKNode` — transform hierarchy (`position`, `zPosition`, `zRotation`, `xScale`/`yScale`,
-      `alpha`, `isHidden`, `isPaused`, `name`, `userData`), `addChild`/`removeFromParent`,
-      `childNode(withName:)`, `enumerateChildNodes(withName:)`, coordinate conversion
-      (`convert(_:to:)`/`convert(_:from:)`), `calculateAccumulatedFrame()`, `intersects(_:)`
-- [ ] `SKScene` — `size`, `scaleMode` (`.fill`/`.aspectFill`/`.aspectFit`/`.resizeFill`),
-      `anchorPoint`, background color, lifecycle callbacks (`update`, `didEvaluateActions`,
-      `didSimulatePhysics`, `didApplyConstraints`, `didFinishUpdate`)
-- [ ] Pure Kotlin, no GL dependency — fully unit-testable independent of a live GL context
+- [x] `Vector2` — this library's `CGPoint`/`CGVector` stand-in (see `docs/API_COMPATIBILITY.md`);
+      `Rect` — its `CGRect` stand-in, a plain Kotlin value type rather than
+      `android.graphics.RectF` (whose instance methods aren't safe to call from plain JVM unit
+      tests without Robolectric)
+- [x] `SKNode` — transform hierarchy (`position`, `zPosition`, `zRotation`, `xScale`/`yScale`,
+      `alpha`, `isHidden`, `isPaused`, `name`, `userData`), `addChild`/`removeFromParent`/
+      `removeAllChildren`, `childNode`/`enumerateChildNodes` (direct-child exact-name match only;
+      see `docs/API_COMPATIBILITY.md`), coordinate conversion (`convertTo`/`convertFrom`, renamed
+      from Apple's `convert(_:to:)`/`convert(_:from:)` — see `docs/API_COMPATIBILITY.md`),
+      `calculateAccumulatedFrame()`, `intersects(_:)`
+- [x] `SKScene` — extended Phase 1's lifecycle-callback-only shell to subclass `SKNode` and added
+      `size`, `scaleMode` (`.fill`/`.aspectFill`/`.aspectFit`/`.resizeFill`), `anchorPoint`,
+      `backgroundColor`
+- [x] Pure Kotlin, no GL dependency — fully unit-testable independent of a live GL context (28
+      unit tests across `Vector2`/`Rect`-adjacent transform math, child management, coordinate
+      conversion, and accumulated-frame/intersection logic)
 
 ## Phase 3 — Textures & Sprite Rendering
 
-- [ ] `SKTexture` — from `Bitmap`/drawable resource/asset, `filteringMode`, rect subset
-- [ ] GPU resource manager wired into Phase 1's `SKResourceRegistry`
-- [ ] OpenGL ES 2.0 sprite renderer: default vertex/fragment shader program, draw list flattened
-      from the scene graph and sorted by `zPosition` (ties broken by tree order, per Apple's
-      documented rule), batched by texture + blend mode
-- [ ] `SKSpriteNode` — `texture`, `color`/`colorBlendFactor`, `size`, `anchorPoint`, `blendMode`
-- [ ] `SKTextureAtlas` — runtime atlas packer (Apple auto-packs atlases at Xcode build time; no
-      Android equivalent, so this is a runtime alternative — see `docs/API_COMPATIBILITY.md`)
+- [x] `SKTexture` — wraps a `Bitmap`, `filteringMode`, rect subset (`SKTexture(rect:in:)`, sharing
+      GPU state with the texture it's carved from — see `docs/ARCHITECTURE.md`)
+- [x] `SKBlendMode`, `SKTextureFilteringMode`
+- [x] GPU resource manager: `SKResourceRegistry.generation`, a lazy-upload counter added alongside
+      Phase 1's register/`reloadAll` callback list — see `docs/ARCHITECTURE.md`
+- [x] OpenGL ES 2.0 sprite renderer (`SKSpriteRenderer`, internal): default vertex/fragment shader
+      program, draw list flattened from the scene graph (`buildSpriteDrawList`) and sorted by
+      `zPosition` (ties broken by tree order, per Apple's documented rule), batched by texture +
+      blend mode. `SKScene.scaleMode` letterbox/crop math (`computeSceneProjection`) is pure
+      Kotlin and unit-tested; the actual `GLES20`/`GLUtils`/`Matrix` calls are not — see this
+      phase's testing note below
+- [x] `SKSpriteNode` — `texture`, `color`/`colorBlendFactor`, `size`, `anchorPoint`, `blendMode`
+- [x] `SKTextureAtlas` — runtime atlas packer (Apple auto-packs atlases at Xcode build time; no
+      Android equivalent, so this is a runtime alternative — see `docs/API_COMPATIBILITY.md`); the
+      packing layout algorithm (`packTextureAtlas`) is pure Kotlin and unit-tested separately from
+      the actual bitmap compositing
+- [x] Testing note: `SKTexture`/`SKSpriteRenderer`/`SKTextureAtlas.pack` all ultimately touch
+      `android.graphics.Bitmap`/`Canvas` or `GLES20`/`GLUtils`, none of which are safe to call from
+      plain JVM unit tests without Robolectric — consistent with `CLAUDE.md`'s documented testing
+      gap. Everything reachable *without* constructing a real `Bitmap` (draw-list building,
+      alpha/visibility inheritance, zPosition sorting, color-blend math, scaleMode projection math,
+      atlas packing layout) is still pure Kotlin and unit-tested
 
 ## Phase 4 — Shapes & Labels
 
-- [ ] `SKShapeNode` — fill/stroke rendered from a triangulated `android.graphics.Path`,
-      `strokeColor`/`fillColor`/`lineWidth`/`glowWidth`
-- [ ] `SKLabelNode` — `text`/`fontName`/`fontSize`/`fontColor`/alignment modes, glyphs rendered via
-      `android.graphics.Paint` into a cached texture (no CoreText equivalent on Android — see
-      `docs/API_COMPATIBILITY.md`)
+- [x] Generalized Phase 3's quad-only render pipeline into a flat-triangle-list one
+      (`SKSpriteRenderer` → `SKSceneRenderer`, `buildSpriteDrawList` → `buildRenderCommands`) so
+      shapes (arbitrary triangle meshes, no texture) interleave correctly by `zPosition` with
+      sprites and labels (both still just textured quads) in one draw list — needed because all
+      three node types must sort together, not as separate draw passes
+- [x] `SKShapeNode` — `path` (an `android.graphics.Path`, this library's `CGPath` stand-in),
+      `strokeColor`/`fillColor`/`lineWidth`/`glowWidth` (stored, not rendered — see
+      `docs/API_COMPATIBILITY.md`). Fill via ear-clipping triangulation (`triangulateFill`),
+      stroke via a per-segment quad ribbon (`triangulateStroke`) — both pure Kotlin and
+      unit-tested; flattening the `Path`'s curves into line segments first (`flattenPath`, via
+      `PathMeasure`) is not, for the same Android-API-safety reasons as everything else touching
+      `Bitmap`/`Canvas`/`GLES20`
+- [x] `SKLabelNode` — `text`/`fontName`/`fontSize`/`fontColor`/alignment modes, glyphs rendered via
+      `android.graphics.Paint`/`Canvas` into a cached texture, regenerated only when the text or
+      font actually changes (no CoreText equivalent on Android — see
+      `docs/API_COMPATIBILITY.md`). The alignment-offset math (`labelQuadCorners`) is pure Kotlin
+      and unit-tested separately from the `Paint`-based measurement/rendering it consumes
 
 ## Phase 5 — Actions
 
-- [ ] `SKAction` — full factory surface: move/scale/rotate/fade/resize/wait/run/sequence/group/
-      repeat/repeatForever/speed/reversed/customAction/colorize/follow-path/animate-with-textures/
-      playSoundFileNamed
-- [ ] `SKActionTimingMode` — linear/easeIn/easeOut/easeInEaseOut/custom timing function
-- [ ] Frame-stepped executor (a per-node list of running action state machines evaluated each
-      `update(deltaTime)`) — not coroutines/suspend, to match SpriteKit's exact per-frame
-      evaluation timing and keep `speed`/pause semantics simple
+- [x] `SKAction` — factory surface: `moveTo`/`moveBy`, `scaleTo`/`scaleBy` (uniform and per-axis),
+      `rotateTo`/`rotateBy` (shortest angular path), `resizeTo`/`resizeBy`, `fadeIn`/`fadeOut`/
+      `fadeAlphaTo`/`fadeAlphaBy`, `hide`/`unhide`, `colorize`, `wait`/`wait(withRange:)`, `run`
+      (block), `removeFromParent`, `sequence`/`group`/`repeat`/`repeatForever`, `customAction`,
+      `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`. **Deferred**
+      (see "Explicitly Out of Scope" below): `followPath`, `playSoundFileNamed`,
+      `run(_:onChildWithName:)`
+- [x] `SKActionTimingMode` — linear/easeIn/easeOut/easeInEaseOut, plus a custom `timingFunction`
+      property
+- [x] Frame-stepped executor (`SKActionState`/`stepAction`, per running action — not
+      coroutines/suspend, to match SpriteKit's exact per-frame evaluation timing and keep
+      `speed`/pause semantics simple), wired into `SKNode.run`/`removeAction`/`stepActions` and
+      `SKView`'s frame loop (between `update(deltaTime)` and `didEvaluateActions()`). Correctly
+      carries "leftover" time from a finished leaf action into the next step of an enclosing
+      `sequence`/`repeat` within the same frame (important at low frame rates); a `group`'s
+      children may each finish at a different point within a frame, but the group itself always
+      reports finishing with zero leftover rather than tracking the exact remainder — a documented
+      simplification, see `docs/API_COMPATIBILITY.md`. Pure Kotlin, no OpenGL/Android
+      dependency — fully unit-tested (28 tests covering leaf interpolation, overflow/leftover
+      carrying, sequence/group/repeat composition, `reversed()`, and `SKNode` integration)
 
 ## Phase 6 — Camera, Effects, Crop, Constraints
 
-- [ ] `SKCameraNode` — viewport transform, `scene.camera`, `containsNode`
-- [ ] `SKEffectNode` — `shouldEnableEffects`/`shouldRasterize` baseline only; Core Image `filter`
-      is **out of scope** (no Android equivalent)
-- [ ] `SKCropNode` — `maskNode`
-- [ ] `SKConstraint`/`SKRange`/`SKRegion` — applied after physics, per Apple's documented
-      per-frame order
+- [x] `SKCameraNode` — `scene.camera`, `containsNode`. The renderer expresses every render
+      command's vertices relative to the camera (via `SKNode.convertTo`, from Phase 2) instead of
+      the scene directly when one is set — moving/scaling the camera pans/zooms the view, reusing
+      already-tested transform-conversion code rather than building separate view-matrix math
+- [x] `SKEffectNode` — `shouldEnableEffects`/`shouldRasterize`/`shouldCenterFilter` baseline only
+      (stored, no observable effect); Core Image `filter` is **out of scope** (no Android
+      equivalent) — see `docs/API_COMPATIBILITY.md`
+- [x] `SKCropNode` — `maskNode`, clipping to its *bounding box* via `glScissor` (not true
+      per-pixel masking — see `docs/API_COMPATIBILITY.md`). The render command list carries an
+      inherited (and, for nested crop nodes, progressively narrowed) `clipRect`; the renderer
+      batches by (texture, blend mode, clip rect) and toggles `GL_SCISSOR_TEST` between runs
+- [x] `SKConstraint`/`SKRange` — `positionX`/`positionY`/`position`/`zRotation`/`distance`/
+      `orient`, applied after physics, per Apple's documented per-frame order. `SKRange`'s
+      `SKRange(lowerLimit:)`/`SKRange(upperLimit:)` renamed to `atLeast`/`atMost` (proactively,
+      to avoid the same Kotlin-overload-resolution collision `SKNode.convertTo`/`convertFrom` hit)
+- [x] `SKRegion` — not implemented; every constraint Apple documents as taking one
+      (`SKConstraint.positionX(_:y:)` and friends) actually takes an `SKRange`, so there was
+      nothing in this phase's scope that needed it — see `docs/API_COMPATIBILITY.md`
+- [x] Pure Kotlin, no OpenGL/Android dependency — fully unit-tested (27 new tests: constraint
+      math, `SKCameraNode.containsNode`, `Rect.intersection`, and crop-node clip-rect
+      propagation/nesting)
 
 ## Phase 7 — Physics
 
@@ -151,41 +222,241 @@ Custom sequential-impulse 2D rigid-body engine, zero external dependencies (matc
 own physics engine internals aren't public, same framing GameplayKit uses for its undocumented
 algorithms (steering, noise, Gaussian sampling).
 
-- [ ] **7a** — `SKPhysicsWorld`/`SKPhysicsBody` core: circle/rectangle/polygon/edge-loop shapes,
+- [x] **7a** — `SKPhysicsWorld`/`SKPhysicsBody` core: circle/rectangle/polygon/edge-loop shapes,
       gravity, dynamics (mass/density/friction/restitution/damping), semi-implicit Euler
-      integration, SAT narrow-phase, category/collision/contactTest bitmasks
-- [ ] **7b** — `SKPhysicsContact`/`SKPhysicsContactDelegate` (`didBegin`/`didEnd`)
-- [ ] **7c** — `SKPhysicsJoint` family: pin, spring, fixed, sliding, limit
-- [ ] **7d** — `SKFieldNode`, subset: radial gravity, linear gravity, drag, velocity (noise,
-      turbulence, electric, magnetic fields deferred — see "Explicitly Out of Scope")
+      integration, SAT narrow-phase, category/collision/contactTest bitmasks. `SKPhysicsShape`
+      (circle/convex-polygon/edge-chain) carries hand-verified mass/moment-of-inertia formulas
+      (solid-disk for circles, the standard polygon second-moment sum for polygons — verified
+      against the known `I = mass*(w²+h²)/12` square formula); `density` is the source of truth,
+      so setting `.mass` back-computes it. `SKPhysicsBody` factories match Apple's:
+      `circleOfRadius`/`rectangleOf`/`polygonFrom`/`edgeLoopFrom`/`edgeFrom` — `polygonFrom` takes
+      a `List<Vector2>` (no `CGPath` equivalent), and `bodies(fromTexture:...)` texture-alpha-mask
+      bodies aren't implemented. `SKWorldShape`/`narrowPhase` (`SKPhysicsCollision.kt`) is pure
+      Kotlin and unit-tested independent of any node/scene: circle-circle, circle-polygon (inside
+      and outside cases), polygon-polygon SAT, and circle/polygon-vs-edge-chain
+      (segment-by-segment); two edge chains never collide with each other (both are static), and
+      contact points for polygon-polygon/polygon-chain cases are an edge midpoint rather than a
+      true clipped contact point. `SKPhysicsSimulation.kt`'s solver is **linear-only**: sequential
+      impulses resolve normal (restitution) and tangential (Coulomb friction) velocity, but
+      contact-point torque (spin from an off-center hit) is deferred — `applyTorque`/
+      `applyAngularImpulse` still work, collision response just doesn't itself impart spin. O(n²)
+      AABB broad phase, not scoped to large body counts; Baumgarte positional correction
+      (20%/step, above a small penetration slop) resolves leftover overlap after the velocity
+      solve. A node's world-space shape reuses `SKNode.convertTo` (the same trick Phase 6's camera
+      support used); a circle's world radius is measured from where its local +x edge lands,
+      exact under uniform scale/rotation, an ellipse-as-circle approximation under non-uniform
+      scale. Adds `SKNode.physicsBody`/`SKScene.physicsWorld`; `SKView`'s frame loop now calls
+      `simulatePhysics(scene, deltaTime)` between action evaluation and `didSimulatePhysics()`.
+      Pure Kotlin, unit-tested without a live GL/Android context (36 new tests: mass/inertia
+      formulas, collision manifolds, and full simulation steps — gravity, resting contacts,
+      bitmask filtering, `isPaused`/`pinned` bodies)
+- [x] **7b** — `SKPhysicsContact`/`SKPhysicsContactDelegate` (`didBegin`/`didEnd`). Contact
+      notification is decoupled from physical collision response: every touching pair found by
+      the narrow phase is checked against `contactTestBitMask` (Apple's documented rule — reported
+      if either body's category is in the *other*'s contact-test mask) independent of whether
+      `collisionBitMask` lets them physically collide, so a zero-`collisionBitMask` "sensor" body
+      still reports contact without ever being pushed. `SKPhysicsWorld` tracks the set of
+      currently-touching pairs (keyed by object identity, not equality) across frames to fire
+      `didBegin` only on the first touching frame and `didEnd` only once they stop being observed
+      touching — including when one body leaves the scene entirely, since it simply stops
+      appearing in that frame's observations. `SKPhysicsContact.collisionImpulse` is always `0` —
+      not threaded back from the solver in this port, see `docs/API_COMPATIBILITY.md`. 5 new tests
+- [x] **7c** — `SKPhysicsJoint` family: pin, spring, fixed, sliding, limit. Constructed via
+      idiomatic Kotlin constructors (`SKPhysicsJointPin(bodyA, bodyB, anchor)`, etc.) rather than
+      Apple's `joint(withBodyA:bodyB:...)` class-method factories; added to a scene's simulation
+      via `SKPhysicsWorld.add`/`remove`/`removeAllJoints`. Every joint kind's per-body anchor
+      offset (and, for fixed/spring/limit, its other one-time state — relative rotation, spring
+      rest length, limit's default `maxLength`) is bound lazily, from each body's *current*
+      transform, the first frame the simulation actually processes it — not at construction time,
+      since (unlike Apple) a body doesn't know its owning node, so the joint can't resolve
+      world-to-local anchor conversion until a simulation step hands it that context; see
+      `docs/API_COMPATIBILITY.md`. The solver is two-stage per step, mirroring contacts: a
+      velocity-constraint pass (pin/fixed cancel all relative anchor-point velocity; sliding
+      cancels only the perpendicular component; limit cancels the outward component once taut;
+      spring applies a velocity-changing force instead, `-stiffness·stretch - damping·relative
+      velocity` with `stiffness = (2π·frequency)²`) folded into the same iteration loop as contact
+      resolution, followed by a Baumgarte position-correction pass — the velocity pass turned out
+      to be load-bearing, not optional: pure position correction alone couldn't keep up with
+      gravity's continuously-growing velocity error and drifted. `SKPhysicsJointFixed` additionally
+      re-syncs relative rotation kinematically each step (not via torque). `SKPhysicsJointPin`'s
+      angle-limit properties, `SKPhysicsJointSliding`'s axis (fixed in world space, doesn't rotate
+      with either body), and `reactionForce`/`reactionTorque` are simplified/deferred — see
+      `docs/API_COMPATIBILITY.md`. 9 new tests, one per joint kind's core behavior plus world
+      joint-list management and a defensive "referenced body left the scene" case
+- [x] **7d** — `SKFieldNode`, subset: radial gravity, linear gravity, drag, velocity (noise,
+      turbulence, electric, magnetic, spring, vortex, and checkerboard-texture fields deferred —
+      see "Explicitly Out of Scope"). One concrete class configured by factory functions
+      (`radialGravityField`/`linearGravityField`/`dragField`/`velocityField`), matching Apple's own
+      shape (a single `SKFieldNode` class with class-method factories, unlike `SKPhysicsJoint`'s
+      genuinely-separate subclasses). Radial gravity's `strength`/`falloff`/`minimumRadius`
+      formula (`strength / max(distance, minimumRadius)^falloff`, direction towards the field) is
+      a standard inverse-power model, not necessarily Apple's own undocumented one — same
+      *contract-conformant, not bit-identical* framing as the rest of physics. A field only affects
+      a body if `(field.categoryBitMask and body.fieldBitMask) != 0`, the new
+      `SKPhysicsBody.fieldBitMask`. Force-based fields (radial/linear gravity, drag) integrate into
+      velocity like gravity does; `velocityField` instead directly overrides a body's velocity each
+      step (matching Apple's documented "sets velocity, not acceleration" behavior), applied after
+      the force-based fields so it wins when both affect the same body. `region` isn't implemented
+      (every field is unbounded, as if `region` were `null` — this port has no `SKRegion`, the same
+      gap Phase 6 documented for `SKConstraint`) and `isExclusive` is stored but not enforced. 8 new
+      tests: each field kind's core behavior, `isEnabled`/bitmask gating, and non-dynamic bodies
+      being unaffected
 
 ## Phase 8 — Particles
 
-- [ ] `SKEmitterNode` — programmatic configuration only (no `.sks` particle-editor file format to
-      parse — see `docs/API_COMPATIBILITY.md`)
-- [ ] `SKKeyframeSequence` — used for particle color/scale/alpha ramps and other keyframed values
-- [ ] Particle rendering reuses Phase 3's sprite batcher
+- [x] `SKEmitterNode` — programmatic configuration only (no `.sks` particle-editor file format to
+      parse — see `docs/API_COMPATIBILITY.md`). Full `particleXxx`/`particleXxxRange`/
+      `particleXxxSpeed` surface (birth rate, lifetime, position/speed/emission-angle range,
+      x/yAcceleration, alpha/scale/rotation/color-blend-factor/z-position with their range and
+      per-second-speed variants), `particleColor`/`particleColorSequence`, `particleBlendMode`,
+      `fieldBitMask` (particles respond to matching `SKFieldNode`s — reuses Phase 7d's field-force
+      formulas, refactored to work from a world position/velocity pair instead of an
+      `SKPhysicsBody` so both can share them), `advanceSimulationTime`/`resetSimulation`.
+      `particleSize` has no Apple equivalent (Apple auto-sizes from the texture's pixel
+      dimensions; this port can't without reading `Bitmap` dimensions outside the GL-only code
+      paths, the same reason `SKSpriteNode.size` isn't auto-derived either). `targetNode` and the
+      scale/rotation/alpha sibling `SKKeyframeSequence` properties aren't implemented — see
+      `docs/API_COMPATIBILITY.md`. Stepped once per frame by `SKView` (`stepEmitters`, after
+      constraints, before rendering), independent of `SKPhysicsWorld`
+- [x] `SKKeyframeSequence` — used for `SKEmitterNode.particleColorSequence`, and reusable generic
+      elsewhere. Deliberately deviates from Apple's untyped, reflection-based version: this one is
+      generic over its value type and takes an explicit `interpolate` function at `sample(_:_:)`
+      time, rather than inferring how to interpolate a runtime type — more explicit, no hidden
+      "which types actually support interpolation" behavior to document; see
+      `docs/API_COMPATIBILITY.md`
+- [x] Particle rendering reuses Phase 3/4's render-command pipeline: each living particle
+      contributes its own textured (or flat-colored) quad command, with its own
+      scale/rotation/alpha/color/z-position sampled from its age — same triangle-list shape
+      `SKSpriteNode`/`SKLabelNode`/`SKShapeNode` already produce, so `SKSceneRenderer` needed no
+      changes. Pure Kotlin/unit-testable, like the rest of `SKRenderCommandList.kt` (particles
+      never touch `Bitmap`/`Canvas`)
+- [x] 21 new tests: `SKKeyframeSequence` interpolation/edge cases (9), `SKEmitterNode` simulation —
+      birth rate, `numParticlesToEmit`, particle lifetime expiry, `isPaused`, acceleration,
+      `resetSimulation`, `advanceSimulationTime`, field integration and its bitmask gating (9),
+      plus 3 new particle-rendering cases in `SKRenderCommandListTest.kt`
 
 ## Phase 9 — Tile Maps
 
-- [ ] `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/`SKTileDefinition`
-- [ ] `SKTileMapNode`
+- [x] `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/`SKTileDefinition` — configured programmatically
+      (no `.sks` tile-set archive format and no bundled/built-in tile sets to parse — see
+      `docs/API_COMPATIBILITY.md`). Only grid-shaped maps are supported — Apple's
+      `SKTileSetType`/isometric/hexagonal variants aren't, so `SKTileSet` has no corresponding
+      property at all. `SKTileDefinition.textures` may be empty (renders flat-colored, this
+      port's usual convention, unlike Apple which always requires at least one texture) — chosen
+      specifically so `SKTileMapNode`'s grid/automapping logic stays fully unit-testable without
+      ever constructing a real `SKTexture` (which wraps an `android.graphics.Bitmap`, unsafe in a
+      plain JVM test). `SKTileAdjacencyMask` is a plain `Int`-bitmask `object`
+      (`UP`/`UPPER_RIGHT`/.../`ALL_EDGES`/`ALL`/`NONE`), matching this library's existing
+      `categoryBitMask`-style bitmask convention rather than introducing a dedicated option-set type
+- [x] `SKTileMapNode` — `numberOfColumns`/`numberOfRows` fixed at construction (Apple allows
+      resizing a live map; this port doesn't), `tileSize`, `anchorPoint`, `tileGroup`/
+      `tileDefinition` lookup, `setTileGroup` (3-argument, rule-matched or first-rule depending on
+      `enableAutomapping`; 4-argument, sets an exact definition bypassing rule matching entirely),
+      `centerOfTile`/`tileColumnIndex`/`tileRowIndex`, `fillWith`-at-construction convenience.
+      Automapping picks each tile's best-matching `SKTileGroupRule` by comparing its actual
+      same-group 8-neighbor configuration against each candidate rule's `adjacency`, preferring an
+      exact match and otherwise the rule sharing the most bits (Hamming-distance-style) —
+      *contract-conformant, not bit-identical* with Apple's own (undocumented) matching algorithm;
+      placing or clearing a tile re-evaluates that tile and all 8 neighbors, matching Apple's
+      documented auto-tiling behavior. Rendered by contributing one flat-colored-or-textured quad
+      `SKRenderCommand` per non-empty cell (reusing the same triangle-list pipeline
+      `SKSpriteNode`/`SKEmitterNode` particles already produce — `SKSceneRenderer` needed no
+      changes), sized by each cell's own `SKTileDefinition.size` rather than the map's `tileSize`,
+      all sharing the map node's own `zPosition` (a tile map is one flat layer, unlike particles'
+      per-particle z-position). `SKView`'s frame loop advances each map's own animation clock
+      (`stepTileMaps`, mirroring `stepEmitters`) so multi-texture `SKTileDefinition`s animate.
+      26 new tests: `SKTileDefinition`/`SKTileGroupRule`/`SKTileGroup`/`SKTileSet` basics and
+      animation-frame math (10), `SKTileMapNode` grid operations, bounds handling, automapping
+      (placement, clearing, non-automapped fallback), and coordinate conversions (14), plus 2 new
+      tile-map render tests in `SKRenderCommandListTest.kt`
 
 ## Phase 10 — Input
 
-- [ ] Full `SKNode`/`SKScene` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
-      `touchesCancelled`) wired through Phase 1's UI→GL bridge
-- [ ] Hit-testing via the scene graph's accumulated frame
+- [x] Full `SKNode` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
+      `touchesCancelled`) wired through Phase 1's UI→GL bridge (`SKView.onTouchEvent` →
+      `runOnGLThread` → `dispatchTouch`, alongside — not replacing — the raw `SKView.onTouch`
+      escape hatch). `SKNode.isUserInteractionEnabled` (defaults `false`, except `SKScene`, which
+      defaults it `true`, matching Apple) gates which nodes are even candidates. Delivered one
+      `SKTouch` (`pointerId` + `location`, already converted into the *receiving* node's own local
+      space) at a time per callback, rather than Apple's batched `Set<UITouch>` — idiomatic Kotlin
+      given this library's per-pointer `SKTouchEvent` model from Phase 1, and a natural fit for
+      Android's per-pointer `MotionEvent` API; see `docs/API_COMPATIBILITY.md`. A touch is
+      hit-tested once, on `touchesBegan`; the same node keeps receiving `touchesMoved`/`Ended`/
+      `Cancelled` for that pointer regardless of where it travels afterward (tracked per pointer ID
+      in `SKScene.activeTouchTargets`), matching Apple's tracking behavior — not re-hit-tested
+      every frame
+- [x] Hit-testing via `SKNode.containsLocalPoint` against each candidate's own `localBounds`
+      (reusing the same protected property `SKSpriteNode`/`SKTileMapNode`/etc. already override for
+      rendering) rather than the full `calculateAccumulatedFrame` (which would also count a node's
+      *children*'s bounds — hit-testing should only consider a node's own shape). The frontmost
+      match wins, using the exact same "highest `zPosition`, ties broken by tree-traversal order"
+      rule `SKRenderCommandList.kt` sorts draw order by, so "what's on top" agrees between
+      rendering and touch. A touch's raw view-space point is converted into the scene's (or, if a
+      camera is set, the camera's — matching how rendering itself projects) local space by
+      inverting `computeSceneProjection`'s exact mapping (`viewToScenePoint`), so touch input and
+      rendering always agree on where things are, including under `SKSceneScaleMode`
+      letterboxing/cropping. Crop-node clipping isn't considered — a touch can still hit a node
+      even where an ancestor `SKCropNode` would clip it from view; see `docs/API_COMPATIBILITY.md`.
+      14 new tests: `viewToScenePoint`'s three-corner mapping, and `dispatchTouch`'s hit-testing
+      (inside/outside/non-interactive/hidden/frontmost-of-overlapping), touch tracking across
+      moved/ended/cancelled, and the pre-`onSurfaceChanged`/no-tracked-target no-op cases
 
 ## Phase 11 — Transitions
 
-- [ ] `SKTransition` — fade/crossFade/moveIn/push/reveal/doorway/flip
-- [ ] `SKView.presentScene(_:transition:)`
+- [x] `SKTransition` — `fade`/`crossFade`/`moveIn`/`push`/`reveal`/`doorway`/`flipHorizontal`/
+      `flipVertical`. One concrete class configured by factory functions, matching Apple's own
+      shape here (same pattern `SKFieldNode`/`SKTransition` already established). This renderer
+      has no offscreen-framebuffer support (see `docs/ARCHITECTURE.md`), so every effect reduces
+      to the same primitives — drawing each scene at a `glViewport` offset/size, an overall alpha
+      multiplier, and (`doorway` only) a plain rectangular clip reusing the existing
+      `SKCropNode`-style scissor machinery — computed by the pure, unit-tested
+      `transitionLayers(transition, progress, viewWidth, viewHeight)` (`SKTransitionLayers.kt`),
+      independent of any actual GL call. `flipHorizontal`/`flipVertical` approximate Apple's true
+      3D flip as a 2D squash-then-grow, since this renderer has no 3D perspective transform
+      either. All *contract-conformant, not bit-identical* with Apple's own effects — see
+      `docs/API_COMPATIBILITY.md`
+- [x] `SKView.presentScene(_:transition:)` — an overload alongside the existing instant-cut
+      `presentScene(_:)`; a no-op transition (an instant cut) if no scene was already presented,
+      since there'd be nothing to transition from. Only the *new* scene's `update`/actions/
+      physics/etc. run during a transition — the outgoing scene is frozen, drawn only as a visual
+      snapshot via the new `SKSceneRenderer.draw` parameters (`viewportOffset`/`viewportSize`/
+      `globalAlpha`/`clearFirst`/`outerClip`) `SKTransitionLayers.kt`'s output maps onto directly.
+      17 new tests: `SKTransition`'s factories (4), and `transitionLayers`' per-effect
+      geometry/timing (13) — start/end/midpoint states, `push`'s "always exactly one screen apart"
+      invariant, `doorway`'s panel-split clipping, and progress clamping
 
 ## Phase 12 — Audio
 
-- [ ] `SKAudioNode` wrapping `SoundPool` (short sound effects) / `MediaPlayer` (music);
-      positional/spatial audio is **out of scope** initially
+- [x] `SKAudioNode` — a single persistent audio clip per node (mirrors Apple's own 1:1
+      node-to-player model), backed by `android.media.MediaPlayer` rather than `SoundPool`:
+      `MediaPlayer.setDataSource(String)` needs no `Context`, unlike `SoundPool`/
+      `MediaPlayer.create()`, so clips are addressed by a plain path/URL string
+      (`SKAudioNode.path`) with no Apple-style app-bundle `fileNamed:` lookup — an absolute file
+      path, an `http(s)://` URL, or a bundled asset via `"file:///android_asset/..."`; see
+      `docs/API_COMPATIBILITY.md`. `autoplayLooped` (Apple's combined "plays automatically AND
+      loops" flag) is driven by a new per-frame `stepAudioNodes(scene)` (mirroring
+      `stepEmitters`/`stepTileMaps`), triggering exactly once per node's lifetime. Positional/
+      spatial audio is **out of scope**, same as originally scoped
+- [x] `SKAction.play`/`pause`/`stop`/`changeVolume(to:duration:)`/`changePlaybackRate(to:duration:)`
+      — no-ops when run on anything but an `SKAudioNode`. Reuses the existing frame-stepped
+      `SKAction`/`SKActionExecution` machinery unchanged; `changeVolume`/`changePlaybackRate`
+      interpolate exactly like `fadeAlphaTo` via `SKActionState.captureOnce`
+- [x] `SKAction.playSoundFileNamed(fileNamed:waitForCompletion:)` — also `MediaPlayer`-backed
+      (not `SoundPool`), fire-and-forget, self-releasing on completion. Its real clip duration
+      isn't known ahead of time, so it's special-cased entirely in `stepLeaf` (`stepPlaySound`)
+      rather than going through the normal fixed-`SKAction.duration` progress path: it starts
+      playback once (via `SKActionState.captureOnce`) and, when `waitForCompletion` is `true`,
+      polls `handle.isPlaying` each frame until playback ends. Its reported `SKAction.duration` is
+      always `0`, since the real duration is unknown until the clip is actually playing; see
+      `docs/API_COMPATIBILITY.md`
+- [x] `SKAudioPlaybackHandle`/`SKAudioPlaybackFactory` — the seam keeping `SKAudioNode.kt`/
+      `SKActionExecution.kt` pure/testable while the real `MediaPlayer` calls live in a dedicated,
+      untested Android-only file (`SKAudioPlayback.kt`), installed by `SKView` at construction —
+      same isolation convention as `SKSceneRenderer.kt`/`SKLabelRendering.kt`/
+      `SKPathFlattening.kt`. Every real-backend operation is wrapped in `runCatching` and silently
+      ignored on failure, so a bad path or a player in the wrong state can't crash the render
+      thread. 21 new tests, all against a fake `SKAudioPlaybackHandle` — no real `MediaPlayer`
+      touched
 
 ## Phase 13 — Shaders
 
@@ -194,31 +465,72 @@ system injects built-in symbols (`u_time`, `v_tex_coord`, ...) per node type in 
 publicly specified. This phase ships the extensibility hook and one trivial example rather than
 full parity; see `docs/ARCHITECTURE.md`.
 
-- [ ] Renderer always dispatches through a "current shader program for this node" concept (default
-      built-in program if none set), so `SKShader`/`SKUniform` slot in without re-architecting the
-      renderer built in Phase 3
-- [ ] `SKShader`/`SKUniform` — custom GLSL ES fragment shader source + uniform bindings
-- [ ] One built-in example shader (grayscale/tint) demonstrating the extension point
+- [x] Renderer always dispatches through a "current program for this run" concept: every batched
+      run of `SKRenderCommand`s now also shares a `shader` (by reference, alongside texture/blend
+      mode/clip rect — a shader change starts a new run same as a texture change does), resolved
+      to a `SKProgramBinding` (linked program + attribute/uniform locations) — the renderer's own
+      default program when `null`, or the node's `SKShader`'s own program otherwise. Locations are
+      re-resolved per run rather than reused across programs, since GLES doesn't guarantee the
+      same attribute/uniform location across two different linked programs even under identical
+      names
+- [x] `SKShader`/`SKUniform` — custom GLSL ES fragment shader source + uniform bindings. Only
+      `SKSpriteNode.shader` is exposed in this port (see `docs/API_COMPATIBILITY.md`). `SKUniform`
+      is a Kotlin sealed-value shape (`SKUniformValue.FloatValue`/`Vector2Value`/`TextureValue`)
+      rather than Apple's one-class-many-typed-properties shape, matching this library's existing
+      `SKActionKind`/`SKConstraintKind` convention; a `TextureValue` claims its own texture unit
+      above `u_Texture`'s reserved unit `0`. `SKShader`'s compiled program is lazily
+      (re)compiled/uploaded the same way `SKTexture` is — tracked via `SKResourceRegistry
+      .generation` for `EGLContext` loss, plus its own edited-`source`-since-last-compile check. A
+      shader that fails to compile/link (invalid user-supplied GLSL) falls back to the renderer's
+      default program rather than crashing the render thread, and isn't retried every frame until
+      `source` is actually edited again
+- [x] One built-in example shader, `SKShader.grayscale(intensity:)`, demonstrating the extension
+      point: blends each pixel between its own color and its grayscale luminance (standard NTSC
+      luma weights), with `intensity` exposed as a live-adjustable `SKUniform`
 - [ ] **Deferred** (see "Explicitly Out of Scope"): the shader-modifier snippet system,
-      `SKAttribute` per-vertex custom attributes, `SKWarpGeometry`, lighting (`SKLightNode`)
+      `SKAttribute` per-vertex custom attributes, `SKWarpGeometry`, lighting (`SKLightNode`),
+      `SKShapeNode`/`SKEmitterNode`/`SKScene`-level shaders. 10 new tests, all pure Kotlin —
+      `SKShader`'s `addUniform`/`uniformNamed`/`grayscale` factory, `SKUniform`'s typed
+      constructors, and a sprite's `shader` carrying through to its `SKRenderCommand`
 
 ## Phase 14 — Documentation
 
-- [ ] KDoc for all public API surfaces
-- [ ] `docs/API_COMPATIBILITY.md` fully filled in (per-subsystem deviation notes, as GameplayKit's
-      equivalent document does)
-- [ ] README usage examples per module
+- [x] KDoc for all public API surfaces. Coverage was already thorough (each phase's own KDoc pass
+      as it landed); this phase audited every public declaration across the module and filled in
+      the real remaining gaps — mostly a run of undocumented `SKAction`/`SKConstraint` companion
+      factories, `SKEffectNode`'s parity-only properties, `SKPhysicsContact`'s coordinate-space-
+      dependent fields, `SKTexture.textureRect`, `SKTileMapNode.tileSize`, and `Vector2.Zero`/
+      `Rect.Zero`. Primary-constructor properties already covered by their class's own KDoc (this
+      library's established convention — referencing `[paramName]` in prose rather than annotating
+      every constructor parameter individually) were left as-is
+- [x] `docs/API_COMPATIBILITY.md` fully filled in (per-subsystem deviation notes, as GameplayKit's
+      equivalent document does) — kept in sync incrementally as each phase landed; verified
+      complete against every phase in this pass
+- [x] README usage examples per module — a `## Usage` section with one short, API-accurate
+      snippet per subsystem (scenes/nodes, sprites/shapes/labels, actions, physics, particles,
+      tile maps, camera/crop, constraints, input, transitions, audio, shaders)
 - **Not in this repo**: no sample/demo app — this repo is consumed as a git submodule by host
       apps, so it stays library code + docs only, same policy as GameplayKit
 
 ## Explicitly Out of Scope
 
+- `SKAction.follow(_:asOffset:orientToPath:duration:)` — path-following actions; would need
+  path-length parameterization on top of `SKShapeNode`'s existing path-flattening machinery,
+  deferred for scope
+- `SKAction.run(_:onChildWithName:)` — a niche convenience over `childNode`/`enumerateChildNodes`
+  plus a plain `run`
 - `SKEffectNode.filter` — Core Image, no Android equivalent
 - `SKVideoNode` — video-texture playback; no immediate `SurfaceTexture`/`MediaPlayer` bridge
 - `SKLightNode` / normal-map lighting and shadows — shader-dependent, deferred with the rest of
   the advanced shader system
 - `SKWarpGeometry` — mesh warp rendering
+- `SKFieldNode`'s noise/turbulence/electric/magnetic/spring/vortex fields and texture-based
+  (checkerboard) velocity fields — only the radial gravity/linear gravity/drag/velocity subset is
+  implemented (Phase 7d)
 - The shader-modifier snippet injection system and `SKAttribute` per-vertex custom attributes
+- `SKUniform`'s `vector_float3`/`vector_float4`/matrix value types (only `float`/`vector_float2`/
+  `texture` are ported — no SIMD types, see `docs/API_COMPATIBILITY.md`), and `shader` on anything
+  but `SKSpriteNode` (`SKShapeNode`/`SKEmitterNode`/`SKScene`-level shaders)
 - `SKReferenceNode` file-based scene loading — Apple's `.sks` scene archive format has no Android
   equivalent serialization; could be revisited with a custom Kotlin-serialization-based format
 - Any `GKScene`-style binding to [GameplayKit for Android](https://github.com/bitzgroup/GameplayKit)
