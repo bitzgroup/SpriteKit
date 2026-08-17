@@ -232,7 +232,23 @@ categories recur throughout and are called out once here rather than per item:
   doesn't rotate along with either body (Apple's own axis-rotation behavior isn't documented).
 - **`SKPhysicsJoint.reactionForce`/`reactionTorque`** (read-only, post-simulation) aren't
   implemented.
-- `SKFieldNode` (Phase 7d) isn't implemented yet.
+- **`SKFieldNode` is one concrete class configured by factory functions**
+  (`radialGravityField`/`linearGravityField`/`dragField`/`velocityField`), matching Apple's own
+  shape here — unlike `SKPhysicsJoint`, which really is a family of separate subclasses. Only this
+  subset of Apple's field kinds is implemented; noise, turbulence, electric, magnetic, spring,
+  vortex, and checkerboard-texture-based velocity fields aren't — see `docs/ROADMAP.md`'s
+  "Explicitly Out of Scope".
+- **`SKFieldNode.region` isn't implemented** — every field is always unbounded, as if `region`
+  were `null`, since this port has no `SKRegion` implementation (the same gap Phase 6 documented
+  for `SKConstraint`). **`isExclusive`** is stored but not enforced — every enabled, bitmask
+  matching field affects a body regardless of whether another exclusive field also does.
+- **`radialGravityField`'s `strength`/`falloff`/`minimumRadius` formula** —
+  `strength / max(distance, minimumRadius)^falloff`, directed towards the field node's position —
+  is a standard inverse-power model, not necessarily Apple's own (undocumented) one.
+- **`velocityField` directly overrides a body's velocity** each step (matching Apple's documented
+  "applies a velocity, not an acceleration" behavior) rather than integrating a force, and is
+  applied after every force-based field for that step, so it wins whenever both affect the same
+  body in the same frame.
 
 ## Particles (`SKEmitterNode`, `SKKeyframeSequence`)
 
