@@ -17,8 +17,9 @@ private const val POSITION_CORRECTION_PERCENT = 0.2f
  * [SKView], between action evaluation and [SKScene.didSimulatePhysics]. Semi-implicit Euler
  * integration, an O(n²) AABB broad phase, [narrowPhase] for shape-pair detection, a linear-only
  * sequential-impulse solver (contact-point torque -- i.e. spin from an off-center hit -- is
- * deferred; see `docs/API_COMPATIBILITY.md`), and [SKPhysicsContactDelegate] notifications for
- * whichever touching pairs opt in via [SKPhysicsBody.contactTestBitMask].
+ * deferred; see `docs/API_COMPATIBILITY.md`), [SKPhysicsContactDelegate] notifications for
+ * whichever touching pairs opt in via [SKPhysicsBody.contactTestBitMask], and [SKPhysicsJoint]
+ * constraint solving (see `SKPhysicsJointSimulation.kt`).
  */
 internal fun simulatePhysics(
     scene: SKScene,
@@ -30,15 +31,22 @@ internal fun simulatePhysics(
 
     val bodies = collectPhysicsBodies(scene)
     if (bodies.isEmpty()) return
+    val nodeByBody = bodies.associate { it.body to it.node }
+    bindJoints(world.joints, nodeByBody, scene)
 
     for (entry in bodies) integrateForces(entry.body, world.gravity, dt)
+    applyJointForces(world.joints, nodeByBody, scene, dt)
 
     val shapes = bodies.associateWith { worldShape(it.node, scene, it.body.shape) }
     val observations = findContactObservations(bodies, shapes)
 
     val physicalContacts = observations.mapNotNull(::toResolvedContact)
-    repeat(VELOCITY_ITERATIONS) { physicalContacts.forEach(::resolveVelocity) }
+    repeat(VELOCITY_ITERATIONS) {
+        physicalContacts.forEach(::resolveVelocity)
+        resolveJointVelocities(world.joints, nodeByBody, scene)
+    }
     physicalContacts.forEach(::correctPosition)
+    correctJointPositions(world.joints, nodeByBody, scene)
 
     reportContacts(world, observations)
 

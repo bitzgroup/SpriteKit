@@ -48,9 +48,10 @@ foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (texture
 — `SKTexture`, `SKTextureAtlas`, `SKSpriteNode`), Phase 4 (shapes & labels — `SKShapeNode`,
 `SKLabelNode`), Phase 5 (actions — `SKAction`), Phase 6 (camera, effects, crop, constraints —
 `SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`), Phase 7a (physics core —
-`SKPhysicsWorld`, `SKPhysicsBody`), and Phase 7b (physics contacts — `SKPhysicsContact`,
-`SKPhysicsContactDelegate`) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full
-phased plan and progress checklist.
+`SKPhysicsWorld`, `SKPhysicsBody`), Phase 7b (physics contacts — `SKPhysicsContact`,
+`SKPhysicsContactDelegate`), and Phase 7c (physics joints — `SKPhysicsJoint` pin/spring/fixed/
+sliding/limit) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan
+and progress checklist.
 
 ## Requirements
 
