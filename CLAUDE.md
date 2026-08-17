@@ -9,12 +9,12 @@ Phase 0 (project scaffolding), Phase 1 (threading & view foundation), Phase 2 (s
 `SKSpriteNode`), Phase 4 (shapes & labels: `SKShapeNode`, `SKLabelNode`), Phase 5 (actions:
 `SKAction`'s factory surface plus the frame-stepped `stepAction` executor, wired into
 `SKNode.run`/`SKView`'s frame loop), Phase 6 (camera, effects, crop, constraints: `SKCameraNode`,
-`SKEffectNode`, `SKCropNode`, `SKConstraint`/`SKRange`), Phase 7a (physics core:
-`SKPhysicsWorld`/`SKPhysicsBody`, a from-scratch semi-implicit-Euler/SAT rigid-body solver wired
-into `SKView`'s frame loop), Phase 7b (physics contacts: `SKPhysicsContact`/
-`SKPhysicsContactDelegate`, decoupled contact-test vs. collision bitmasks), and Phase 7c (physics
-joints: `SKPhysicsJoint` pin/spring/fixed/sliding/limit, lazily-bound anchors, a two-stage
-velocity-then-position solver) are complete — the internal renderer (`SKSceneRenderer`) draws
+`SKEffectNode`, `SKCropNode`, `SKConstraint`/`SKRange`), and Phase 7 (physics, complete:
+`SKPhysicsWorld`/`SKPhysicsBody` — a from-scratch semi-implicit-Euler/SAT rigid-body solver wired
+into `SKView`'s frame loop; `SKPhysicsContact`/`SKPhysicsContactDelegate` — contact-test bitmasks
+decoupled from collision bitmasks; the `SKPhysicsJoint` family — pin/spring/fixed/sliding/limit,
+lazily-bound anchors, a two-stage velocity-then-position solver; `SKFieldNode` — radial/linear
+gravity, drag, velocity fields) are complete — the internal renderer (`SKSceneRenderer`) draws
 sprites/labels/shapes through one generalized triangle-list pipeline, camera-relative and
 crop-clipped via `glScissor` when applicable. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
 full phase-by-phase plan and progress checklist.

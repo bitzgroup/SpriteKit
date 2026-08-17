@@ -108,6 +108,9 @@ public class SKPhysicsBody internal constructor(
      */
     public var contactTestBitMask: Int = 0
 
+    /** Which [SKFieldNode.categoryBitMask] categories affect this body. Defaults to all bits set, matching Apple. */
+    public var fieldBitMask: Int = -1
+
     internal var forceAccumulator: Vector2 = Vector2.Zero
         private set
     internal var torqueAccumulator: Float = 0f

@@ -18,8 +18,9 @@ private const val POSITION_CORRECTION_PERCENT = 0.2f
  * integration, an O(n²) AABB broad phase, [narrowPhase] for shape-pair detection, a linear-only
  * sequential-impulse solver (contact-point torque -- i.e. spin from an off-center hit -- is
  * deferred; see `docs/API_COMPATIBILITY.md`), [SKPhysicsContactDelegate] notifications for
- * whichever touching pairs opt in via [SKPhysicsBody.contactTestBitMask], and [SKPhysicsJoint]
- * constraint solving (see `SKPhysicsJointSimulation.kt`).
+ * whichever touching pairs opt in via [SKPhysicsBody.contactTestBitMask], [SKPhysicsJoint]
+ * constraint solving (see `SKPhysicsJointSimulation.kt`), and [SKFieldNode] force/velocity fields
+ * (see `SKFieldSimulation.kt`).
  */
 internal fun simulatePhysics(
     scene: SKScene,
@@ -36,6 +37,7 @@ internal fun simulatePhysics(
 
     for (entry in bodies) integrateForces(entry.body, world.gravity, dt)
     applyJointForces(world.joints, nodeByBody, scene, dt)
+    applyFieldForces(scene, bodies, dt)
 
     val shapes = bodies.associateWith { worldShape(it.node, scene, it.body.shape) }
     val observations = findContactObservations(bodies, shapes)
@@ -53,7 +55,7 @@ internal fun simulatePhysics(
     for (entry in bodies) integrateVelocity(entry.node, entry.body, dt)
 }
 
-private data class SKPhysicsEntry(val node: SKNode, val body: SKPhysicsBody)
+internal data class SKPhysicsEntry(val node: SKNode, val body: SKPhysicsBody)
 
 /**
  * Every (node, physicsBody) pair in [node]'s subtree, skipping [SKNode.isPaused] subtrees -- the

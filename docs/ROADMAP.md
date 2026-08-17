@@ -283,8 +283,24 @@ algorithms (steering, noise, Gaussian sampling).
       with either body), and `reactionForce`/`reactionTorque` are simplified/deferred — see
       `docs/API_COMPATIBILITY.md`. 9 new tests, one per joint kind's core behavior plus world
       joint-list management and a defensive "referenced body left the scene" case
-- [ ] **7d** — `SKFieldNode`, subset: radial gravity, linear gravity, drag, velocity (noise,
-      turbulence, electric, magnetic fields deferred — see "Explicitly Out of Scope")
+- [x] **7d** — `SKFieldNode`, subset: radial gravity, linear gravity, drag, velocity (noise,
+      turbulence, electric, magnetic, spring, vortex, and checkerboard-texture fields deferred —
+      see "Explicitly Out of Scope"). One concrete class configured by factory functions
+      (`radialGravityField`/`linearGravityField`/`dragField`/`velocityField`), matching Apple's own
+      shape (a single `SKFieldNode` class with class-method factories, unlike `SKPhysicsJoint`'s
+      genuinely-separate subclasses). Radial gravity's `strength`/`falloff`/`minimumRadius`
+      formula (`strength / max(distance, minimumRadius)^falloff`, direction towards the field) is
+      a standard inverse-power model, not necessarily Apple's own undocumented one — same
+      *contract-conformant, not bit-identical* framing as the rest of physics. A field only affects
+      a body if `(field.categoryBitMask and body.fieldBitMask) != 0`, the new
+      `SKPhysicsBody.fieldBitMask`. Force-based fields (radial/linear gravity, drag) integrate into
+      velocity like gravity does; `velocityField` instead directly overrides a body's velocity each
+      step (matching Apple's documented "sets velocity, not acceleration" behavior), applied after
+      the force-based fields so it wins when both affect the same body. `region` isn't implemented
+      (every field is unbounded, as if `region` were `null` — this port has no `SKRegion`, the same
+      gap Phase 6 documented for `SKConstraint`) and `isExclusive` is stored but not enforced. 8 new
+      tests: each field kind's core behavior, `isEnabled`/bitmask gating, and non-dynamic bodies
+      being unaffected
 
 ## Phase 8 — Particles
 
@@ -351,6 +367,9 @@ full parity; see `docs/ARCHITECTURE.md`.
 - `SKLightNode` / normal-map lighting and shadows — shader-dependent, deferred with the rest of
   the advanced shader system
 - `SKWarpGeometry` — mesh warp rendering
+- `SKFieldNode`'s noise/turbulence/electric/magnetic/spring/vortex fields and texture-based
+  (checkerboard) velocity fields — only the radial gravity/linear gravity/drag/velocity subset is
+  implemented (Phase 7d)
 - The shader-modifier snippet injection system and `SKAttribute` per-vertex custom attributes
 - `SKReferenceNode` file-based scene loading — Apple's `.sks` scene archive format has no Android
   equivalent serialization; could be revisited with a custom Kotlin-serialization-based format
