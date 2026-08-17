@@ -46,9 +46,10 @@ which follows the same porting philosophy for Apple's GameplayKit.
 This project is under active development. Phase 0 (project scaffolding), Phase 1 (threading & view
 foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (textures & sprite rendering
 — `SKTexture`, `SKTextureAtlas`, `SKSpriteNode`), Phase 4 (shapes & labels — `SKShapeNode`,
-`SKLabelNode`), Phase 5 (actions — `SKAction`), and Phase 6 (camera, effects, crop, constraints —
-`SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`) are complete. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and progress checklist.
+`SKLabelNode`), Phase 5 (actions — `SKAction`), Phase 6 (camera, effects, crop, constraints —
+`SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`), and Phase 7a (physics core —
+`SKPhysicsWorld`, `SKPhysicsBody`) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
+full phased plan and progress checklist.
 
 ## Requirements
 

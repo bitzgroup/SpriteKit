@@ -36,6 +36,9 @@ public open class SKScene(
      */
     public var camera: SKCameraNode? = null
 
+    /** This scene's rigid-body simulation -- gravity/speed plus whatever [SKNode.physicsBody]s are in the tree. */
+    public val physicsWorld: SKPhysicsWorld = SKPhysicsWorld()
+
     /**
      * Called once per frame with the time elapsed since the previous frame, before actions,
      * physics, and constraints are evaluated. Override to drive custom per-frame logic.
