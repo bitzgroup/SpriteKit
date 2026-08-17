@@ -17,9 +17,12 @@ complexity:
     # Android's detekt.yml documents for GKGoal's companion).
     thresholdInObjects: 30
     # SKActionExecution.kt is the frame-stepped action interpreter: one function per SKActionKind
-    # composite (sequence/group/repeat) plus one apply-effect function per leaf kind. Splitting it
-    # into more files wouldn't reduce the function count, just scatter closely related code.
-    thresholdInFiles: 20
+    # composite (sequence/group/repeat) plus one apply-effect function per leaf kind.
+    # SKPhysicsCollision.kt is the narrow-phase SAT/distance-test suite: one small pure function
+    # per shape-pair case (circle/polygon/edge-chain × each other) plus their shared geometry
+    # helpers. In both files, splitting further wouldn't reduce the function count, just scatter
+    # closely related code across more files.
+    thresholdInFiles: 22
 
 naming:
   # @Composable functions are conventionally PascalCase (they're used like components), which

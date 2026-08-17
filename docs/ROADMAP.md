@@ -222,9 +222,34 @@ Custom sequential-impulse 2D rigid-body engine, zero external dependencies (matc
 own physics engine internals aren't public, same framing GameplayKit uses for its undocumented
 algorithms (steering, noise, Gaussian sampling).
 
-- [ ] **7a** — `SKPhysicsWorld`/`SKPhysicsBody` core: circle/rectangle/polygon/edge-loop shapes,
+- [x] **7a** — `SKPhysicsWorld`/`SKPhysicsBody` core: circle/rectangle/polygon/edge-loop shapes,
       gravity, dynamics (mass/density/friction/restitution/damping), semi-implicit Euler
-      integration, SAT narrow-phase, category/collision/contactTest bitmasks
+      integration, SAT narrow-phase, category/collision/contactTest bitmasks. `SKPhysicsShape`
+      (circle/convex-polygon/edge-chain) carries hand-verified mass/moment-of-inertia formulas
+      (solid-disk for circles, the standard polygon second-moment sum for polygons — verified
+      against the known `I = mass*(w²+h²)/12` square formula); `density` is the source of truth,
+      so setting `.mass` back-computes it. `SKPhysicsBody` factories match Apple's:
+      `circleOfRadius`/`rectangleOf`/`polygonFrom`/`edgeLoopFrom`/`edgeFrom` — `polygonFrom` takes
+      a `List<Vector2>` (no `CGPath` equivalent), and `bodies(fromTexture:...)` texture-alpha-mask
+      bodies aren't implemented. `SKWorldShape`/`narrowPhase` (`SKPhysicsCollision.kt`) is pure
+      Kotlin and unit-tested independent of any node/scene: circle-circle, circle-polygon (inside
+      and outside cases), polygon-polygon SAT, and circle/polygon-vs-edge-chain
+      (segment-by-segment); two edge chains never collide with each other (both are static), and
+      contact points for polygon-polygon/polygon-chain cases are an edge midpoint rather than a
+      true clipped contact point. `SKPhysicsSimulation.kt`'s solver is **linear-only**: sequential
+      impulses resolve normal (restitution) and tangential (Coulomb friction) velocity, but
+      contact-point torque (spin from an off-center hit) is deferred — `applyTorque`/
+      `applyAngularImpulse` still work, collision response just doesn't itself impart spin. O(n²)
+      AABB broad phase, not scoped to large body counts; Baumgarte positional correction
+      (20%/step, above a small penetration slop) resolves leftover overlap after the velocity
+      solve. A node's world-space shape reuses `SKNode.convertTo` (the same trick Phase 6's camera
+      support used); a circle's world radius is measured from where its local +x edge lands,
+      exact under uniform scale/rotation, an ellipse-as-circle approximation under non-uniform
+      scale. Adds `SKNode.physicsBody`/`SKScene.physicsWorld`; `SKView`'s frame loop now calls
+      `simulatePhysics(scene, deltaTime)` between action evaluation and `didSimulatePhysics()`.
+      Pure Kotlin, unit-tested without a live GL/Android context (36 new tests: mass/inertia
+      formulas, collision manifolds, and full simulation steps — gravity, resting contacts,
+      bitmask filtering, `isPaused`/`pinned` bodies)
 - [ ] **7b** — `SKPhysicsContact`/`SKPhysicsContactDelegate` (`didBegin`/`didEnd`)
 - [ ] **7c** — `SKPhysicsJoint` family: pin, spring, fixed, sliding, limit
 - [ ] **7d** — `SKFieldNode`, subset: radial gravity, linear gravity, drag, velocity (noise,

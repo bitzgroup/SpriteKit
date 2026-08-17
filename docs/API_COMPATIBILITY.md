@@ -181,9 +181,30 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Physics (`SKPhysicsWorld`, `SKPhysicsBody`, `SKPhysicsJoint`, `SKFieldNode`)
 
-- The physics engine will be a self-contained, from-scratch 2D rigid-body implementation (no
-  external physics library dependency), matching GameplayKit's zero-runtime-dependency convention.
+- The physics engine is a self-contained, from-scratch 2D rigid-body implementation (no external
+  physics library dependency), matching GameplayKit's zero-runtime-dependency convention.
   *Contract-conformant, not bit-identical* — Apple's own physics engine internals are not public.
+- **Mass/inertia formulas** are standard, well-known ones (a solid disk for circles, the classic
+  polygon second-moment-of-area sum for convex polygons — hand-verified against the known
+  `I = mass*(w²+h²)/12` square formula before implementation), not necessarily Apple's own
+  (undocumented) computation.
+- **`polygonFrom(_:)`** takes a `List<Vector2>` rather than a `CGPath` — this library has no path
+  type. Concave input isn't validated or corrected, matching Apple's own "must be convex" contract.
+- **`bodies(fromTexture:...)`** (texture-alpha-mask bodies) is not implemented.
+- **The narrow phase's contact point is approximate** for polygon-polygon and polygon-vs-edge-chain
+  cases: an edge midpoint rather than a true Sutherland-Hodgman-clipped contact point/manifold.
+- **Collision response is linear-only**: sequential impulses resolve normal (restitution) and
+  tangential (Coulomb friction) velocity, but don't derive torque from an off-center contact
+  point, so a collision alone never imparts spin (`applyTorque`/`applyAngularImpulse` still do).
+  Apple doesn't document its own solver's exact behavior here either.
+- **Broad phase is O(n²)** (every body pair's AABBs are tested each step) — not scoped to scale to
+  very large body counts; a spatial partition (grid/quadtree) is a possible future optimization.
+- **A body's world-space shape ignores non-uniform scale for circles**: the world radius is
+  measured from where the local shape's +x edge lands after the node's transform, which is exact
+  under uniform scale/rotation but treats a non-uniformly-scaled circle as a (slightly wrong-sized)
+  circle rather than the ellipse it should become.
+- `SKPhysicsContact`/`SKPhysicsContactDelegate` (Phase 7b), the `SKPhysicsJoint` family (Phase
+  7c), and `SKFieldNode` (Phase 7d) aren't implemented yet.
 
 ## Particles (`SKEmitterNode`, `SKKeyframeSequence`)
 

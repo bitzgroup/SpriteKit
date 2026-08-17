@@ -46,6 +46,9 @@ public open class SKNode {
     /** Arbitrary user data, `null` until the caller sets it — this library's `NSMutableDictionary` stand-in. */
     public var userData: MutableMap<String, Any?>? = null
 
+    /** This node's rigid-body simulation, or `null` (the default) to opt out of physics entirely. */
+    public var physicsBody: SKPhysicsBody? = null
+
     /** This node's parent, or `null` if it's a root (or not yet attached to one). */
     public var parent: SKNode? = null
         private set

@@ -8,11 +8,13 @@ Phase 0 (project scaffolding), Phase 1 (threading & view foundation), Phase 2 (s
 `SKNode`/`SKScene`), Phase 3 (textures & sprite rendering: `SKTexture`, `SKTextureAtlas`,
 `SKSpriteNode`), Phase 4 (shapes & labels: `SKShapeNode`, `SKLabelNode`), Phase 5 (actions:
 `SKAction`'s factory surface plus the frame-stepped `stepAction` executor, wired into
-`SKNode.run`/`SKView`'s frame loop), and Phase 6 (camera, effects, crop, constraints:
-`SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`/`SKRange`) are complete — the internal
-renderer (`SKSceneRenderer`) draws sprites/labels/shapes through one generalized triangle-list
-pipeline, camera-relative and crop-clipped via `glScissor` when applicable. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
+`SKNode.run`/`SKView`'s frame loop), Phase 6 (camera, effects, crop, constraints: `SKCameraNode`,
+`SKEffectNode`, `SKCropNode`, `SKConstraint`/`SKRange`), and Phase 7a (physics core:
+`SKPhysicsWorld`/`SKPhysicsBody`, a from-scratch semi-implicit-Euler/SAT rigid-body solver wired
+into `SKView`'s frame loop) are complete — the internal renderer (`SKSceneRenderer`) draws
+sprites/labels/shapes through one generalized triangle-list pipeline, camera-relative and
+crop-clipped via `glScissor` when applicable. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
+full phase-by-phase plan and progress checklist.
 
 ## Intent
 
