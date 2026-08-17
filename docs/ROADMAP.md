@@ -304,10 +304,36 @@ algorithms (steering, noise, Gaussian sampling).
 
 ## Phase 8 — Particles
 
-- [ ] `SKEmitterNode` — programmatic configuration only (no `.sks` particle-editor file format to
-      parse — see `docs/API_COMPATIBILITY.md`)
-- [ ] `SKKeyframeSequence` — used for particle color/scale/alpha ramps and other keyframed values
-- [ ] Particle rendering reuses Phase 3's sprite batcher
+- [x] `SKEmitterNode` — programmatic configuration only (no `.sks` particle-editor file format to
+      parse — see `docs/API_COMPATIBILITY.md`). Full `particleXxx`/`particleXxxRange`/
+      `particleXxxSpeed` surface (birth rate, lifetime, position/speed/emission-angle range,
+      x/yAcceleration, alpha/scale/rotation/color-blend-factor/z-position with their range and
+      per-second-speed variants), `particleColor`/`particleColorSequence`, `particleBlendMode`,
+      `fieldBitMask` (particles respond to matching `SKFieldNode`s — reuses Phase 7d's field-force
+      formulas, refactored to work from a world position/velocity pair instead of an
+      `SKPhysicsBody` so both can share them), `advanceSimulationTime`/`resetSimulation`.
+      `particleSize` has no Apple equivalent (Apple auto-sizes from the texture's pixel
+      dimensions; this port can't without reading `Bitmap` dimensions outside the GL-only code
+      paths, the same reason `SKSpriteNode.size` isn't auto-derived either). `targetNode` and the
+      scale/rotation/alpha sibling `SKKeyframeSequence` properties aren't implemented — see
+      `docs/API_COMPATIBILITY.md`. Stepped once per frame by `SKView` (`stepEmitters`, after
+      constraints, before rendering), independent of `SKPhysicsWorld`
+- [x] `SKKeyframeSequence` — used for `SKEmitterNode.particleColorSequence`, and reusable generic
+      elsewhere. Deliberately deviates from Apple's untyped, reflection-based version: this one is
+      generic over its value type and takes an explicit `interpolate` function at `sample(_:_:)`
+      time, rather than inferring how to interpolate a runtime type — more explicit, no hidden
+      "which types actually support interpolation" behavior to document; see
+      `docs/API_COMPATIBILITY.md`
+- [x] Particle rendering reuses Phase 3/4's render-command pipeline: each living particle
+      contributes its own textured (or flat-colored) quad command, with its own
+      scale/rotation/alpha/color/z-position sampled from its age — same triangle-list shape
+      `SKSpriteNode`/`SKLabelNode`/`SKShapeNode` already produce, so `SKSceneRenderer` needed no
+      changes. Pure Kotlin/unit-testable, like the rest of `SKRenderCommandList.kt` (particles
+      never touch `Bitmap`/`Canvas`)
+- [x] 21 new tests: `SKKeyframeSequence` interpolation/edge cases (9), `SKEmitterNode` simulation —
+      birth rate, `numParticlesToEmit`, particle lifetime expiry, `isPaused`, acceleration,
+      `resetSimulation`, `advanceSimulationTime`, field integration and its bitmask gating (9),
+      plus 3 new particle-rendering cases in `SKRenderCommandListTest.kt`
 
 ## Phase 9 — Tile Maps
 

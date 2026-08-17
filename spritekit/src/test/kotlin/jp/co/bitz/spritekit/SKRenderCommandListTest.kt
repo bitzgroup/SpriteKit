@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 class SKRenderCommandListTest {
     @Test
@@ -254,5 +255,52 @@ class SKRenderCommandListTest {
         inner.addChild(SKSpriteNode(size = Vector2(1f, 1f)))
 
         assertTrue(buildRenderCommands(scene).isEmpty())
+    }
+
+    @Test
+    fun `an emitter node produces one untextured render command per living particle`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val emitter =
+            SKEmitterNode().apply {
+                particleBirthRate = 3f
+                numParticlesToEmit = 3
+            }
+        scene.addChild(emitter)
+        stepEmitters(scene, 1.seconds)
+
+        val commands = buildRenderCommands(scene)
+
+        assertEquals(3, commands.size)
+        assertTrue(commands.all { it.texture == null })
+    }
+
+    @Test
+    fun `an emitter with no particles produces no commands`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        scene.addChild(SKEmitterNode())
+
+        assertTrue(buildRenderCommands(scene).isEmpty())
+    }
+
+    @Test
+    fun `a particle's quad is centered on the emitter position plus the particle's own offset`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val emitter =
+            SKEmitterNode().apply {
+                position = Vector2(10f, 20f)
+                particleSize = Vector2(4f, 4f)
+                particleBirthRate = 1f
+                numParticlesToEmit = 1
+            }
+        scene.addChild(emitter)
+        stepEmitters(scene, 1.seconds) // spawns one particle at the emitter's local origin
+
+        val command = buildRenderCommands(scene).single()
+
+        // An unrotated 4x4 quad centered on the emitter's (10, 20) position.
+        assertEquals(
+            setOf(Vector2(8f, 18f), Vector2(12f, 18f), Vector2(12f, 22f), Vector2(8f, 22f)),
+            command.vertices.map { it.position }.toSet(),
+        )
     }
 }

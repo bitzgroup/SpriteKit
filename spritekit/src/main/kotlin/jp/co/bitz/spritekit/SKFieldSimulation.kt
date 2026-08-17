@@ -23,6 +23,19 @@ private fun collectFieldNodes(
 }
 
 /**
+ * Every enabled [SKFieldNode] in [scene], each paired with its current world-space position --
+ * shared by [applyFieldForces] and [SKEmitterNode]'s own [SKFieldNode.fieldBitMask]-driven
+ * particle forces.
+ */
+internal fun enabledFieldNodes(scene: SKScene): List<Pair<SKFieldNode, Vector2>> =
+    collectFieldNodes(scene).filter { it.isEnabled }.map { it to it.convertTo(Vector2.Zero, scene) }
+
+internal fun fieldAffects(
+    field: SKFieldNode,
+    fieldBitMask: Int,
+): Boolean = (field.categoryBitMask and fieldBitMask) != 0
+
+/**
  * Applies every enabled [SKFieldNode] in [scene] to every matching body in [bodies]' velocity for
  * this step -- called once per frame, alongside gravity/force integration. Force-based fields
  * ([SKFieldKind.RadialGravity]/[SKFieldKind.LinearGravity]/[SKFieldKind.Drag]) are integrated
@@ -34,64 +47,57 @@ internal fun applyFieldForces(
     bodies: List<SKPhysicsEntry>,
     dt: Float,
 ) {
-    val fields = collectFieldNodes(scene).filter { it.isEnabled }
+    val fields = enabledFieldNodes(scene)
     if (fields.isEmpty()) return
 
-    val (velocityFields, forceFields) = fields.partition { it.kind == SKFieldKind.Velocity }
+    val (velocityFields, forceFields) = fields.partition { it.first.kind == SKFieldKind.Velocity }
     for (entry in bodies) {
         if (!entry.body.isDynamic) continue
-        for (field in forceFields) applyForceField(field, entry, scene, dt)
-        for (field in velocityFields) applyVelocityField(field, entry)
+        val worldPosition = entry.node.convertTo(Vector2.Zero, scene)
+        for ((field, fieldWorldPosition) in forceFields) {
+            if (!fieldAffects(field, entry.body.fieldBitMask)) continue
+            entry.body.velocity += fieldAcceleration(field, fieldWorldPosition, worldPosition, entry.body.velocity) * dt
+        }
+        for ((field, _) in velocityFields) {
+            if (!fieldAffects(field, entry.body.fieldBitMask)) continue
+            entry.body.velocity = fieldOverrideVelocity(field)
+        }
     }
 }
 
-private fun fieldAffects(
+/**
+ * The acceleration [field] (currently at [fieldWorldPosition]) contributes to something at
+ * [worldPosition] moving at [velocity] -- position/velocity-based rather than
+ * [SKPhysicsBody]-based, so both physics bodies and [SKEmitterNode] particles (which have no
+ * physics body) can share this. Returns [Vector2.Zero] for a [SKFieldKind.Velocity] field, which
+ * overrides velocity directly instead of accelerating it -- see [fieldOverrideVelocity].
+ */
+internal fun fieldAcceleration(
     field: SKFieldNode,
-    body: SKPhysicsBody,
-): Boolean = (field.categoryBitMask and body.fieldBitMask) != 0
+    fieldWorldPosition: Vector2,
+    worldPosition: Vector2,
+    velocity: Vector2,
+): Vector2 =
+    when (field.kind) {
+        SKFieldKind.RadialGravity -> radialGravityAcceleration(field, fieldWorldPosition, worldPosition)
+        SKFieldKind.LinearGravity -> field.direction.normalized() * field.strength
+        SKFieldKind.Drag -> velocity * -field.strength
+        SKFieldKind.Velocity -> Vector2.Zero
+    }
 
-private fun applyForceField(
-    field: SKFieldNode,
-    entry: SKPhysicsEntry,
-    scene: SKScene,
-    dt: Float,
-) {
-    if (!fieldAffects(field, entry.body)) return
-    val acceleration =
-        when (field.kind) {
-            SKFieldKind.RadialGravity -> radialGravityAcceleration(field, entry.node, scene)
-            SKFieldKind.LinearGravity -> linearGravityAcceleration(field)
-            SKFieldKind.Drag -> dragAcceleration(field, entry.body)
-            SKFieldKind.Velocity -> return // handled by applyVelocityField instead
-        }
-    entry.body.velocity += acceleration * dt
-}
+/** The velocity a [SKFieldKind.Velocity] field drives an affected body/particle directly towards. */
+internal fun fieldOverrideVelocity(field: SKFieldNode): Vector2 = field.direction * field.strength
 
 private fun radialGravityAcceleration(
     field: SKFieldNode,
-    node: SKNode,
-    scene: SKScene,
+    fieldWorldPosition: Vector2,
+    worldPosition: Vector2,
 ): Vector2 {
-    val toField = field.convertTo(Vector2.Zero, scene) - node.convertTo(Vector2.Zero, scene)
+    val toField = fieldWorldPosition - worldPosition
     val distance = toField.length()
     if (distance == 0f) return Vector2.Zero
     val direction = toField * (1f / distance)
     val effectiveDistance = maxOf(distance, field.minimumRadius, MINIMUM_FIELD_DISTANCE)
     val magnitude = if (field.falloff == 0f) field.strength else field.strength / effectiveDistance.pow(field.falloff)
     return direction * magnitude
-}
-
-private fun linearGravityAcceleration(field: SKFieldNode): Vector2 = field.direction.normalized() * field.strength
-
-private fun dragAcceleration(
-    field: SKFieldNode,
-    body: SKPhysicsBody,
-): Vector2 = body.velocity * -field.strength
-
-private fun applyVelocityField(
-    field: SKFieldNode,
-    entry: SKPhysicsEntry,
-) {
-    if (!fieldAffects(field, entry.body)) return
-    entry.body.velocity = field.direction * field.strength
 }
