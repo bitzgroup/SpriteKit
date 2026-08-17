@@ -261,7 +261,28 @@ algorithms (steering, noise, Gaussian sampling).
       touching — including when one body leaves the scene entirely, since it simply stops
       appearing in that frame's observations. `SKPhysicsContact.collisionImpulse` is always `0` —
       not threaded back from the solver in this port, see `docs/API_COMPATIBILITY.md`. 5 new tests
-- [ ] **7c** — `SKPhysicsJoint` family: pin, spring, fixed, sliding, limit
+- [x] **7c** — `SKPhysicsJoint` family: pin, spring, fixed, sliding, limit. Constructed via
+      idiomatic Kotlin constructors (`SKPhysicsJointPin(bodyA, bodyB, anchor)`, etc.) rather than
+      Apple's `joint(withBodyA:bodyB:...)` class-method factories; added to a scene's simulation
+      via `SKPhysicsWorld.add`/`remove`/`removeAllJoints`. Every joint kind's per-body anchor
+      offset (and, for fixed/spring/limit, its other one-time state — relative rotation, spring
+      rest length, limit's default `maxLength`) is bound lazily, from each body's *current*
+      transform, the first frame the simulation actually processes it — not at construction time,
+      since (unlike Apple) a body doesn't know its owning node, so the joint can't resolve
+      world-to-local anchor conversion until a simulation step hands it that context; see
+      `docs/API_COMPATIBILITY.md`. The solver is two-stage per step, mirroring contacts: a
+      velocity-constraint pass (pin/fixed cancel all relative anchor-point velocity; sliding
+      cancels only the perpendicular component; limit cancels the outward component once taut;
+      spring applies a velocity-changing force instead, `-stiffness·stretch - damping·relative
+      velocity` with `stiffness = (2π·frequency)²`) folded into the same iteration loop as contact
+      resolution, followed by a Baumgarte position-correction pass — the velocity pass turned out
+      to be load-bearing, not optional: pure position correction alone couldn't keep up with
+      gravity's continuously-growing velocity error and drifted. `SKPhysicsJointFixed` additionally
+      re-syncs relative rotation kinematically each step (not via torque). `SKPhysicsJointPin`'s
+      angle-limit properties, `SKPhysicsJointSliding`'s axis (fixed in world space, doesn't rotate
+      with either body), and `reactionForce`/`reactionTorque` are simplified/deferred — see
+      `docs/API_COMPATIBILITY.md`. 9 new tests, one per joint kind's core behavior plus world
+      joint-list management and a defensive "referenced body left the scene" case
 - [ ] **7d** — `SKFieldNode`, subset: radial gravity, linear gravity, drag, velocity (noise,
       turbulence, electric, magnetic fields deferred — see "Explicitly Out of Scope")
 

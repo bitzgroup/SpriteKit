@@ -11,9 +11,10 @@ Phase 0 (project scaffolding), Phase 1 (threading & view foundation), Phase 2 (s
 `SKNode.run`/`SKView`'s frame loop), Phase 6 (camera, effects, crop, constraints: `SKCameraNode`,
 `SKEffectNode`, `SKCropNode`, `SKConstraint`/`SKRange`), Phase 7a (physics core:
 `SKPhysicsWorld`/`SKPhysicsBody`, a from-scratch semi-implicit-Euler/SAT rigid-body solver wired
-into `SKView`'s frame loop), and Phase 7b (physics contacts: `SKPhysicsContact`/
-`SKPhysicsContactDelegate`, decoupled contact-test vs. collision bitmasks) are complete — the
-internal renderer (`SKSceneRenderer`) draws
+into `SKView`'s frame loop), Phase 7b (physics contacts: `SKPhysicsContact`/
+`SKPhysicsContactDelegate`, decoupled contact-test vs. collision bitmasks), and Phase 7c (physics
+joints: `SKPhysicsJoint` pin/spring/fixed/sliding/limit, lazily-bound anchors, a two-stage
+velocity-then-position solver) are complete — the internal renderer (`SKSceneRenderer`) draws
 sprites/labels/shapes through one generalized triangle-list pipeline, camera-relative and
 crop-clipped via `glScissor` when applicable. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
 full phase-by-phase plan and progress checklist.

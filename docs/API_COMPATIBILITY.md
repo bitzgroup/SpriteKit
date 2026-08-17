@@ -211,7 +211,28 @@ categories recur throughout and are called out once here rather than per item:
   `SKPhysicsContactDelegate` without ever physically colliding (a zero-`collisionBitMask` sensor
   body), and vice versa. Both are independent of the narrow phase itself, which runs once per
   candidate pair regardless of either bitmask.
-- The `SKPhysicsJoint` family (Phase 7c) and `SKFieldNode` (Phase 7d) aren't implemented yet.
+- **`SKPhysicsJoint` subclasses are idiomatic Kotlin constructors** (`SKPhysicsJointPin(bodyA,
+  bodyB, anchor)`, etc.), not Apple's `joint(withBodyA:bodyB:...)` class-method factories.
+- **A joint's anchor point(s) are bound lazily**, from each body's *current* transform, the first
+  frame the simulation processes that joint — not at construction/`add(_:)` time like Apple. A
+  body has no reference back to its owning node in this port (unlike Apple's engine, which does),
+  so a joint can't resolve a world-space anchor into each body's local space until a simulation
+  step hands it the node lookup it needs. In practice this only matters if a body moves between
+  constructing the joint and the next simulation step — construct/add joints and let a step run
+  before relying on the anchor tracking a specific point, rather than moving bodies in between.
+- **The joint solver is linear-only**, the same simplification collision response makes: joints
+  correct relative *position*/*velocity* to satisfy their constraint but don't exchange torque, so
+  a body's rotation is otherwise still driven only by its own `angularVelocity`/`applyTorque`.
+  `SKPhysicsJointFixed` is the one exception — it kinematically re-syncs `bodyB`'s rotation to
+  `bodyA`'s each step (a direct rotation overwrite, not a torque-based coupling).
+- **`SKPhysicsJointPin`'s `shouldEnableLimits`/`lowerAngleLimit`/`upperAngleLimit`/
+  `frictionTorque`** are stored for API parity but not enforced — the solver doesn't model
+  relative rotation between a pin's two bodies at all.
+- **`SKPhysicsJointSliding`'s `axis`** is fixed in world space for the joint's lifetime; it
+  doesn't rotate along with either body (Apple's own axis-rotation behavior isn't documented).
+- **`SKPhysicsJoint.reactionForce`/`reactionTorque`** (read-only, post-simulation) aren't
+  implemented.
+- `SKFieldNode` (Phase 7d) isn't implemented yet.
 
 ## Particles (`SKEmitterNode`, `SKKeyframeSequence`)
 

@@ -6,7 +6,6 @@ package jp.co.bitz.spritekit
  * presented scene; there's no public step function here, matching Apple (the scene drives
  * simulation implicitly).
  *
- * The `SKPhysicsJoint` family (Phase 7c) isn't implemented yet — see `docs/ROADMAP.md`.
  */
 public class SKPhysicsWorld {
     /**
@@ -30,4 +29,24 @@ public class SKPhysicsWorld {
      * contact point/normal even on the frame the bodies actually separate.
      */
     internal val activeContacts: MutableMap<Pair<SKPhysicsBody, SKPhysicsBody>, SKContactManifold> = mutableMapOf()
+
+    private val mutableJoints = mutableListOf<SKPhysicsJoint>()
+
+    /** Every [SKPhysicsJoint] currently active in this world. */
+    public val joints: List<SKPhysicsJoint> get() = mutableJoints
+
+    /** Activates [joint], whose two bodies must belong to nodes in this world's scene to have any effect. */
+    public fun add(joint: SKPhysicsJoint) {
+        mutableJoints += joint
+    }
+
+    /** Deactivates [joint]. No-op if it isn't currently active. */
+    public fun remove(joint: SKPhysicsJoint) {
+        mutableJoints -= joint
+    }
+
+    /** Deactivates every currently-active joint. */
+    public fun removeAllJoints() {
+        mutableJoints.clear()
+    }
 }
