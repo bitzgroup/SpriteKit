@@ -30,6 +30,13 @@ public open class SKScene(
     public var backgroundColor: Int = Color.BLACK
 
     /**
+     * The node whose position/rotation/scale the scene renders relative to, instead of the
+     * scene's own origin — see [SKCameraNode]. Must be part of this scene's node tree (added via
+     * [addChild], directly or nested) to take effect.
+     */
+    public var camera: SKCameraNode? = null
+
+    /**
      * Called once per frame with the time elapsed since the previous frame, before actions,
      * physics, and constraints are evaluated. Override to drive custom per-frame logic.
      */

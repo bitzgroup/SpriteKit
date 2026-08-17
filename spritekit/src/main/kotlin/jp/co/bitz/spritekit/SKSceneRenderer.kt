@@ -101,10 +101,11 @@ internal class SKSceneRenderer {
         var index = 0
         while (index < commands.size) {
             val run = takeRun(commands, index)
-            drawRun(run, resourceRegistry)
+            drawRun(run, resourceRegistry, projection, viewWidth, viewHeight)
             index += run.size
         }
 
+        GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
         GLES20.glDisableVertexAttribArray(positionAttrib)
         GLES20.glDisableVertexAttribArray(texCoordAttrib)
         GLES20.glDisableVertexAttribArray(colorAttrib)
@@ -113,7 +114,11 @@ internal class SKSceneRenderer {
     private fun drawRun(
         run: List<SKRenderCommand>,
         resourceRegistry: SKResourceRegistry,
+        projection: SKSceneProjection,
+        viewWidth: Int,
+        viewHeight: Int,
     ) {
+        applyScissor(run.first().clipRect, projection, viewWidth, viewHeight)
         applyBlendMode(run.first().blendMode)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId(run.first().texture, resourceRegistry))
 
@@ -199,20 +204,48 @@ internal class SKSceneRenderer {
     }
 }
 
-/** Groups the run of consecutive commands, starting at [startIndex], sharing a texture and blend mode. */
+/** Groups the run of consecutive commands, starting at [startIndex], sharing a texture, blend mode, and clip rect. */
 private fun takeRun(
     commands: List<SKRenderCommand>,
     startIndex: Int,
 ): List<SKRenderCommand> {
     val first = commands[startIndex]
+
+    fun batchesWithFirst(command: SKRenderCommand) =
+        command.texture === first.texture && command.blendMode == first.blendMode && command.clipRect == first.clipRect
     var end = startIndex + 1
-    while (end < commands.size &&
-        commands[end].texture === first.texture &&
-        commands[end].blendMode == first.blendMode
-    ) {
+    while (end < commands.size && batchesWithFirst(commands[end])) {
         end++
     }
     return commands.subList(startIndex, end)
+}
+
+/**
+ * Enables/configures (or disables) `GL_SCISSOR_TEST` for [clipRect] — in the same space as
+ * render command vertices — mapped through [projection] into `glScissor`'s viewport-pixel,
+ * bottom-left-origin coordinates. `null` disables scissoring. For [SKCropNode].
+ */
+private fun applyScissor(
+    clipRect: Rect?,
+    projection: SKSceneProjection,
+    viewWidth: Int,
+    viewHeight: Int,
+) {
+    if (clipRect == null) {
+        GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
+        return
+    }
+    val scaleX = viewWidth / (projection.right - projection.left)
+    val scaleY = viewHeight / (projection.top - projection.bottom)
+    val x = (clipRect.left - projection.left) * scaleX
+    // clipRect.top is the smaller-y (this library's Rect is normalized left<=right/top<=bottom),
+    // which in this y-up world is the visually *lower* edge -- matching glScissor's own
+    // bottom-left-origin y parameter directly, with no flip needed.
+    val y = (clipRect.top - projection.bottom) * scaleY
+    val width = (clipRect.right - clipRect.left) * scaleX
+    val height = (clipRect.bottom - clipRect.top) * scaleY
+    GLES20.glEnable(GLES20.GL_SCISSOR_TEST)
+    GLES20.glScissor(x.toInt(), y.toInt(), width.toInt().coerceAtLeast(0), height.toInt().coerceAtLeast(0))
 }
 
 private fun appendCommand(
