@@ -150,4 +150,109 @@ class SKRenderCommandListTest {
 
         assertTrue(buildRenderCommands(scene).isEmpty())
     }
+
+    @Test
+    fun `positions are relative to the scene's camera when one is set`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val camera = SKCameraNode().apply { position = Vector2(100f, 100f) }
+        scene.addChild(camera)
+        scene.camera = camera
+        val sprite =
+            SKSpriteNode(
+                size = Vector2(4f, 2f),
+            ).apply { position = Vector2(100f, 100f) } // coincides with the camera
+
+        scene.addChild(sprite)
+        val command = buildRenderCommands(scene).single()
+
+        assertEquals(
+            listOf(
+                Vector2(-2f, -1f),
+                Vector2(2f, -1f),
+                Vector2(2f, 1f),
+                Vector2(-2f, -1f),
+                Vector2(2f, 1f),
+                Vector2(-2f, 1f),
+            ),
+            command.vertices.map { it.position },
+        )
+    }
+
+    @Test
+    fun `a crop node with no maskNode produces no commands for its subtree`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val crop = SKCropNode()
+        scene.addChild(crop)
+        crop.addChild(SKSpriteNode(size = Vector2(4f, 2f)))
+
+        assertTrue(buildRenderCommands(scene).isEmpty())
+    }
+
+    @Test
+    fun `a crop node's maskNode is not rendered a second time as ordinary content`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val crop = SKCropNode()
+        scene.addChild(crop)
+        val mask = SKSpriteNode(size = Vector2(10f, 10f))
+        crop.maskNode = mask
+        crop.addChild(mask)
+
+        assertTrue(buildRenderCommands(scene).isEmpty())
+    }
+
+    @Test
+    fun `a crop node clips its descendants' commands to the maskNode's bounding box`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val crop = SKCropNode()
+        scene.addChild(crop)
+        val mask = SKSpriteNode(size = Vector2(10f, 10f)) // default anchorPoint (0.5,0.5) -> bounds (-5,-5)-(5,5)
+        crop.maskNode = mask
+        crop.addChild(mask)
+        crop.addChild(SKSpriteNode(size = Vector2(2f, 2f)))
+
+        val command = buildRenderCommands(scene).single() // only the plain sprite -- the mask itself isn't rendered
+
+        assertEquals(Rect(-5f, -5f, 5f, 5f), command.clipRect)
+    }
+
+    @Test
+    fun `nested crop nodes intersect their clip rects`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val outer = SKCropNode()
+        scene.addChild(outer)
+        val outerMask = SKSpriteNode(size = Vector2(20f, 20f)) // bounds (-10,-10)-(10,10)
+        outer.maskNode = outerMask
+        outer.addChild(outerMask)
+
+        val inner = SKCropNode()
+        outer.addChild(inner)
+        val innerMask = SKSpriteNode(size = Vector2(6f, 6f)) // bounds (-3,-3)-(3,3), fully inside outer's
+        inner.maskNode = innerMask
+        inner.addChild(innerMask)
+        inner.addChild(SKSpriteNode(size = Vector2(1f, 1f)))
+
+        val command = buildRenderCommands(scene).single()
+
+        assertEquals(Rect(-3f, -3f, 3f, 3f), command.clipRect) // narrowed to the inner (smaller) mask
+    }
+
+    @Test
+    fun `nested crop nodes whose masks don't overlap render nothing`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val outer = SKCropNode()
+        scene.addChild(outer)
+        val outerMask = SKSpriteNode(size = Vector2(10f, 10f)).apply { position = Vector2(-50f, -50f) }
+        outer.maskNode = outerMask
+        outer.addChild(outerMask)
+
+        val inner = SKCropNode()
+        outer.addChild(inner)
+        // Nowhere near outerMask's bounds -- the two masks don't overlap at all.
+        val innerMask = SKSpriteNode(size = Vector2(10f, 10f)).apply { position = Vector2(50f, 50f) }
+        inner.maskNode = innerMask
+        inner.addChild(innerMask)
+        inner.addChild(SKSpriteNode(size = Vector2(1f, 1f)))
+
+        assertTrue(buildRenderCommands(scene).isEmpty())
+    }
 }

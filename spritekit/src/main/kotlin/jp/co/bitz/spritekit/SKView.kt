@@ -142,6 +142,7 @@ public class SKView
                     scene.stepActions(deltaTime)
                     scene.didEvaluateActions()
                     scene.didSimulatePhysics()
+                    scene.applyConstraints()
                     scene.didApplyConstraints()
                     renderFrame()
                     scene.didFinishUpdate()

@@ -193,12 +193,27 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
 
 ## Phase 6 — Camera, Effects, Crop, Constraints
 
-- [ ] `SKCameraNode` — viewport transform, `scene.camera`, `containsNode`
-- [ ] `SKEffectNode` — `shouldEnableEffects`/`shouldRasterize` baseline only; Core Image `filter`
-      is **out of scope** (no Android equivalent)
-- [ ] `SKCropNode` — `maskNode`
-- [ ] `SKConstraint`/`SKRange`/`SKRegion` — applied after physics, per Apple's documented
-      per-frame order
+- [x] `SKCameraNode` — `scene.camera`, `containsNode`. The renderer expresses every render
+      command's vertices relative to the camera (via `SKNode.convertTo`, from Phase 2) instead of
+      the scene directly when one is set — moving/scaling the camera pans/zooms the view, reusing
+      already-tested transform-conversion code rather than building separate view-matrix math
+- [x] `SKEffectNode` — `shouldEnableEffects`/`shouldRasterize`/`shouldCenterFilter` baseline only
+      (stored, no observable effect); Core Image `filter` is **out of scope** (no Android
+      equivalent) — see `docs/API_COMPATIBILITY.md`
+- [x] `SKCropNode` — `maskNode`, clipping to its *bounding box* via `glScissor` (not true
+      per-pixel masking — see `docs/API_COMPATIBILITY.md`). The render command list carries an
+      inherited (and, for nested crop nodes, progressively narrowed) `clipRect`; the renderer
+      batches by (texture, blend mode, clip rect) and toggles `GL_SCISSOR_TEST` between runs
+- [x] `SKConstraint`/`SKRange` — `positionX`/`positionY`/`position`/`zRotation`/`distance`/
+      `orient`, applied after physics, per Apple's documented per-frame order. `SKRange`'s
+      `SKRange(lowerLimit:)`/`SKRange(upperLimit:)` renamed to `atLeast`/`atMost` (proactively,
+      to avoid the same Kotlin-overload-resolution collision `SKNode.convertTo`/`convertFrom` hit)
+- [x] `SKRegion` — not implemented; every constraint Apple documents as taking one
+      (`SKConstraint.positionX(_:y:)` and friends) actually takes an `SKRange`, so there was
+      nothing in this phase's scope that needed it — see `docs/API_COMPATIBILITY.md`
+- [x] Pure Kotlin, no OpenGL/Android dependency — fully unit-tested (27 new tests: constraint
+      math, `SKCameraNode.containsNode`, `Rect.intersection`, and crop-node clip-rect
+      propagation/nesting)
 
 ## Phase 7 — Physics
 

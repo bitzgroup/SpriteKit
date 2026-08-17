@@ -205,6 +205,23 @@ public open class SKNode {
     }
 
     /**
+     * Restrictions on this node's position/rotation, applied once per frame after physics
+     * simulation. `null` by default.
+     */
+    public var constraints: List<SKConstraint>? = null
+
+    /**
+     * Applies this node's own [constraints] (in order), then recurses into its children — called
+     * once per frame by [SKScene]'s presenting [SKView], after physics. Skipped (along with the
+     * whole subtree) for an [isPaused] node, the same as [stepActions].
+     */
+    internal fun applyConstraints() {
+        if (isPaused) return
+        constraints?.forEach { applyConstraint(this, it) }
+        for (child in children.toList()) child.applyConstraints()
+    }
+
+    /**
      * This node's own local-space content bounds, before considering its transform or children —
      * a zero-size rect at the local origin for a plain [SKNode] (no visual content). Subclasses
      * with visual content (e.g. a future `SKSpriteNode`) override this.
@@ -261,7 +278,8 @@ public open class SKNode {
     }
 }
 
-private fun corners(rect: Rect): List<Vector2> =
+/** [rect]'s four corners in `[left,top / right,top / right,bottom / left,bottom]` order. Shared with [SKCameraNode]. */
+internal fun corners(rect: Rect): List<Vector2> =
     listOf(
         Vector2(rect.left, rect.top),
         Vector2(rect.right, rect.top),
@@ -269,7 +287,8 @@ private fun corners(rect: Rect): List<Vector2> =
         Vector2(rect.left, rect.bottom),
     )
 
-private fun boundingRectOf(points: List<Vector2>): Rect {
+/** The smallest axis-aligned [Rect] containing every point in [points]. Shared with [SKCameraNode]. */
+internal fun boundingRectOf(points: List<Vector2>): Rect {
     val xs = points.map { it.x }
     val ys = points.map { it.y }
     return Rect(xs.min(), ys.min(), xs.max(), ys.max())

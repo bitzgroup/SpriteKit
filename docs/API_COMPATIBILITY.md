@@ -150,6 +150,35 @@ categories recur throughout and are called out once here rather than per item:
 - **`customAction`'s block receives raw elapsed time** (`0` to the action's duration), not eased
   by `timingMode`/`timingFunction` — matches Apple's own documented behavior.
 
+## Camera, effects, crop, constraints (`SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`)
+
+- **`SKScene`/`SKCropNode` don't extend `SKEffectNode`**, unlike Apple's inheritance chain
+  (`SKScene : SKEffectNode : SKNode`). With no Core Image filter pipeline behind it,
+  `SKEffectNode` here is a plain passthrough grouping node — there's nothing for `SKScene`/
+  `SKCropNode` to meaningfully inherit from it, so retrofitting that inheritance isn't worth the
+  churn unless a real filter/offscreen-rendering pipeline lands later.
+- **`SKEffectNode.filter`** (Core Image) isn't implemented — no Android equivalent.
+  `shouldEnableEffects`/`shouldRasterize`/`shouldCenterFilter` are stored for API parity but have
+  no observable effect without a filter.
+- **`SKCropNode` clips to `maskNode`'s bounding box**, via `glScissor` — not true per-pixel alpha
+  masking. A non-rectangular or partially-transparent mask (e.g. a circular `SKShapeNode`) clips
+  to its rectangular bounds, not its actual silhouette. Nested crop nodes still intersect
+  correctly (each narrows the inherited clip rect further).
+- **`SKCameraNode.containsNode`** approximates the camera's viewport as `SKScene.size` (centered
+  per `SKScene.anchorPoint`) — it doesn't account for `SKScene.scaleMode`'s letterbox/crop
+  adjustment against the presenting `SKView`'s actual aspect ratio, since a node has no way to
+  know that from the scene-graph layer alone.
+- **`SKRange.atLeast`/`atMost`** replace Apple's overloaded `SKRange(lowerLimit:)`/
+  `SKRange(upperLimit:)` initializers — the same Kotlin-overload-resolution collision (and rename
+  pattern) as `SKNode.convertTo`/`convertFrom`.
+- **`SKRegion` isn't implemented.** Every constraint Apple documents as taking one
+  (`SKConstraint.positionX(_:y:)` and its siblings) actually takes an `SKRange`; nothing in this
+  port's constraint API needed a region.
+- **`SKConstraint`'s built-in kinds are *contract-conformant, not bit-identical*** with Apple's
+  own (undocumented) constraint-solving internals — in particular, `orient(to:offset:)`'s exact
+  algorithm for resolving the allowed angular deviation from facing the target isn't documented by
+  Apple beyond its observable effect.
+
 ## Physics (`SKPhysicsWorld`, `SKPhysicsBody`, `SKPhysicsJoint`, `SKFieldNode`)
 
 - The physics engine will be a self-contained, from-scratch 2D rigid-body implementation (no
