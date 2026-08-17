@@ -133,6 +133,7 @@ private fun addCommand(
         is SKLabelNode -> addLabelCommand(node, context, alpha)
         is SKShapeNode -> addShapeCommands(node, context, alpha)
         is SKEmitterNode -> addEmitterCommands(node, context, alpha)
+        is SKTileMapNode -> addTileMapCommands(node, context, alpha)
         else -> Unit
     }
 }
@@ -295,6 +296,56 @@ private fun addEmitterCommands(
             particle.initialZPosition + particle.zPositionSpeed * particle.age,
         )
     }
+}
+
+/**
+ * One [SKRenderCommand] per non-empty cell in [node]'s grid -- an axis-aligned quad sized by that
+ * cell's [SKTileDefinition.size] (not necessarily [SKTileMapNode.tileSize]) and centered on
+ * [SKTileMapNode.centerOfTile], sampling whichever animation frame [SKTileMapNode.elapsedTime]
+ * currently lands on. Every tile in a map shares [node]'s own [SKNode.zPosition] -- a tile map
+ * renders as one flat layer, unlike per-particle z-position.
+ */
+private fun addTileMapCommands(
+    node: SKTileMapNode,
+    context: RenderContext,
+    alpha: Float,
+) {
+    for (row in 0 until node.numberOfRows) {
+        for (column in 0 until node.numberOfColumns) {
+            addTileCommand(node, column, row, context, alpha)
+        }
+    }
+}
+
+private fun addTileCommand(
+    node: SKTileMapNode,
+    column: Int,
+    row: Int,
+    context: RenderContext,
+    alpha: Float,
+) {
+    val definition = node.tileDefinition(column, row) ?: return
+    val center = node.centerOfTile(column, row)
+    val halfSize = definition.size * 0.5f
+    val corners =
+        listOf(
+            Vector2(center.x - halfSize.x, center.y - halfSize.y),
+            Vector2(center.x + halfSize.x, center.y - halfSize.y),
+            Vector2(center.x + halfSize.x, center.y + halfSize.y),
+            Vector2(center.x - halfSize.x, center.y + halfSize.y),
+        ).map { node.convertTo(it, context.referenceNode) }
+    val texture = definition.textureAt(node.elapsedTime)
+    val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
+    context.add(
+        SKRenderCommand(
+            texture = texture,
+            blendMode = SKBlendMode.Alpha,
+            vertices = quadVertices(corners, uv),
+            color = SKVertexColor(1f, 1f, 1f, alpha),
+            clipRect = context.clipRect,
+        ),
+        node.zPosition,
+    )
 }
 
 /**
