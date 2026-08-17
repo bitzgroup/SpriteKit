@@ -9,7 +9,9 @@ import kotlin.time.Duration
  * rotation, scale) relative to its parent, an optional list of children, and participates in
  * [SKView]'s per-frame update/render loop once it's part of a presented [SKScene]'s tree.
  *
- * All node state is confined to [SKView]'s render thread — see `docs/ARCHITECTURE.md`.
+ * All node state is confined to [SKView]'s render thread — see `docs/ARCHITECTURE.md`. Touch
+ * dispatch ([touchesBegan] and friends) is delivered one [SKTouch] at a time, rather than Apple's
+ * batched `Set<UITouch>` — see `docs/API_COMPATIBILITY.md`.
  */
 public open class SKNode {
     /** Position relative to the parent's coordinate system. */
@@ -48,6 +50,13 @@ public open class SKNode {
 
     /** This node's rigid-body simulation, or `null` (the default) to opt out of physics entirely. */
     public var physicsBody: SKPhysicsBody? = null
+
+    /**
+     * Whether this node can receive touches at all — only a node with this `true` is ever a
+     * candidate during hit-testing (see `SKTouchDispatch.kt`). Defaults to `false`, except
+     * [SKScene], which defaults it to `true`, matching Apple.
+     */
+    public var isUserInteractionEnabled: Boolean = false
 
     /** This node's parent, or `null` if it's a root (or not yet attached to one). */
     public var parent: SKNode? = null
@@ -230,6 +239,36 @@ public open class SKNode {
      * with visual content (e.g. a future `SKSpriteNode`) override this.
      */
     protected open val localBounds: Rect get() = Rect.Zero
+
+    /**
+     * Whether [pointInLocalSpace] (already in this node's own local space) falls within
+     * [localBounds] — used by touch hit-testing.
+     */
+    internal fun containsLocalPoint(pointInLocalSpace: Vector2): Boolean {
+        val bounds = localBounds
+        return pointInLocalSpace.x in bounds.left..bounds.right && pointInLocalSpace.y in bounds.top..bounds.bottom
+    }
+
+    /**
+     * Called when a new touch begins on this node — only ever delivered to a node with
+     * [isUserInteractionEnabled] set. A no-op unless overridden.
+     */
+    public open fun touchesBegan(touch: SKTouch) {}
+
+    /**
+     * Called as an already-began touch moves, delivered to the same node [touchesBegan] was,
+     * regardless of where the touch moves to. A no-op unless overridden.
+     */
+    public open fun touchesMoved(touch: SKTouch) {}
+
+    /** Called when a touch this node received [touchesBegan] for lifts. A no-op unless overridden. */
+    public open fun touchesEnded(touch: SKTouch) {}
+
+    /**
+     * Called when a touch this node received [touchesBegan] for is cancelled by the system
+     * instead of lifting normally. A no-op unless overridden.
+     */
+    public open fun touchesCancelled(touch: SKTouch) {}
 
     /**
      * Transforms [point] from this node's local space into its parent's space, applying

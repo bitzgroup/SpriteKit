@@ -16,6 +16,11 @@ import kotlin.time.Duration
 public open class SKScene(
     public var size: Vector2,
 ) : SKNode() {
+    init {
+        // Apple's documented default -- every other SKNode defaults to false.
+        isUserInteractionEnabled = true
+    }
+
     /** How this scene scales to fit the [SKView] presenting it. Defaults to [SKSceneScaleMode.Fill]. */
     public var scaleMode: SKSceneScaleMode = SKSceneScaleMode.Fill
 
@@ -38,6 +43,22 @@ public open class SKScene(
 
     /** This scene's rigid-body simulation -- gravity/speed plus whatever [SKNode.physicsBody]s are in the tree. */
     public val physicsWorld: SKPhysicsWorld = SKPhysicsWorld()
+
+    /**
+     * Which node is currently handling each active touch, by pointer ID -- lets a touch that
+     * began on a node keep being delivered to that same node as it moves, regardless of where the
+     * pointer travels afterward, matching Apple's tracking behavior. See `SKTouchDispatch.kt`.
+     */
+    internal val activeTouchTargets: MutableMap<Int, SKNode> = mutableMapOf()
+
+    override val localBounds: Rect
+        get() =
+            Rect(
+                left = 0f - size.x * anchorPoint.x,
+                top = 0f - size.y * anchorPoint.y,
+                right = size.x * (1f - anchorPoint.x),
+                bottom = size.y * (1f - anchorPoint.y),
+            )
 
     /**
      * Called once per frame with the time elapsed since the previous frame, before actions,

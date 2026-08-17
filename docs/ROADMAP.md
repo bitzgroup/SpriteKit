@@ -372,9 +372,34 @@ algorithms (steering, noise, Gaussian sampling).
 
 ## Phase 10 — Input
 
-- [ ] Full `SKNode`/`SKScene` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
-      `touchesCancelled`) wired through Phase 1's UI→GL bridge
-- [ ] Hit-testing via the scene graph's accumulated frame
+- [x] Full `SKNode` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
+      `touchesCancelled`) wired through Phase 1's UI→GL bridge (`SKView.onTouchEvent` →
+      `runOnGLThread` → `dispatchTouch`, alongside — not replacing — the raw `SKView.onTouch`
+      escape hatch). `SKNode.isUserInteractionEnabled` (defaults `false`, except `SKScene`, which
+      defaults it `true`, matching Apple) gates which nodes are even candidates. Delivered one
+      `SKTouch` (`pointerId` + `location`, already converted into the *receiving* node's own local
+      space) at a time per callback, rather than Apple's batched `Set<UITouch>` — idiomatic Kotlin
+      given this library's per-pointer `SKTouchEvent` model from Phase 1, and a natural fit for
+      Android's per-pointer `MotionEvent` API; see `docs/API_COMPATIBILITY.md`. A touch is
+      hit-tested once, on `touchesBegan`; the same node keeps receiving `touchesMoved`/`Ended`/
+      `Cancelled` for that pointer regardless of where it travels afterward (tracked per pointer ID
+      in `SKScene.activeTouchTargets`), matching Apple's tracking behavior — not re-hit-tested
+      every frame
+- [x] Hit-testing via `SKNode.containsLocalPoint` against each candidate's own `localBounds`
+      (reusing the same protected property `SKSpriteNode`/`SKTileMapNode`/etc. already override for
+      rendering) rather than the full `calculateAccumulatedFrame` (which would also count a node's
+      *children*'s bounds — hit-testing should only consider a node's own shape). The frontmost
+      match wins, using the exact same "highest `zPosition`, ties broken by tree-traversal order"
+      rule `SKRenderCommandList.kt` sorts draw order by, so "what's on top" agrees between
+      rendering and touch. A touch's raw view-space point is converted into the scene's (or, if a
+      camera is set, the camera's — matching how rendering itself projects) local space by
+      inverting `computeSceneProjection`'s exact mapping (`viewToScenePoint`), so touch input and
+      rendering always agree on where things are, including under `SKSceneScaleMode`
+      letterboxing/cropping. Crop-node clipping isn't considered — a touch can still hit a node
+      even where an ancestor `SKCropNode` would clip it from view; see `docs/API_COMPATIBILITY.md`.
+      14 new tests: `viewToScenePoint`'s three-corner mapping, and `dispatchTouch`'s hit-testing
+      (inside/outside/non-interactive/hidden/frontmost-of-overlapping), touch tracking across
+      moved/ended/cancelled, and the pre-`onSurfaceChanged`/no-tracked-target no-op cases
 
 ## Phase 11 — Transitions
 

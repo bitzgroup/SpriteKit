@@ -8,10 +8,10 @@ style:
 complexity:
   TooManyFunctions:
     # SKNode (and later SKScene/SKSpriteNode/...) mirror SpriteKit's own large per-node APIs
-    # (transform properties, child management, coordinate conversion, actions, physics, ...) —
-    # a wide surface by design, not poor organization. Raised generously since these classes grow
-    # across roadmap phases.
-    thresholdInClasses: 25
+    # (transform properties, child management, coordinate conversion, actions, physics, touch
+    # handling, ...) — a wide surface by design, not poor organization. Raised generously since
+    # these classes grow across roadmap phases.
+    thresholdInClasses: 30
     # SKAction's companion mirrors SpriteKit's own ~30-factory-method SKAction API 1:1 — a
     # deliberate, cohesive API surface, not poor organization (same rationale GameplayKit-for-
     # Android's detekt.yml documents for GKGoal's companion).

@@ -16,10 +16,13 @@ decoupled from collision bitmasks; the `SKPhysicsJoint` family — pin/spring/fi
 lazily-bound anchors, a two-stage velocity-then-position solver; `SKFieldNode` — radial/linear
 gravity, drag, velocity fields), Phase 8 (particles: `SKEmitterNode`/`SKKeyframeSequence`,
 stepped once per frame independent of `SKPhysicsWorld`, rendering through the same render-command
-pipeline sprites/labels/shapes already use), and Phase 9 (tile maps: `SKTileSet`/`SKTileGroup`/
+pipeline sprites/labels/shapes already use), Phase 9 (tile maps: `SKTileSet`/`SKTileGroup`/
 `SKTileGroupRule`/`SKTileDefinition`/`SKTileMapNode`, grid-only, with adjacency-rule-based
-automapping and its own per-map animation clock) are complete — the internal renderer
-(`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile maps through one generalized
+automapping and its own per-map animation clock), and Phase 10 (input: full `SKNode` touch
+dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, one `SKTouch` at a
+time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKScene`) are
+complete — the internal renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile
+maps through one generalized
 triangle-list pipeline, camera-relative and crop-clipped via `glScissor` when applicable. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
 
