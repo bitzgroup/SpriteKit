@@ -36,7 +36,7 @@ public class SKView
         public var onTouch: ((SKTouchEvent) -> Unit)? = null
 
         private var currentScene: SKScene? = null
-        private val spriteRenderer = SKSpriteRenderer()
+        private val sceneRenderer = SKSceneRenderer()
         private var viewWidth = 0
         private var viewHeight = 0
 
@@ -98,14 +98,14 @@ public class SKView
         }
 
         /**
-         * Renders the current scene's state via [spriteRenderer] — clears to
+         * Renders the current scene's state via [sceneRenderer] — clears to
          * [SKScene.backgroundColor] and draws its sprites (Phase 3). Falls back to a plain black
          * clear when no scene is presented yet.
          */
         private fun renderFrame() {
             val scene = currentScene
             if (scene != null) {
-                spriteRenderer.draw(scene, viewWidth, viewHeight, resourceRegistry)
+                sceneRenderer.draw(scene, viewWidth, viewHeight, resourceRegistry)
             } else {
                 GLES20.glClearColor(0f, 0f, 0f, 1f)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
@@ -120,7 +120,7 @@ public class SKView
                 config: EGLConfig,
             ) {
                 clock.reset()
-                spriteRenderer.onSurfaceCreated()
+                sceneRenderer.onSurfaceCreated()
                 resourceRegistry.reloadAll()
             }
 

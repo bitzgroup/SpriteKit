@@ -10,3 +10,5 @@ internal fun redOf(argb: Int): Float = ((argb shr 16) and 0xFF) / 255f
 internal fun greenOf(argb: Int): Float = ((argb shr 8) and 0xFF) / 255f
 
 internal fun blueOf(argb: Int): Float = (argb and 0xFF) / 255f
+
+internal fun alphaOf(argb: Int): Float = ((argb ushr 24) and 0xFF) / 255f
