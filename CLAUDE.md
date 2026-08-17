@@ -5,9 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project status
 
 Phase 0 (project scaffolding), Phase 1 (threading & view foundation), Phase 2 (scene graph core:
-`SKNode`/`SKScene`), and Phase 3 (textures & sprite rendering: `SKTexture`, `SKTextureAtlas`,
-`SKSpriteNode`, and the internal OpenGL ES 2.0 sprite batcher) are complete. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
+`SKNode`/`SKScene`), Phase 3 (textures & sprite rendering: `SKTexture`, `SKTextureAtlas`,
+`SKSpriteNode`), and Phase 4 (shapes & labels: `SKShapeNode`, `SKLabelNode`) are complete — the
+internal renderer (now `SKSceneRenderer`) draws all three node types through one generalized
+triangle-list pipeline. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan
+and progress checklist.
 
 ## Intent
 

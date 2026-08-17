@@ -2,24 +2,32 @@ package jp.co.bitz.spritekit
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class SKSpriteDrawListTest {
+class SKRenderCommandListTest {
     @Test
     fun `an untextured sprite produces a command with a null texture and its world-space quad`() {
         val scene = SKScene(size = Vector2(100f, 100f))
         val sprite = SKSpriteNode(size = Vector2(4f, 2f)).apply { position = Vector2(10f, 20f) }
         scene.addChild(sprite)
 
-        val commands = buildSpriteDrawList(scene)
+        val commands = buildRenderCommands(scene)
 
         assertEquals(1, commands.size)
-        val quad = commands.single().quad
-        assertEquals(Vector2(8f, 19f), quad.bottomLeft)
-        assertEquals(Vector2(12f, 19f), quad.bottomRight)
-        assertEquals(Vector2(12f, 21f), quad.topRight)
-        assertEquals(Vector2(8f, 21f), quad.topLeft)
-        assertEquals(null, commands.single().texture)
+        val command = commands.single()
+        assertNull(command.texture)
+        assertEquals(
+            listOf(
+                Vector2(8f, 19f),
+                Vector2(12f, 19f),
+                Vector2(12f, 21f),
+                Vector2(8f, 19f),
+                Vector2(12f, 21f),
+                Vector2(8f, 21f),
+            ),
+            command.vertices.map { it.position },
+        )
     }
 
     @Test
@@ -27,7 +35,7 @@ class SKSpriteDrawListTest {
         val scene = SKScene(size = Vector2(100f, 100f))
         scene.addChild(SKSpriteNode(size = Vector2(4f, 2f)).apply { isHidden = true })
 
-        assertTrue(buildSpriteDrawList(scene).isEmpty())
+        assertTrue(buildRenderCommands(scene).isEmpty())
     }
 
     @Test
@@ -37,7 +45,7 @@ class SKSpriteDrawListTest {
         scene.addChild(layer)
         layer.addChild(SKSpriteNode(size = Vector2(4f, 2f)))
 
-        assertTrue(buildSpriteDrawList(scene).isEmpty())
+        assertTrue(buildRenderCommands(scene).isEmpty())
     }
 
     @Test
@@ -45,7 +53,7 @@ class SKSpriteDrawListTest {
         val scene = SKScene(size = Vector2(100f, 100f))
         scene.addChild(SKSpriteNode(size = Vector2(4f, 2f)).apply { alpha = 0f })
 
-        assertTrue(buildSpriteDrawList(scene).isEmpty())
+        assertTrue(buildRenderCommands(scene).isEmpty())
     }
 
     @Test
@@ -55,7 +63,7 @@ class SKSpriteDrawListTest {
         scene.addChild(layer)
         layer.addChild(SKSpriteNode(size = Vector2(4f, 2f)).apply { alpha = 0.5f })
 
-        val command = buildSpriteDrawList(scene).single()
+        val command = buildRenderCommands(scene).single()
 
         assertEquals(0.25f, command.color.a)
     }
@@ -65,9 +73,9 @@ class SKSpriteDrawListTest {
         val scene = SKScene(size = Vector2(100f, 100f))
         scene.addChild(SKSpriteNode(size = Vector2(4f, 2f), color = 0xFF00FF00.toInt()).apply { colorBlendFactor = 0f })
 
-        val color = buildSpriteDrawList(scene).single().color
+        val color = buildRenderCommands(scene).single().color
 
-        assertEquals(SKSpriteColor(1f, 1f, 1f, 1f), color)
+        assertEquals(SKVertexColor(1f, 1f, 1f, 1f), color)
     }
 
     @Test
@@ -75,9 +83,9 @@ class SKSpriteDrawListTest {
         val scene = SKScene(size = Vector2(100f, 100f))
         scene.addChild(SKSpriteNode(size = Vector2(4f, 2f), color = 0xFF00FF00.toInt()).apply { colorBlendFactor = 1f })
 
-        val color = buildSpriteDrawList(scene).single().color
+        val color = buildRenderCommands(scene).single().color
 
-        assertEquals(SKSpriteColor(0f, 1f, 0f, 1f), color)
+        assertEquals(SKVertexColor(0f, 1f, 0f, 1f), color)
     }
 
     @Test
@@ -96,7 +104,7 @@ class SKSpriteDrawListTest {
         scene.addChild(front) // added first, but its higher zPosition should still sort it last
         scene.addChild(back)
 
-        val commands = buildSpriteDrawList(scene)
+        val commands = buildRenderCommands(scene)
 
         assertEquals(2, commands.size)
         assertEquals(1f, commands[0].color.b) // back (blue, zPosition -10) drawn first
@@ -111,7 +119,7 @@ class SKSpriteDrawListTest {
         scene.addChild(first) // added first -> earlier tree order
         scene.addChild(second)
 
-        val commands = buildSpriteDrawList(scene)
+        val commands = buildRenderCommands(scene)
 
         assertEquals(1f, commands[0].color.r) // red sprite (first) drawn before blue (second)
         assertEquals(1f, commands[1].color.b)
@@ -124,6 +132,22 @@ class SKSpriteDrawListTest {
         scene.addChild(layer)
         layer.addChild(SKSpriteNode(size = Vector2(1f, 1f)))
 
-        assertEquals(1, buildSpriteDrawList(scene).size)
+        assertEquals(1, buildRenderCommands(scene).size)
+    }
+
+    @Test
+    fun `an empty-text label produces no command`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        scene.addChild(SKLabelNode(text = ""))
+
+        assertTrue(buildRenderCommands(scene).isEmpty())
+    }
+
+    @Test
+    fun `a shape node with no path produces no command`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        scene.addChild(SKShapeNode())
+
+        assertTrue(buildRenderCommands(scene).isEmpty())
     }
 }

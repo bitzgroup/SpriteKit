@@ -150,11 +150,23 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
 
 ## Phase 4 — Shapes & Labels
 
-- [ ] `SKShapeNode` — fill/stroke rendered from a triangulated `android.graphics.Path`,
-      `strokeColor`/`fillColor`/`lineWidth`/`glowWidth`
-- [ ] `SKLabelNode` — `text`/`fontName`/`fontSize`/`fontColor`/alignment modes, glyphs rendered via
-      `android.graphics.Paint` into a cached texture (no CoreText equivalent on Android — see
-      `docs/API_COMPATIBILITY.md`)
+- [x] Generalized Phase 3's quad-only render pipeline into a flat-triangle-list one
+      (`SKSpriteRenderer` → `SKSceneRenderer`, `buildSpriteDrawList` → `buildRenderCommands`) so
+      shapes (arbitrary triangle meshes, no texture) interleave correctly by `zPosition` with
+      sprites and labels (both still just textured quads) in one draw list — needed because all
+      three node types must sort together, not as separate draw passes
+- [x] `SKShapeNode` — `path` (an `android.graphics.Path`, this library's `CGPath` stand-in),
+      `strokeColor`/`fillColor`/`lineWidth`/`glowWidth` (stored, not rendered — see
+      `docs/API_COMPATIBILITY.md`). Fill via ear-clipping triangulation (`triangulateFill`),
+      stroke via a per-segment quad ribbon (`triangulateStroke`) — both pure Kotlin and
+      unit-tested; flattening the `Path`'s curves into line segments first (`flattenPath`, via
+      `PathMeasure`) is not, for the same Android-API-safety reasons as everything else touching
+      `Bitmap`/`Canvas`/`GLES20`
+- [x] `SKLabelNode` — `text`/`fontName`/`fontSize`/`fontColor`/alignment modes, glyphs rendered via
+      `android.graphics.Paint`/`Canvas` into a cached texture, regenerated only when the text or
+      font actually changes (no CoreText equivalent on Android — see
+      `docs/API_COMPATIBILITY.md`). The alignment-offset math (`labelQuadCorners`) is pure Kotlin
+      and unit-tested separately from the `Paint`-based measurement/rendering it consumes
 
 ## Phase 5 — Actions
 

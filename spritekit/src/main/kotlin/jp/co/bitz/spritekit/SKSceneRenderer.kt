@@ -32,20 +32,21 @@ private const val FRAGMENT_SHADER_SOURCE = """
 """
 
 private const val FLOATS_PER_VERTEX = 8 // position(2) + texCoord(2) + color(4)
-private const val VERTICES_PER_QUAD = 6 // two triangles, non-indexed
 private const val BYTES_PER_FLOAT = 4
 
 /**
- * The OpenGL ES 2.0 sprite batcher: compiles the default shader program, uploads/re-uploads
- * [SKTexture]s on demand (see [SKResourceRegistry.generation]), and draws the [SKSpriteDrawCommand]
- * list [buildSpriteDrawList] produces, batched into as few `glDrawArrays` calls as practical by
- * runs of consecutive commands sharing a texture and [SKBlendMode].
+ * The OpenGL ES 2.0 scene renderer: compiles the default shader program, uploads/re-uploads
+ * [SKTexture]s on demand (see [SKResourceRegistry.generation]), and draws the [SKRenderCommand]
+ * list [buildRenderCommands] produces — [SKSpriteNode]s, [SKLabelNode]s, and [SKShapeNode]
+ * fills/strokes alike, since they all reduce to the same "flat triangle list, texture, blend
+ * mode, vertex color" shape — batched into as few `glDrawArrays` calls as practical by runs of
+ * consecutive commands sharing a texture and [SKBlendMode].
  *
  * Not part of the public API — an [SKView] implementation detail. Touches real
  * `GLES20`/`GLUtils`/`Matrix` calls throughout, so — unlike this file's siblings — it isn't
  * covered by unit tests; see `docs/ROADMAP.md`'s testing notes.
  */
-internal class SKSpriteRenderer {
+internal class SKSceneRenderer {
     private var program = 0
     private var positionAttrib = 0
     private var texCoordAttrib = 0
@@ -54,7 +55,7 @@ internal class SKSpriteRenderer {
     private var textureUniform = 0
     private var whiteTextureId = 0
     private val mvpMatrix = FloatArray(16)
-    private var vertexBuffer = allocateVertexBuffer(VERTICES_PER_QUAD)
+    private var vertexBuffer = allocateVertexBuffer(64)
 
     /** (Re)compiles the shader program and the fallback white texture. Call from `onSurfaceCreated`. */
     fun onSurfaceCreated() {
@@ -67,7 +68,7 @@ internal class SKSpriteRenderer {
         whiteTextureId = createWhiteTexture()
     }
 
-    /** Clears the frame to [SKScene.backgroundColor], then draws [scene]'s sprites. */
+    /** Clears the frame to [SKScene.backgroundColor], then draws [scene]'s content. */
     fun draw(
         scene: SKScene,
         viewWidth: Int,
@@ -85,7 +86,7 @@ internal class SKSpriteRenderer {
         )
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
-        val commands = buildSpriteDrawList(scene)
+        val commands = buildRenderCommands(scene)
         if (commands.isEmpty()) return
 
         GLES20.glUseProgram(program)
@@ -110,15 +111,16 @@ internal class SKSpriteRenderer {
     }
 
     private fun drawRun(
-        run: List<SKSpriteDrawCommand>,
+        run: List<SKRenderCommand>,
         resourceRegistry: SKResourceRegistry,
     ) {
         applyBlendMode(run.first().blendMode)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId(run.first().texture, resourceRegistry))
 
-        val buffer = ensureCapacity(run.size)
+        val vertexCount = run.sumOf { it.vertices.size }
+        val buffer = ensureCapacity(vertexCount)
         buffer.clear()
-        for (command in run) appendQuad(buffer, command)
+        for (command in run) appendCommand(buffer, command)
         buffer.flip()
 
         val stride = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
@@ -129,7 +131,7 @@ internal class SKSpriteRenderer {
         buffer.position(4)
         GLES20.glVertexAttribPointer(colorAttrib, 4, GLES20.GL_FLOAT, false, stride, buffer)
 
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, run.size * VERTICES_PER_QUAD)
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, vertexCount)
     }
 
     private fun textureId(
@@ -189,10 +191,9 @@ internal class SKSpriteRenderer {
         return ids[0]
     }
 
-    private fun ensureCapacity(quadCount: Int): FloatBuffer {
-        val neededVertices = quadCount * VERTICES_PER_QUAD
-        if (vertexBuffer.capacity() < neededVertices * FLOATS_PER_VERTEX) {
-            vertexBuffer = allocateVertexBuffer(neededVertices)
+    private fun ensureCapacity(vertexCount: Int): FloatBuffer {
+        if (vertexBuffer.capacity() < vertexCount * FLOATS_PER_VERTEX) {
+            vertexBuffer = allocateVertexBuffer(vertexCount)
         }
         return vertexBuffer
     }
@@ -200,9 +201,9 @@ internal class SKSpriteRenderer {
 
 /** Groups the run of consecutive commands, starting at [startIndex], sharing a texture and blend mode. */
 private fun takeRun(
-    commands: List<SKSpriteDrawCommand>,
+    commands: List<SKRenderCommand>,
     startIndex: Int,
-): List<SKSpriteDrawCommand> {
+): List<SKRenderCommand> {
     val first = commands[startIndex]
     var end = startIndex + 1
     while (end < commands.size &&
@@ -214,31 +215,15 @@ private fun takeRun(
     return commands.subList(startIndex, end)
 }
 
-private fun appendQuad(
+private fun appendCommand(
     buffer: FloatBuffer,
-    command: SKSpriteDrawCommand,
+    command: SKRenderCommand,
 ) {
-    val uv = command.texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
-    val quad = command.quad
-    val color = command.color
-    appendVertex(buffer, quad.bottomLeft, uv.left, uv.bottom, color)
-    appendVertex(buffer, quad.bottomRight, uv.right, uv.bottom, color)
-    appendVertex(buffer, quad.topRight, uv.right, uv.top, color)
-    appendVertex(buffer, quad.bottomLeft, uv.left, uv.bottom, color)
-    appendVertex(buffer, quad.topRight, uv.right, uv.top, color)
-    appendVertex(buffer, quad.topLeft, uv.left, uv.top, color)
-}
-
-private fun appendVertex(
-    buffer: FloatBuffer,
-    position: Vector2,
-    u: Float,
-    v: Float,
-    color: SKSpriteColor,
-) {
-    buffer.put(position.x).put(position.y)
-    buffer.put(u).put(v)
-    buffer.put(color.r).put(color.g).put(color.b).put(color.a)
+    for (vertex in command.vertices) {
+        buffer.put(vertex.position.x).put(vertex.position.y)
+        buffer.put(vertex.u).put(vertex.v)
+        buffer.put(command.color.r).put(command.color.g).put(command.color.b).put(command.color.a)
+    }
 }
 
 private fun applyBlendMode(blendMode: SKBlendMode) {

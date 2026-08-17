@@ -106,8 +106,24 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Shapes & labels (`SKShapeNode`, `SKLabelNode`)
 
-- **`SKLabelNode`** will render glyphs via `android.graphics.Paint`/`Typeface` into a cached
-  texture — there is no CoreText equivalent on Android.
+- **`SKShapeNode.path`** is a plain `android.graphics.Path` — this library's `CGPath` stand-in,
+  chosen because it already fits the role well (see the "reuse existing Android types" convention
+  under "General conventions" above). Its points are interpreted directly as this node's local
+  (y-up) coordinate space, the same as every other node's local geometry (e.g. `SKSpriteNode.size`)
+  — no y-flip, since `Path` itself has no inherent "up" direction until something renders it, and
+  this library never renders it via `Canvas`.
+- **Fill triangulation** (`triangulateFill`) is classic ear-clipping: doesn't support holes, and
+  stops early (returning whatever was triangulated so far) on self-intersecting input rather than
+  producing garbage geometry. **Stroke triangulation** (`triangulateStroke`) doesn't generate
+  miter/bevel/round joins between segments — adjacent quads simply meet (or gap slightly, at sharp
+  angles) without extra join geometry. Both are *contract-conformant, not bit-identical* with
+  Apple's own (undocumented) shape rendering.
+- **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
+  blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13).
+- **`SKLabelNode`** renders glyphs via `android.graphics.Paint`/`Typeface` into a cached texture —
+  there is no CoreText equivalent on Android.
+- **`SKLabelNode` is single-line only** — Apple's `numberOfLines`/`preferredMaxLayoutWidth`
+  multi-line wrapping isn't implemented.
 
 ## Actions (`SKAction`)
 
