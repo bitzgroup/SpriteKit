@@ -378,6 +378,25 @@ categories recur throughout and are called out once here rather than per item:
   auto-injected per node type) is not publicly specified beyond its observable effect and is
   deferred, along with `SKAttribute` per-vertex custom attributes and `SKWarpGeometry` mesh warp
   rendering. See `docs/ROADMAP.md`'s "Explicitly Out of Scope" section.
+- **`SKShader.source` is a complete GLSL ES fragment shader**, not an Apple-style modifier
+  snippet — since that snippet-injection system isn't publicly specified, this port compiles
+  `source` whole, in place of the renderer's default fragment shader, against the same
+  varyings/uniforms the default shader already exposes (`varying vec2 v_TexCoord`,
+  `varying vec4 v_Color`, `uniform sampler2D u_Texture`) plus every custom `SKUniform`.
+- **Only `SKSpriteNode.shader` exists** — Apple also exposes `shader` on `SKShapeNode`,
+  `SKEmitterNode`, and `SKScene` (a whole-scene shader); none of those are ported yet, deferred
+  along with the rest of the advanced shader system.
+- **`SKUniform` is a Kotlin sealed-value shape** (`SKUniformValue.FloatValue`/`Vector2Value`/
+  `TextureValue`, set via `SKUniform.value`) rather than Apple's one-class-many-typed-properties
+  shape — matches this library's existing `SKActionKind`/`SKConstraintKind` convention. Only
+  `float`/`vector_float2`/`texture` uniform types are ported; `vector_float3`/`vector_float4`/
+  matrix types aren't — no SIMD types in this library (see "General conventions" above), and
+  they're not needed by this phase's scope.
+- **A shader that fails to compile/link falls back to the renderer's default program**, rather
+  than crashing the render thread — there's no delegate/callback equivalent of Apple's own shader
+  compile-error reporting; a failure is silent (matching this library's audio-playback-failure
+  convention, see "Audio" above) and isn't retried every frame until `SKShader.source` is edited
+  again.
 
 ## Not implemented
 

@@ -465,13 +465,33 @@ system injects built-in symbols (`u_time`, `v_tex_coord`, ...) per node type in 
 publicly specified. This phase ships the extensibility hook and one trivial example rather than
 full parity; see `docs/ARCHITECTURE.md`.
 
-- [ ] Renderer always dispatches through a "current shader program for this node" concept (default
-      built-in program if none set), so `SKShader`/`SKUniform` slot in without re-architecting the
-      renderer built in Phase 3
-- [ ] `SKShader`/`SKUniform` — custom GLSL ES fragment shader source + uniform bindings
-- [ ] One built-in example shader (grayscale/tint) demonstrating the extension point
+- [x] Renderer always dispatches through a "current program for this run" concept: every batched
+      run of `SKRenderCommand`s now also shares a `shader` (by reference, alongside texture/blend
+      mode/clip rect — a shader change starts a new run same as a texture change does), resolved
+      to a `SKProgramBinding` (linked program + attribute/uniform locations) — the renderer's own
+      default program when `null`, or the node's `SKShader`'s own program otherwise. Locations are
+      re-resolved per run rather than reused across programs, since GLES doesn't guarantee the
+      same attribute/uniform location across two different linked programs even under identical
+      names
+- [x] `SKShader`/`SKUniform` — custom GLSL ES fragment shader source + uniform bindings. Only
+      `SKSpriteNode.shader` is exposed in this port (see `docs/API_COMPATIBILITY.md`). `SKUniform`
+      is a Kotlin sealed-value shape (`SKUniformValue.FloatValue`/`Vector2Value`/`TextureValue`)
+      rather than Apple's one-class-many-typed-properties shape, matching this library's existing
+      `SKActionKind`/`SKConstraintKind` convention; a `TextureValue` claims its own texture unit
+      above `u_Texture`'s reserved unit `0`. `SKShader`'s compiled program is lazily
+      (re)compiled/uploaded the same way `SKTexture` is — tracked via `SKResourceRegistry
+      .generation` for `EGLContext` loss, plus its own edited-`source`-since-last-compile check. A
+      shader that fails to compile/link (invalid user-supplied GLSL) falls back to the renderer's
+      default program rather than crashing the render thread, and isn't retried every frame until
+      `source` is actually edited again
+- [x] One built-in example shader, `SKShader.grayscale(intensity:)`, demonstrating the extension
+      point: blends each pixel between its own color and its grayscale luminance (standard NTSC
+      luma weights), with `intensity` exposed as a live-adjustable `SKUniform`
 - [ ] **Deferred** (see "Explicitly Out of Scope"): the shader-modifier snippet system,
-      `SKAttribute` per-vertex custom attributes, `SKWarpGeometry`, lighting (`SKLightNode`)
+      `SKAttribute` per-vertex custom attributes, `SKWarpGeometry`, lighting (`SKLightNode`),
+      `SKShapeNode`/`SKEmitterNode`/`SKScene`-level shaders. 10 new tests, all pure Kotlin —
+      `SKShader`'s `addUniform`/`uniformNamed`/`grayscale` factory, `SKUniform`'s typed
+      constructors, and a sprite's `shader` carrying through to its `SKRenderCommand`
 
 ## Phase 14 — Documentation
 
@@ -498,6 +518,9 @@ full parity; see `docs/ARCHITECTURE.md`.
   (checkerboard) velocity fields — only the radial gravity/linear gravity/drag/velocity subset is
   implemented (Phase 7d)
 - The shader-modifier snippet injection system and `SKAttribute` per-vertex custom attributes
+- `SKUniform`'s `vector_float3`/`vector_float4`/matrix value types (only `float`/`vector_float2`/
+  `texture` are ported — no SIMD types, see `docs/API_COMPATIBILITY.md`), and `shader` on anything
+  but `SKSpriteNode` (`SKShapeNode`/`SKEmitterNode`/`SKScene`-level shaders)
 - `SKReferenceNode` file-based scene loading — Apple's `.sks` scene archive format has no Android
   equivalent serialization; could be revisited with a custom Kotlin-serialization-based format
 - Any `GKScene`-style binding to [GameplayKit for Android](https://github.com/bitzgroup/GameplayKit)

@@ -52,9 +52,10 @@ foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (texture
 `SKPhysicsJoint` family, and `SKFieldNode`), Phase 8 (particles — `SKEmitterNode`,
 `SKKeyframeSequence`), Phase 9 (tile maps — `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/
 `SKTileDefinition`/`SKTileMapNode`), Phase 10 (input — `SKNode` touch dispatch), Phase 11
-(transitions — `SKTransition`, `SKView.presentScene(_:transition:)`), and Phase 12 (audio —
+(transitions — `SKTransition`, `SKView.presentScene(_:transition:)`), Phase 12 (audio —
 `SKAudioNode`, the `play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate`/`playSoundFileNamed`
-`SKAction`s) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and
+`SKAction`s), and Phase 13 (shaders — `SKShader`/`SKUniform` on `SKSpriteNode`, plus the built-in
+`SKShader.grayscale` example) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and
 progress checklist.
 
 ## Requirements
