@@ -9,6 +9,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.time.Duration
 
 /**
  * Hosts an [SKScene], driving its per-frame update/render loop. Mirrors Apple's `SKView`
@@ -41,6 +42,10 @@ public class SKView
         private var viewWidth = 0
         private var viewHeight = 0
 
+        private var transitionFromScene: SKScene? = null
+        private var transitionSpec: SKTransition? = null
+        private var transitionElapsed: Duration = Duration.ZERO
+
         init {
             setEGLContextClientVersion(2)
             setRenderer(SceneRenderer())
@@ -53,6 +58,26 @@ public class SKView
          */
         public fun presentScene(scene: SKScene) {
             runOnGLThread { currentScene = scene }
+        }
+
+        /**
+         * Presents [scene] like [presentScene], but plays [transition] over its
+         * [SKTransition.duration] instead of cutting instantly — a no-op transition (just an
+         * instant cut) if no scene was already presented, since there'd be nothing to transition
+         * from.
+         */
+        public fun presentScene(
+            scene: SKScene,
+            transition: SKTransition,
+        ) {
+            runOnGLThread {
+                currentScene?.let {
+                    transitionFromScene = it
+                    transitionSpec = transition
+                    transitionElapsed = Duration.ZERO
+                }
+                currentScene = scene
+            }
         }
 
         /**
@@ -116,6 +141,67 @@ public class SKView
             }
         }
 
+        /**
+         * Advances an in-progress [SKTransition] by [deltaTime] and draws it, or falls back to
+         * [renderFrame] once it's finished (or none is active). See `SKTransitionLayers.kt` for
+         * the actual per-layer offset/alpha/clip math.
+         */
+        private fun renderTransitionFrame(deltaTime: Duration) {
+            val transition = transitionSpec
+            val fromScene = transitionFromScene
+            val toScene = currentScene
+            if (transition == null || fromScene == null || toScene == null) {
+                renderFrame()
+                return
+            }
+            transitionElapsed += deltaTime
+            if (transitionElapsed >= transition.duration) {
+                transitionSpec = null
+                transitionFromScene = null
+                renderFrame()
+                return
+            }
+            val progress = (transitionElapsed / transition.duration).toFloat()
+            for (layer in transitionLayers(transition, progress, viewWidth, viewHeight)) {
+                sceneRenderer.draw(
+                    scene = if (layer.useToScene) toScene else fromScene,
+                    viewWidth = viewWidth,
+                    viewHeight = viewHeight,
+                    resourceRegistry = resourceRegistry,
+                    viewportOffset = layer.viewportOffset,
+                    viewportSize = layer.viewportSize,
+                    globalAlpha = layer.alpha,
+                    clearFirst = layer.clearFirst,
+                    outerClip = splitClip(layer.split, fromScene),
+                )
+            }
+        }
+
+        /**
+         * The scene-space rect [SKTransitionSplit.Left]/[SKTransitionSplit.Right] refers to, in
+         * [fromScene]'s own reference space -- `null` for [SKTransitionSplit.None].
+         */
+        private fun splitClip(
+            split: SKTransitionSplit,
+            fromScene: SKScene,
+        ): Rect? {
+            if (split == SKTransitionSplit.None) return null
+            val projection =
+                computeSceneProjection(
+                    fromScene.size,
+                    fromScene.anchorPoint,
+                    fromScene.scaleMode,
+                    viewWidth,
+                    viewHeight,
+                )
+            val midX = (projection.left + projection.right) / 2f
+            return when (split) {
+                SKTransitionSplit.Left -> Rect(projection.left, projection.bottom, midX, projection.top)
+                SKTransitionSplit.Right -> Rect(midX, projection.bottom, projection.right, projection.top)
+                SKTransitionSplit.None -> null
+            }
+        }
+
         private inner class SceneRenderer : Renderer {
             private val clock = SKFrameClock()
 
@@ -151,10 +237,10 @@ public class SKView
                     scene.didApplyConstraints()
                     stepEmitters(scene, deltaTime)
                     stepTileMaps(scene, deltaTime)
-                    renderFrame()
+                    renderTransitionFrame(deltaTime)
                     scene.didFinishUpdate()
                 } else {
-                    renderFrame()
+                    renderTransitionFrame(deltaTime)
                 }
             }
         }

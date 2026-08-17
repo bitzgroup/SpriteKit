@@ -68,23 +68,41 @@ internal class SKSceneRenderer {
         whiteTextureId = createWhiteTexture()
     }
 
-    /** Clears the frame to [SKScene.backgroundColor], then draws [scene]'s content. */
+    /**
+     * Clears the frame to [SKScene.backgroundColor] (unless [clearFirst] is `false`, for a layer
+     * drawn on top of one already on screen — see `SKTransitionLayers.kt`), then draws [scene]'s
+     * content into a `glViewport` of [viewportSize] (defaulting to the full [viewWidth]x
+     * [viewHeight]) at [viewportOffset], each vertex's alpha additionally scaled by [globalAlpha],
+     * and — if set — every command further clipped to [outerClip] (in the same space as
+     * [SKRenderCommand.clipRect], intersected with each command's own).
+     */
+    @Suppress("LongParameterList")
     fun draw(
         scene: SKScene,
         viewWidth: Int,
         viewHeight: Int,
         resourceRegistry: SKResourceRegistry,
+        viewportOffset: Vector2 = Vector2.Zero,
+        viewportSize: Vector2? = null,
+        globalAlpha: Float = 1f,
+        clearFirst: Boolean = true,
+        outerClip: Rect? = null,
     ) {
         val projection = computeSceneProjection(scene.size, scene.anchorPoint, scene.scaleMode, viewWidth, viewHeight)
         Matrix.orthoM(mvpMatrix, 0, projection.left, projection.right, projection.bottom, projection.top, -1f, 1f)
 
-        GLES20.glClearColor(
-            redOf(scene.backgroundColor),
-            greenOf(scene.backgroundColor),
-            blueOf(scene.backgroundColor),
-            1f,
-        )
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        val size = viewportSize ?: Vector2(viewWidth.toFloat(), viewHeight.toFloat())
+        GLES20.glViewport(viewportOffset.x.toInt(), viewportOffset.y.toInt(), size.x.toInt(), size.y.toInt())
+
+        if (clearFirst) {
+            GLES20.glClearColor(
+                redOf(scene.backgroundColor),
+                greenOf(scene.backgroundColor),
+                blueOf(scene.backgroundColor),
+                1f,
+            )
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        }
 
         val commands = buildRenderCommands(scene)
         if (commands.isEmpty()) return
@@ -101,7 +119,7 @@ internal class SKSceneRenderer {
         var index = 0
         while (index < commands.size) {
             val run = takeRun(commands, index)
-            drawRun(run, resourceRegistry, projection, viewWidth, viewHeight)
+            drawRun(run, resourceRegistry, projection, viewWidth, viewHeight, globalAlpha, outerClip)
             index += run.size
         }
 
@@ -109,23 +127,27 @@ internal class SKSceneRenderer {
         GLES20.glDisableVertexAttribArray(positionAttrib)
         GLES20.glDisableVertexAttribArray(texCoordAttrib)
         GLES20.glDisableVertexAttribArray(colorAttrib)
+        GLES20.glViewport(0, 0, viewWidth, viewHeight)
     }
 
+    @Suppress("LongParameterList")
     private fun drawRun(
         run: List<SKRenderCommand>,
         resourceRegistry: SKResourceRegistry,
         projection: SKSceneProjection,
         viewWidth: Int,
         viewHeight: Int,
+        globalAlpha: Float,
+        outerClip: Rect?,
     ) {
-        applyScissor(run.first().clipRect, projection, viewWidth, viewHeight)
+        applyScissor(combinedClip(run.first().clipRect, outerClip), projection, viewWidth, viewHeight)
         applyBlendMode(run.first().blendMode)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId(run.first().texture, resourceRegistry))
 
         val vertexCount = run.sumOf { it.vertices.size }
         val buffer = ensureCapacity(vertexCount)
         buffer.clear()
-        for (command in run) appendCommand(buffer, command)
+        for (command in run) appendCommand(buffer, command, globalAlpha)
         buffer.flip()
 
         val stride = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
@@ -248,14 +270,34 @@ private fun applyScissor(
     GLES20.glScissor(x.toInt(), y.toInt(), width.toInt().coerceAtLeast(0), height.toInt().coerceAtLeast(0))
 }
 
+/**
+ * [ownClip] (an [SKRenderCommand]'s own, possibly-`null`, [SKCropNode]-derived clip) intersected
+ * with [outerClip] (a whole-`draw`-call clip — see `SKTransitionLayers.kt`'s [SKTransitionSplit]).
+ * Not `ownClip?.intersection(outerClip) ?: outerClip`: that would (wrongly) fall back to
+ * [outerClip] even when [ownClip] and [outerClip] genuinely don't overlap, instead of drawing
+ * nothing — the same trap [SKRenderCommandList.kt]'s nested-crop-node clipping already avoids.
+ * A non-`null`-but-empty intersection is represented as a zero-area rect (which `glScissor`
+ * naturally renders as "nothing"), rather than `null` ("unclipped").
+ */
+private fun combinedClip(
+    ownClip: Rect?,
+    outerClip: Rect?,
+): Rect? =
+    when {
+        outerClip == null -> ownClip
+        ownClip == null -> outerClip
+        else -> ownClip.intersection(outerClip) ?: Rect(0f, 0f, 0f, 0f)
+    }
+
 private fun appendCommand(
     buffer: FloatBuffer,
     command: SKRenderCommand,
+    globalAlpha: Float,
 ) {
     for (vertex in command.vertices) {
         buffer.put(vertex.position.x).put(vertex.position.y)
         buffer.put(vertex.u).put(vertex.v)
-        buffer.put(command.color.r).put(command.color.g).put(command.color.b).put(command.color.a)
+        buffer.put(command.color.r).put(command.color.g).put(command.color.b).put(command.color.a * globalAlpha)
     }
 }
 

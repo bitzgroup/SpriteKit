@@ -18,13 +18,16 @@ gravity, drag, velocity fields), Phase 8 (particles: `SKEmitterNode`/`SKKeyframe
 stepped once per frame independent of `SKPhysicsWorld`, rendering through the same render-command
 pipeline sprites/labels/shapes already use), Phase 9 (tile maps: `SKTileSet`/`SKTileGroup`/
 `SKTileGroupRule`/`SKTileDefinition`/`SKTileMapNode`, grid-only, with adjacency-rule-based
-automapping and its own per-map animation clock), and Phase 10 (input: full `SKNode` touch
+automapping and its own per-map animation clock), Phase 10 (input: full `SKNode` touch
 dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, one `SKTouch` at a
-time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKScene`) are
-complete — the internal renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile
-maps through one generalized
-triangle-list pipeline, camera-relative and crop-clipped via `glScissor` when applicable. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
+time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKScene`), and Phase
+11 (transitions: `SKTransition` fade/crossFade/moveIn/push/reveal/doorway/flip,
+`SKView.presentScene(_:transition:)` — no offscreen-framebuffer support, so every effect reduces
+to `glViewport` offset/size, a whole-scene alpha multiplier, and (`doorway` only) a scissor clip)
+are complete — the internal renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile
+maps through one generalized triangle-list pipeline, camera-relative and crop-clipped via
+`glScissor` when applicable. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase
+plan and progress checklist.
 
 ## Intent
 
