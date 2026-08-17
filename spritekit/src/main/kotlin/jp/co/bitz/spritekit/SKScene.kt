@@ -1,26 +1,33 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.Color
 import kotlin.time.Duration
 
 /**
- * The root of a scene's per-frame simulation, hosted by [SKView].
+ * The root of a scene's node tree and per-frame simulation, hosted by [SKView]. Mirrors Apple's
+ * `SKScene`, which — like this class — is itself an [SKNode] subclass: a scene's own transform
+ * properties ([SKNode.position] etc.) are rarely used directly, but its [children] are the scene
+ * graph everything else attaches to.
  *
- * Mirrors Apple's `SKScene` lifecycle callback shape. In SpriteKit, `SKScene` also extends
- * `SKNode` to gain the scene graph (children, coordinate space, `size`/`scaleMode`/`anchorPoint`,
- * background color); that part of the API lands in Phase 2 once [jp.co.bitz.spritekit]'s `SKNode`
- * exists, since a real `SKScene` can't subclass a node type that hasn't been written yet. This
- * Phase 1 shell only carries the per-frame callback surface [SKView]'s render loop needs.
- *
- * Subclass this and override [update] (and, less commonly, the other callbacks) to drive
- * game/simulation logic. All callbacks run on [SKView]'s render thread — see
- * `docs/ARCHITECTURE.md`.
+ * Subclass this and override [update] (and, less commonly, the other lifecycle callbacks) to
+ * drive game/simulation logic. All callbacks, and all access to this scene's node tree, run on
+ * [SKView]'s render thread — see `docs/ARCHITECTURE.md`.
  */
-public open class SKScene {
+public open class SKScene(
+    public var size: Vector2,
+) : SKNode() {
+    /** How this scene scales to fit the [SKView] presenting it. Defaults to [SKSceneScaleMode.Fill]. */
+    public var scaleMode: SKSceneScaleMode = SKSceneScaleMode.Fill
+
     /**
-     * When `true`, [SKView]'s render loop skips [update] and the rest of the per-frame sequence
-     * for this scene (time does not advance), but still renders the scene's current state.
+     * The point within [size] (normalized `0..1` on each axis) that maps to the [SKView]'s
+     * origin. `(0, 0)` (the default) puts the scene's origin at the view's bottom-left corner;
+     * `(0.5, 0.5)` centers it.
      */
-    public var isPaused: Boolean = false
+    public var anchorPoint: Vector2 = Vector2.Zero
+
+    /** The color cleared behind this scene's content each frame. An ARGB packed `Int`, matching [Color]. */
+    public var backgroundColor: Int = Color.BLACK
 
     /**
      * Called once per frame with the time elapsed since the previous frame, before actions,

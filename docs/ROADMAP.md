@@ -106,14 +106,22 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
 
 ## Phase 2 — Scene Graph Core
 
-- [ ] `SKNode` — transform hierarchy (`position`, `zPosition`, `zRotation`, `xScale`/`yScale`,
-      `alpha`, `isHidden`, `isPaused`, `name`, `userData`), `addChild`/`removeFromParent`,
-      `childNode(withName:)`, `enumerateChildNodes(withName:)`, coordinate conversion
-      (`convert(_:to:)`/`convert(_:from:)`), `calculateAccumulatedFrame()`, `intersects(_:)`
-- [ ] `SKScene` — extend Phase 1's lifecycle-callback-only shell to subclass `SKNode` (now that it
-      exists) and add `size`, `scaleMode` (`.fill`/`.aspectFill`/`.aspectFit`/`.resizeFill`),
-      `anchorPoint`, background color
-- [ ] Pure Kotlin, no GL dependency — fully unit-testable independent of a live GL context
+- [x] `Vector2` — this library's `CGPoint`/`CGVector` stand-in (see `docs/API_COMPATIBILITY.md`);
+      `Rect` — its `CGRect` stand-in, a plain Kotlin value type rather than
+      `android.graphics.RectF` (whose instance methods aren't safe to call from plain JVM unit
+      tests without Robolectric)
+- [x] `SKNode` — transform hierarchy (`position`, `zPosition`, `zRotation`, `xScale`/`yScale`,
+      `alpha`, `isHidden`, `isPaused`, `name`, `userData`), `addChild`/`removeFromParent`/
+      `removeAllChildren`, `childNode`/`enumerateChildNodes` (direct-child exact-name match only;
+      see `docs/API_COMPATIBILITY.md`), coordinate conversion (`convertTo`/`convertFrom`, renamed
+      from Apple's `convert(_:to:)`/`convert(_:from:)` — see `docs/API_COMPATIBILITY.md`),
+      `calculateAccumulatedFrame()`, `intersects(_:)`
+- [x] `SKScene` — extended Phase 1's lifecycle-callback-only shell to subclass `SKNode` and added
+      `size`, `scaleMode` (`.fill`/`.aspectFill`/`.aspectFit`/`.resizeFill`), `anchorPoint`,
+      `backgroundColor`
+- [x] Pure Kotlin, no GL dependency — fully unit-testable independent of a live GL context (28
+      unit tests across `Vector2`/`Rect`-adjacent transform math, child management, coordinate
+      conversion, and accumulated-frame/intersection logic)
 
 ## Phase 3 — Textures & Sprite Rendering
 

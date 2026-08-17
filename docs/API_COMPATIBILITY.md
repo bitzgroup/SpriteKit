@@ -55,7 +55,25 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Scene graph (`SKNode`, `SKScene`)
 
-*To be filled in when Phase 2 lands.*
+- **`convertTo`/`convertFrom` instead of `convert(_:to:)`/`convert(_:from:)`.** Swift argument
+  labels aren't significant for Kotlin overload resolution, so both would collide as a single
+  `convert(point: Vector2, node: SKNode): Vector2` overload — the same problem, and the same
+  rename pattern, as GameplayKit-for-Android's `GKGraphNode.pathFrom`/`pathTo` (renamed from
+  `findPath(from:)`/`findPath(to:)`).
+- **`childNode`/`enumerateChildNodes` only support an exact-name match among *direct* children.**
+  Apple's `childNode(withName:)`/`enumerateChildNodes(withName:using:)` additionally support a
+  `/`-separated path syntax with `//` for recursive descent and `*` wildcards — not implemented.
+  `enumerateChildNodes` also drops the `UnsafeMutablePointer<ObjCBool>` "stop" out-parameter from
+  its callback (no Kotlin/Obj-C runtime equivalent); the callback is a plain `(SKNode) -> Unit`.
+- **`Vector2` stands in for both `CGPoint` and `CGVector`** (position vs. velocity/force/gravity in
+  Apple's API) — one Kotlin type covers both roles, since the split is a Core Graphics/Objective-C
+  legacy this port doesn't need. **`Rect` stands in for `CGRect`**, returned by
+  `calculateAccumulatedFrame()` — a plain Kotlin value type, not `android.graphics.RectF` (see
+  `docs/ROADMAP.md`'s Phase 2 entry for why).
+- **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
+  action evaluation/physics simulation isn't implemented yet — there's no action or physics system
+  to propagate to until later phases. Only `SKScene.isPaused` (inherited from here) is currently
+  honored, by `SKView`'s render loop.
 
 ## Textures & sprites (`SKTexture`, `SKTextureAtlas`, `SKSpriteNode`)
 
