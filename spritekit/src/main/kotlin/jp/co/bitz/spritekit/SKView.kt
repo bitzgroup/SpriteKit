@@ -36,6 +36,9 @@ public class SKView
         public var onTouch: ((SKTouchEvent) -> Unit)? = null
 
         private var currentScene: SKScene? = null
+        private val spriteRenderer = SKSpriteRenderer()
+        private var viewWidth = 0
+        private var viewHeight = 0
 
         init {
             setEGLContextClientVersion(2)
@@ -95,13 +98,18 @@ public class SKView
         }
 
         /**
-         * Renders the current scene's state. Phase 1 has no rendering pipeline yet (that's Phase
-         * 3, when this starts taking the scene graph as a parameter) — this just proves the
-         * frame loop and `EGLContext` are alive by clearing the frame.
+         * Renders the current scene's state via [spriteRenderer] — clears to
+         * [SKScene.backgroundColor] and draws its sprites (Phase 3). Falls back to a plain black
+         * clear when no scene is presented yet.
          */
         private fun renderFrame() {
-            GLES20.glClearColor(0f, 0f, 0f, 1f)
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            val scene = currentScene
+            if (scene != null) {
+                spriteRenderer.draw(scene, viewWidth, viewHeight, resourceRegistry)
+            } else {
+                GLES20.glClearColor(0f, 0f, 0f, 1f)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            }
         }
 
         private inner class SceneRenderer : Renderer {
@@ -112,6 +120,7 @@ public class SKView
                 config: EGLConfig,
             ) {
                 clock.reset()
+                spriteRenderer.onSurfaceCreated()
                 resourceRegistry.reloadAll()
             }
 
@@ -120,6 +129,8 @@ public class SKView
                 width: Int,
                 height: Int,
             ) {
+                viewWidth = width
+                viewHeight = height
                 GLES20.glViewport(0, 0, width, height)
             }
 

@@ -23,6 +23,16 @@ public fun interface SKReloadableResource {
 public class SKResourceRegistry {
     private val resources = mutableListOf<SKReloadableResource>()
 
+    /**
+     * Bumped by every [reloadAll] call. Resources that upload lazily on first use (like
+     * [SKTexture], added in Phase 3) compare their own last-uploaded generation against this to
+     * detect a context loss without needing to [register] a callback — simpler than the
+     * callback-list mechanism below for resources that don't exist yet when a given `SKView` is
+     * created.
+     */
+    public var generation: Int = 0
+        private set
+
     /** Registers [resource] to be reloaded on every future [reloadAll] call. */
     public fun register(resource: SKReloadableResource) {
         resources.add(resource)
@@ -33,8 +43,12 @@ public class SKResourceRegistry {
         resources.remove(resource)
     }
 
-    /** Calls [SKReloadableResource.reload] on every registered resource, in registration order. */
+    /**
+     * Bumps [generation], then calls [SKReloadableResource.reload] on every registered resource,
+     * in registration order.
+     */
     public fun reloadAll() {
+        generation++
         resources.forEach { it.reload() }
     }
 }
