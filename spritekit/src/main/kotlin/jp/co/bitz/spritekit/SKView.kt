@@ -145,6 +145,7 @@ public class SKView
                     scene.didSimulatePhysics()
                     scene.applyConstraints()
                     scene.didApplyConstraints()
+                    stepEmitters(scene, deltaTime)
                     renderFrame()
                     scene.didFinishUpdate()
                 } else {

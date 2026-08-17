@@ -1,5 +1,8 @@
 package jp.co.bitz.spritekit
 
+import kotlin.math.cos
+import kotlin.math.sin
+
 /**
  * A single rendered vertex: [position] already in the presenting [SKScene]'s (or, if one is set,
  * [SKScene.camera]'s) coordinate space, plus texture coordinates.
@@ -129,6 +132,7 @@ private fun addCommand(
         is SKSpriteNode -> addSpriteCommand(node, context, alpha)
         is SKLabelNode -> addLabelCommand(node, context, alpha)
         is SKShapeNode -> addShapeCommands(node, context, alpha)
+        is SKEmitterNode -> addEmitterCommands(node, context, alpha)
         else -> Unit
     }
 }
@@ -248,6 +252,70 @@ private fun shapeCommand(
         color = SKVertexColor(redOf(colorInt), greenOf(colorInt), blueOf(colorInt), alpha),
         clipRect = context.clipRect,
     )
+
+/**
+ * One [SKRenderCommand] per currently-alive particle -- each is its own small textured quad, with
+ * its own scale/rotation/alpha/color/z-position sampled from its age, positioned by translating
+ * [SKParticle.position] (in [node]'s own local space) before converting to [context]'s reference
+ * space, reusing the same [quadVertices] shape [addSpriteCommand] does.
+ */
+private fun addEmitterCommands(
+    node: SKEmitterNode,
+    context: RenderContext,
+    alpha: Float,
+) {
+    val texture = node.particleTexture
+    val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
+    val halfSize = node.particleSize * 0.5f
+    for (particle in node.particles) {
+        val scale = particle.initialScale + particle.scaleSpeed * particle.age
+        val rotation = particle.initialRotation + particle.rotationSpeed * particle.age
+        val particleAlpha = (particle.initialAlpha + particle.alphaSpeed * particle.age).coerceIn(0f, 1f)
+        val colorBlendFactor =
+            (particle.initialColorBlendFactor + particle.colorBlendFactorSpeed * particle.age).coerceIn(
+                0f,
+                1f,
+            )
+        val lifeFraction = (particle.age / particle.lifetime).coerceIn(0f, 1f)
+        val colorInt = node.particleColorSequence?.sample(lifeFraction, ::lerpColor) ?: node.particleColor
+
+        val corners =
+            rotatedQuadCorners(
+                halfSize * scale,
+                rotation,
+            ).map { node.convertTo(it + particle.position, context.referenceNode) }
+        context.add(
+            SKRenderCommand(
+                texture = texture,
+                blendMode = node.particleBlendMode,
+                vertices = quadVertices(corners, uv),
+                color = tintedVertexColor(colorInt, colorBlendFactor, alpha * particleAlpha),
+                clipRect = context.clipRect,
+            ),
+            particle.initialZPosition + particle.zPositionSpeed * particle.age,
+        )
+    }
+}
+
+/**
+ * A quad's `[bottomLeft, bottomRight, topRight, topLeft]` corners, [halfSize] out from the origin
+ * and rotated by [rotation] radians.
+ */
+private fun rotatedQuadCorners(
+    halfSize: Vector2,
+    rotation: Float,
+): List<Vector2> {
+    val cos = cos(rotation)
+    val sin = sin(rotation)
+
+    fun rotate(local: Vector2) = Vector2(local.x * cos - local.y * sin, local.x * sin + local.y * cos)
+    return listOf(
+        rotate(Vector2(-halfSize.x, -halfSize.y)),
+        rotate(Vector2(halfSize.x, -halfSize.y)),
+        rotate(Vector2(halfSize.x, halfSize.y)),
+        rotate(Vector2(-halfSize.x, halfSize.y)),
+    )
+}
 
 /**
  * Builds the 6-vertex (2 triangle) list for a quad from its `[bottomLeft, bottomRight, topRight,

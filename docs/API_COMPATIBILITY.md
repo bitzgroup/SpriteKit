@@ -252,8 +252,31 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Particles (`SKEmitterNode`, `SKKeyframeSequence`)
 
-- **`SKEmitterNode`** will support programmatic configuration only — Apple's `.sks`
-  particle-editor archive format has no Android equivalent parser to build against.
+- **`SKEmitterNode`** supports programmatic configuration only — Apple's `.sks` particle-editor
+  archive format has no Android equivalent parser to build against.
+- **`SKEmitterNode.particleSize`** has no Apple equivalent. Apple auto-sizes each particle from
+  `particleTexture`'s pixel dimensions; this port can't do that without reading a `Bitmap`'s
+  dimensions from inside otherwise-pure-Kotlin node/config classes — the same reason
+  `SKSpriteNode.size` must be set explicitly instead of inferred from its texture. Set
+  `particleSize` explicitly (defaults to `32x32`).
+- **`SKEmitterNode.targetNode`** isn't implemented — every particle stays in the emitting node's
+  own local space for its whole life (so moving the emitter drags its existing particles along,
+  unlike Apple's default of reparenting particles into the emitter's *parent* so they don't).
+- **The scale/rotation/alpha `SKKeyframeSequence` properties** Apple documents as siblings of
+  `particleColorSequence` aren't implemented — only `particleColorSequence` is.
+- **`SKKeyframeSequence` is generic and takes an explicit `interpolate` function at `sample`
+  time**, rather than Apple's untyped (`[Any]`) version, which infers how to interpolate via
+  runtime reflection on the value's type (`CGFloat`, `SKColor`, `CGPoint`, ...). More boilerplate
+  per call site, but type-safe, and with no implicit "which types does interpolation actually
+  support" contract to document.
+- **Particles respond to `SKFieldNode`s via `SKEmitterNode.fieldBitMask`**, reusing Phase 7d's
+  field-force formulas (refactored to operate on a world position/velocity pair rather than an
+  `SKPhysicsBody`, so both physics bodies and particles — which have no physics body — can share
+  the same code). Defaults to `0` (unaffected by any field), matching Apple.
+- **Particle rendering reuses the existing `SKRenderCommandList.kt` pipeline** — each living
+  particle contributes its own quad command (the same "flat triangle list, texture, blend mode,
+  vertex color" shape `SKSpriteNode`/`SKLabelNode`/`SKShapeNode` already produce), so
+  `SKSceneRenderer` itself needed no changes to support particles.
 
 ## Shaders (`SKShader`, `SKUniform`)
 
