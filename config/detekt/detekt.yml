@@ -12,10 +12,11 @@ complexity:
     # handling, ...) — a wide surface by design, not poor organization. Raised generously since
     # these classes grow across roadmap phases.
     thresholdInClasses: 30
-    # SKAction's companion mirrors SpriteKit's own ~30-factory-method SKAction API 1:1 — a
-    # deliberate, cohesive API surface, not poor organization (same rationale GameplayKit-for-
-    # Android's detekt.yml documents for GKGoal's companion).
-    thresholdInObjects: 30
+    # SKAction's companion mirrors SpriteKit's own ~35-factory-method SKAction API 1:1 (including
+    # the Phase 12 audio actions: play/pause/stop/changeVolume/changePlaybackRate/
+    # playSoundFileNamed) — a deliberate, cohesive API surface, not poor organization (same
+    # rationale GameplayKit-for-Android's detekt.yml documents for GKGoal's companion).
+    thresholdInObjects: 35
     # SKActionExecution.kt is the frame-stepped action interpreter: one function per SKActionKind
     # composite (sequence/group/repeat) plus one apply-effect function per leaf kind.
     # SKPhysicsCollision.kt is the narrow-phase SAT/distance-test suite: one small pure function

@@ -132,12 +132,17 @@ private fun stepRepeat(
     return if (finished) remaining else null
 }
 
+// Early returns cover PlaySoundFileNamed's special (non-duration-based) path and the
+// zero-duration instant-effect case, ahead of the normal progress-based path below.
+@Suppress("ReturnCount")
 private fun stepLeaf(
     state: SKActionState,
     node: SKNode,
     availableTime: Duration,
 ): Duration? {
     val action = state.action
+    val kind = action.kind
+    if (kind is SKActionKind.PlaySoundFileNamed) return stepPlaySound(state, kind, availableTime)
     val duration = action.duration
     if (duration <= Duration.ZERO) {
         applyLeafEffect(state, action.kind, node, progress = 1f, elapsed = Duration.ZERO)
@@ -151,6 +156,24 @@ private fun stepLeaf(
     applyLeafEffect(state, action.kind, node, curve(progress), clampedElapsed)
     state.elapsed = clampedElapsed
     return if (finished) requestedElapsed - duration else null
+}
+
+/**
+ * [SKActionKind.PlaySoundFileNamed] has no fixed [SKAction.duration] to drive progress from (its
+ * real clip length isn't known ahead of time), so it bypasses [stepLeaf]'s normal duration-based
+ * path entirely: starts the clip once (cached via [SKActionState.captureOnce]), finishes
+ * immediately if [SKActionKind.PlaySoundFileNamed.waitForCompletion] is `false`, or keeps
+ * returning `null` (still running) each frame until the clip actually stops playing.
+ */
+private fun stepPlaySound(
+    state: SKActionState,
+    kind: SKActionKind.PlaySoundFileNamed,
+    availableTime: Duration,
+): Duration? {
+    val handle =
+        state.captureOnce { audioPlaybackFactory.create(kind.path, releaseOnCompletion = true).also { it.play() } }
+    if (!kind.waitForCompletion) return availableTime
+    return if (handle.isPlaying) null else availableTime
 }
 
 @Suppress("CyclomaticComplexMethod") // one branch per SKActionKind case; splitting further would obscure, not clarify
@@ -206,9 +229,39 @@ private fun applyLeafEffect(
         is SKActionKind.Wait -> Unit
         is SKActionKind.Custom -> kind.block(node, elapsed)
         is SKActionKind.Animate -> applyAnimate(state, kind, node, elapsed)
+        is SKActionKind.Play -> (node as? SKAudioNode)?.play()
+        is SKActionKind.Pause -> (node as? SKAudioNode)?.pause()
+        is SKActionKind.Stop -> (node as? SKAudioNode)?.stop()
+        is SKActionKind.ChangeVolumeTo -> applyChangeVolume(state, kind, node, progress)
+        is SKActionKind.ChangePlaybackRateTo -> applyChangePlaybackRate(state, kind, node, progress)
+        // Handled specially by stepPlaySound (no fixed duration to drive progress from);
+        // never reaches here.
+        is SKActionKind.PlaySoundFileNamed -> Unit
         // Composite kinds are handled by stepAction's own dispatch and never reach this function.
         is SKActionKind.Sequence, is SKActionKind.Group, is SKActionKind.Repeat -> Unit
     }
+}
+
+private fun applyChangeVolume(
+    state: SKActionState,
+    kind: SKActionKind.ChangeVolumeTo,
+    node: SKNode,
+    progress: Float,
+) {
+    val audio = node as? SKAudioNode ?: return
+    val from = state.captureOnce { audio.volume }
+    audio.volume = from + (kind.volume - from) * progress
+}
+
+private fun applyChangePlaybackRate(
+    state: SKActionState,
+    kind: SKActionKind.ChangePlaybackRateTo,
+    node: SKNode,
+    progress: Float,
+) {
+    val audio = node as? SKAudioNode ?: return
+    val from = state.captureOnce { audio.playbackRate }
+    audio.playbackRate = from + (kind.rate - from) * progress
 }
 
 private fun applyResize(

@@ -204,5 +204,38 @@ public class SKAction internal constructor(
             timePerFrame: Duration,
             restore: Boolean = false,
         ): SKAction = SKAction(timePerFrame * textures.size, SKActionKind.Animate(textures, timePerFrame, restore))
+
+        /** Starts (or resumes) playback. No-op on nodes other than [SKAudioNode]. */
+        public fun play(): SKAction = SKAction(Duration.ZERO, SKActionKind.Play)
+
+        /** Pauses playback in place. No-op on nodes other than [SKAudioNode]. */
+        public fun pause(): SKAction = SKAction(Duration.ZERO, SKActionKind.Pause)
+
+        /** Stops playback and rewinds to the start. No-op on nodes other than [SKAudioNode]. */
+        public fun stop(): SKAction = SKAction(Duration.ZERO, SKActionKind.Stop)
+
+        /** Animates [SKAudioNode.volume] to [to] over [duration]. No-op on other nodes. */
+        public fun changeVolume(
+            to: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ChangeVolumeTo(to))
+
+        /** Animates [SKAudioNode.playbackRate] to [to] over [duration]. No-op on other nodes. */
+        public fun changePlaybackRate(
+            to: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ChangePlaybackRateTo(to))
+
+        /**
+         * Plays the clip at [fileNamed] once, fire-and-forget — independent of any [SKAudioNode]
+         * (runnable on any node). If [waitForCompletion] is `true`, this action doesn't finish
+         * until playback actually completes; its [SKAction.duration] is always reported as `0`
+         * regardless, since the clip's real length isn't known ahead of time — see
+         * `docs/API_COMPATIBILITY.md`.
+         */
+        public fun playSoundFileNamed(
+            fileNamed: String,
+            waitForCompletion: Boolean,
+        ): SKAction = SKAction(Duration.ZERO, SKActionKind.PlaySoundFileNamed(fileNamed, waitForCompletion))
     }
 }
