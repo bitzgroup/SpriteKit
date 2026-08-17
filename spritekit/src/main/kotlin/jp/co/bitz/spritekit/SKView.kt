@@ -139,6 +139,7 @@ public class SKView
                 val scene = currentScene
                 if (scene != null && !scene.isPaused) {
                     scene.update(deltaTime)
+                    scene.stepActions(deltaTime)
                     scene.didEvaluateActions()
                     scene.didSimulatePhysics()
                     scene.didApplyConstraints()

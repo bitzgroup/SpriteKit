@@ -19,6 +19,12 @@ public data class Vector2(
 
     public operator fun times(scalar: Float): Vector2 = Vector2(x * scalar, y * scalar)
 
+    /**
+     * `0 - this`, componentwise. Not `Vector2(-x, -y)`: negating `0f` directly flips it to
+     * `-0.0f`, which breaks equality checks.
+     */
+    public operator fun unaryMinus(): Vector2 = Vector2(0f - x, 0f - y)
+
     public companion object {
         public val Zero: Vector2 = Vector2(0f, 0f)
     }

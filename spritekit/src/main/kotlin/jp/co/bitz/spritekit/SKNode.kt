@@ -2,6 +2,7 @@ package jp.co.bitz.spritekit
 
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.time.Duration
 
 /**
  * A node in the scene graph — mirrors Apple's `SKNode`. Every node has a transform (position,
@@ -138,6 +139,69 @@ public open class SKNode {
         val otherCorners = corners(other.calculateAccumulatedFrame())
         val otherCornersInMySpace = otherCorners.map { convertFrom(it, otherReferenceSpace) }
         return calculateAccumulatedFrame().intersects(boundingRectOf(otherCornersInMySpace))
+    }
+
+    private val runningActions = mutableListOf<SKRunningAction>()
+
+    /** Runs [action] on this node. */
+    public fun run(action: SKAction) {
+        runningActions += SKRunningAction(null, SKActionState(action), null)
+    }
+
+    /** Runs [action] on this node, calling [completion] once it finishes. */
+    public fun run(
+        action: SKAction,
+        completion: () -> Unit,
+    ) {
+        runningActions += SKRunningAction(null, SKActionState(action), completion)
+    }
+
+    /**
+     * Runs [action] on this node, identified by [withKey] — replaces any other action already
+     * running under that key.
+     */
+    public fun run(
+        action: SKAction,
+        withKey: String,
+    ) {
+        removeAction(withKey)
+        runningActions += SKRunningAction(withKey, SKActionState(action), null)
+    }
+
+    /** The action currently running under [forKey], or `null` if none is. */
+    public fun action(forKey: String): SKAction? = runningActions.firstOrNull { it.key == forKey }?.state?.action
+
+    /** Stops and removes the action running under [forKey]. No-op if none is. */
+    public fun removeAction(forKey: String) {
+        runningActions.removeAll { it.key == forKey }
+    }
+
+    /** Stops and removes every action running on this node. */
+    public fun removeAllActions() {
+        runningActions.clear()
+    }
+
+    /** Whether this node has any actions currently running. */
+    public fun hasActions(): Boolean = runningActions.isNotEmpty()
+
+    /**
+     * Advances this node's own running actions by [deltaTime], then recurses into its children —
+     * called once per frame by [SKScene]'s presenting [SKView]. A [isPaused] node (and its whole
+     * subtree) is skipped entirely, matching Apple's documented per-node pause semantics.
+     */
+    internal fun stepActions(deltaTime: Duration) {
+        if (isPaused) return
+        if (runningActions.isNotEmpty()) {
+            val finished = mutableListOf<SKRunningAction>()
+            for (running in runningActions.toList()) { // snapshot: a running action's own effects may mutate this list
+                if (stepAction(running.state, this, deltaTime) != null) finished += running
+            }
+            runningActions.removeAll(finished)
+            finished.forEach { it.completion?.invoke() }
+        }
+        for (child in children.toList()) { // snapshot: an action's effects may mutate the child list
+            child.stepActions(deltaTime)
+        }
     }
 
     /**

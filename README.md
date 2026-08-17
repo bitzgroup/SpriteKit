@@ -45,9 +45,9 @@ which follows the same porting philosophy for Apple's GameplayKit.
 
 This project is under active development. Phase 0 (project scaffolding), Phase 1 (threading & view
 foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (textures & sprite rendering
-— `SKTexture`, `SKTextureAtlas`, `SKSpriteNode`), and Phase 4 (shapes & labels — `SKShapeNode`,
-`SKLabelNode`) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and
-progress checklist.
+— `SKTexture`, `SKTextureAtlas`, `SKSpriteNode`), Phase 4 (shapes & labels — `SKShapeNode`,
+`SKLabelNode`), and Phase 5 (actions — `SKAction`) are complete. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and progress checklist.
 
 ## Requirements
 

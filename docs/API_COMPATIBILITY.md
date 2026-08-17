@@ -127,7 +127,28 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Actions (`SKAction`)
 
-*To be filled in when Phase 5 lands.*
+- **`fadeAlphaTo`/`fadeAlphaBy` instead of an overloaded `fadeAlpha(to:duration:)`/
+  `fadeAlpha(by:duration:)`.** Same Kotlin-overload-resolution collision (and the same rename
+  pattern) as `SKNode.convertTo`/`convertFrom`.
+- **`wait(duration:withRange:)` picks its random duration once, when the action is created.**
+  Apple re-randomizes on every run of a reused action instance (e.g. inside a `repeatForever`);
+  this library doesn't, for simplicity.
+- **`reversed()` only reverses relative ("by") actions and composites (`sequence`/`group`/
+  `repeat`) built from them.** Absolute ("to") actions — `moveTo`, `scaleTo`, `rotateTo`,
+  `resizeTo`, `fadeAlphaTo`, `colorize` — return an unreversed copy of themselves, since the value
+  they started from isn't known until run time. Actions with no natural inverse (`wait`, `run`,
+  `removeFromParent`, `customAction`, `animate`) do the same.
+- **A `group`'s exact leftover time isn't tracked.** In an enclosing `sequence`, a finished
+  `group` always hands zero leftover time to whatever runs next, even if its children actually
+  finished partway through the available frame time — contract-conformant for "did the group
+  finish," not bit-identical to Apple's own (undocumented) internal timing.
+- **`resizeTo`/`resizeBy`/`colorize`/`animate` are no-ops on any node that isn't an
+  `SKSpriteNode`** (the only node type with a mutable `size`/`color`/`colorBlendFactor`/
+  `texture`), same as their underlying properties.
+- **`animate`'s `resize` parameter isn't implemented** — same reason `SKSpriteNode.size` doesn't
+  auto-size from a texture in the first place (see the "Textures & sprites" section above).
+- **`customAction`'s block receives raw elapsed time** (`0` to the action's duration), not eased
+  by `timingMode`/`timingFunction` — matches Apple's own documented behavior.
 
 ## Physics (`SKPhysicsWorld`, `SKPhysicsBody`, `SKPhysicsJoint`, `SKFieldNode`)
 
