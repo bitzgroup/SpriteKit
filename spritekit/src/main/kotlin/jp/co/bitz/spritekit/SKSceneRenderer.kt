@@ -35,6 +35,22 @@ private const val FLOATS_PER_VERTEX = 8 // position(2) + texCoord(2) + color(4)
 private const val BYTES_PER_FLOAT = 4
 
 /**
+ * Which linked GL program a run draws with, plus its attribute/uniform locations — the renderer's
+ * own default program (from [SKSceneRenderer.onSurfaceCreated]), or a custom [SKShader]'s
+ * (lazily-compiled by [SKSceneRenderer.resolveProgram]). Locations vary per linked program even
+ * when the attribute/uniform *names* are shared, so every run resolves and binds its own, rather
+ * than assuming the default program's locations apply everywhere.
+ */
+private class SKProgramBinding(
+    val program: Int,
+    val positionAttrib: Int,
+    val texCoordAttrib: Int,
+    val colorAttrib: Int,
+    val mvpUniform: Int,
+    val textureUniform: Int,
+)
+
+/**
  * The OpenGL ES 2.0 scene renderer: compiles the default shader program, uploads/re-uploads
  * [SKTexture]s on demand (see [SKResourceRegistry.generation]), and draws the [SKRenderCommand]
  * list [buildRenderCommands] produces — [SKSpriteNode]s, [SKLabelNode]s, and [SKShapeNode]
@@ -47,24 +63,14 @@ private const val BYTES_PER_FLOAT = 4
  * covered by unit tests; see `docs/ROADMAP.md`'s testing notes.
  */
 internal class SKSceneRenderer {
-    private var program = 0
-    private var positionAttrib = 0
-    private var texCoordAttrib = 0
-    private var colorAttrib = 0
-    private var mvpUniform = 0
-    private var textureUniform = 0
+    private lateinit var defaultBinding: SKProgramBinding
     private var whiteTextureId = 0
     private val mvpMatrix = FloatArray(16)
     private var vertexBuffer = allocateVertexBuffer(64)
 
     /** (Re)compiles the shader program and the fallback white texture. Call from `onSurfaceCreated`. */
     fun onSurfaceCreated() {
-        program = compileProgram(VERTEX_SHADER_SOURCE, FRAGMENT_SHADER_SOURCE)
-        positionAttrib = GLES20.glGetAttribLocation(program, "a_Position")
-        texCoordAttrib = GLES20.glGetAttribLocation(program, "a_TexCoord")
-        colorAttrib = GLES20.glGetAttribLocation(program, "a_Color")
-        mvpUniform = GLES20.glGetUniformLocation(program, "u_MVP")
-        textureUniform = GLES20.glGetUniformLocation(program, "u_Texture")
+        defaultBinding = linkBinding(compileProgram(VERTEX_SHADER_SOURCE, FRAGMENT_SHADER_SOURCE))
         whiteTextureId = createWhiteTexture()
     }
 
@@ -107,14 +113,7 @@ internal class SKSceneRenderer {
         val commands = buildRenderCommands(scene)
         if (commands.isEmpty()) return
 
-        GLES20.glUseProgram(program)
-        GLES20.glUniformMatrix4fv(mvpUniform, 1, false, mvpMatrix, 0)
-        GLES20.glEnableVertexAttribArray(positionAttrib)
-        GLES20.glEnableVertexAttribArray(texCoordAttrib)
-        GLES20.glEnableVertexAttribArray(colorAttrib)
         GLES20.glEnable(GLES20.GL_BLEND)
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glUniform1i(textureUniform, 0)
 
         var index = 0
         while (index < commands.size) {
@@ -124,9 +123,6 @@ internal class SKSceneRenderer {
         }
 
         GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
-        GLES20.glDisableVertexAttribArray(positionAttrib)
-        GLES20.glDisableVertexAttribArray(texCoordAttrib)
-        GLES20.glDisableVertexAttribArray(colorAttrib)
         GLES20.glViewport(0, 0, viewWidth, viewHeight)
     }
 
@@ -142,7 +138,18 @@ internal class SKSceneRenderer {
     ) {
         applyScissor(combinedClip(run.first().clipRect, outerClip), projection, viewWidth, viewHeight)
         applyBlendMode(run.first().blendMode)
+
+        val binding = resolveProgram(run.first().shader, resourceRegistry)
+        GLES20.glUseProgram(binding.program)
+        GLES20.glUniformMatrix4fv(binding.mvpUniform, 1, false, mvpMatrix, 0)
+        GLES20.glEnableVertexAttribArray(binding.positionAttrib)
+        GLES20.glEnableVertexAttribArray(binding.texCoordAttrib)
+        GLES20.glEnableVertexAttribArray(binding.colorAttrib)
+
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId(run.first().texture, resourceRegistry))
+        GLES20.glUniform1i(binding.textureUniform, 0)
+        bindCustomUniforms(run.first().shader, binding.program, resourceRegistry)
 
         val vertexCount = run.sumOf { it.vertices.size }
         val buffer = ensureCapacity(vertexCount)
@@ -152,13 +159,92 @@ internal class SKSceneRenderer {
 
         val stride = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
         buffer.position(0)
-        GLES20.glVertexAttribPointer(positionAttrib, 2, GLES20.GL_FLOAT, false, stride, buffer)
+        GLES20.glVertexAttribPointer(binding.positionAttrib, 2, GLES20.GL_FLOAT, false, stride, buffer)
         buffer.position(2)
-        GLES20.glVertexAttribPointer(texCoordAttrib, 2, GLES20.GL_FLOAT, false, stride, buffer)
+        GLES20.glVertexAttribPointer(binding.texCoordAttrib, 2, GLES20.GL_FLOAT, false, stride, buffer)
         buffer.position(4)
-        GLES20.glVertexAttribPointer(colorAttrib, 4, GLES20.GL_FLOAT, false, stride, buffer)
+        GLES20.glVertexAttribPointer(binding.colorAttrib, 4, GLES20.GL_FLOAT, false, stride, buffer)
 
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, vertexCount)
+
+        GLES20.glDisableVertexAttribArray(binding.positionAttrib)
+        GLES20.glDisableVertexAttribArray(binding.texCoordAttrib)
+        GLES20.glDisableVertexAttribArray(binding.colorAttrib)
+    }
+
+    /**
+     * The [SKProgramBinding] to draw a run of commands sharing [shader] with — [defaultBinding]
+     * when `null`. Otherwise [shader]'s own program: recompiled when [SKShader.source] itself was
+     * edited in place since the last attempt, or — for a *previously successful* compile — when
+     * [SKResourceRegistry.generation] has moved on since (an `EGLContext` loss; a lost context
+     * can't be fixed by recompiling the same already-bad GLSL, so a prior failure isn't retried
+     * just because the context was recreated). A failed compile/link (invalid user-supplied GLSL)
+     * falls back to [defaultBinding] rather than crashing the render thread — see
+     * [SKShaderGpuState.compileFailed].
+     */
+    @Suppress(
+        "ReturnCount",
+    ) // three early-outs (no shader, cached failure, happy path) read clearer than one accumulator
+    private fun resolveProgram(
+        shader: SKShader?,
+        resourceRegistry: SKResourceRegistry,
+    ): SKProgramBinding {
+        if (shader == null) return defaultBinding
+        val state = shader.gpuState
+        val sourceChanged = state.compiledSource != shader.source
+        val contextLost = state.program != 0 && state.uploadedGeneration != resourceRegistry.generation
+        if (sourceChanged || contextLost) {
+            val binding = runCatching { linkBinding(compileProgram(VERTEX_SHADER_SOURCE, shader.source)) }.getOrNull()
+            state.compiledSource = shader.source
+            state.uploadedGeneration = resourceRegistry.generation
+            state.compileFailed = binding == null
+            state.program = binding?.program ?: 0
+            state.positionAttrib = binding?.positionAttrib ?: 0
+            state.texCoordAttrib = binding?.texCoordAttrib ?: 0
+            state.colorAttrib = binding?.colorAttrib ?: 0
+            state.mvpUniform = binding?.mvpUniform ?: 0
+            state.textureUniform = binding?.textureUniform ?: 0
+        }
+        if (state.compileFailed) return defaultBinding
+        return SKProgramBinding(
+            state.program,
+            state.positionAttrib,
+            state.texCoordAttrib,
+            state.colorAttrib,
+            state.mvpUniform,
+            state.textureUniform,
+        )
+    }
+
+    /**
+     * Binds every [SKUniform] in [shader]'s [SKShader.uniforms] into [program] under its own
+     * [SKUniform.name] — a no-op for any name [program] doesn't actually declare (a negative
+     * `glGetUniformLocation` result is silently skipped, same as an unused attribute would be). A
+     * [SKUniformValue.TextureValue] claims its own texture unit above `u_Texture`'s reserved unit
+     * `0`; the active unit is restored to `0` afterward so later draws aren't affected.
+     */
+    private fun bindCustomUniforms(
+        shader: SKShader?,
+        program: Int,
+        resourceRegistry: SKResourceRegistry,
+    ) {
+        if (shader == null) return
+        var nextTextureUnit = 1
+        for (uniform in shader.uniforms) {
+            val location = GLES20.glGetUniformLocation(program, uniform.name)
+            if (location < 0) continue
+            when (val value = uniform.value) {
+                is SKUniformValue.FloatValue -> GLES20.glUniform1f(location, value.value)
+                is SKUniformValue.Vector2Value -> GLES20.glUniform2f(location, value.value.x, value.value.y)
+                is SKUniformValue.TextureValue -> {
+                    val unit = nextTextureUnit++
+                    GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + unit)
+                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId(value.value, resourceRegistry))
+                    GLES20.glUniform1i(location, unit)
+                }
+            }
+        }
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
     }
 
     private fun textureId(
@@ -226,7 +312,11 @@ internal class SKSceneRenderer {
     }
 }
 
-/** Groups the run of consecutive commands, starting at [startIndex], sharing a texture, blend mode, and clip rect. */
+/**
+ * Groups the run of consecutive commands, starting at [startIndex], sharing a texture, blend
+ * mode, clip rect, and [SKRenderCommand.shader] (by reference — a run draws with exactly one
+ * linked GL program, so a shader change always starts a new run, same as a texture change does).
+ */
 private fun takeRun(
     commands: List<SKRenderCommand>,
     startIndex: Int,
@@ -234,7 +324,10 @@ private fun takeRun(
     val first = commands[startIndex]
 
     fun batchesWithFirst(command: SKRenderCommand) =
-        command.texture === first.texture && command.blendMode == first.blendMode && command.clipRect == first.clipRect
+        command.texture === first.texture &&
+            command.blendMode == first.blendMode &&
+            command.clipRect == first.clipRect &&
+            command.shader === first.shader
     var end = startIndex + 1
     while (end < commands.size && batchesWithFirst(commands[end])) {
         end++
@@ -315,6 +408,17 @@ private fun applyBlendMode(blendMode: SKBlendMode) {
         }
     GLES20.glBlendFunc(src, dst)
 }
+
+/** Looks up [program]'s attribute/uniform locations under the names both the default and every custom shader share. */
+private fun linkBinding(program: Int): SKProgramBinding =
+    SKProgramBinding(
+        program = program,
+        positionAttrib = GLES20.glGetAttribLocation(program, "a_Position"),
+        texCoordAttrib = GLES20.glGetAttribLocation(program, "a_TexCoord"),
+        colorAttrib = GLES20.glGetAttribLocation(program, "a_Color"),
+        mvpUniform = GLES20.glGetUniformLocation(program, "u_MVP"),
+        textureUniform = GLES20.glGetUniformLocation(program, "u_Texture"),
+    )
 
 private fun compileProgram(
     vertexSource: String,

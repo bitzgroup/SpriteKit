@@ -25,8 +25,10 @@ internal data class SKVertexColor(
  * One draw command ready for [SKSceneRenderer]: a flat triangle list ([vertices].size is always a
  * multiple of 3) to draw with [texture] (`null` renders flat-colored, via the renderer's built-in
  * white fallback texture — used by untextured [SKSpriteNode]s and every [SKShapeNode]
- * fill/stroke), [blendMode], and — if this command's node was under an [SKCropNode] — [clipRect]
- * (in the same space as [vertices], `null` meaning unclipped). Not part of the public API.
+ * fill/stroke), [blendMode], [shader] (`null` draws with the renderer's default program — only
+ * [SKSpriteNode] can set one, see `SKShader.kt`), and — if this command's node was under an
+ * [SKCropNode] — [clipRect] (in the same space as [vertices], `null` meaning unclipped). Not part
+ * of the public API.
  */
 internal data class SKRenderCommand(
     val texture: SKTexture?,
@@ -34,6 +36,7 @@ internal data class SKRenderCommand(
     val vertices: List<SKRenderVertex>,
     val color: SKVertexColor,
     val clipRect: Rect? = null,
+    val shader: SKShader? = null,
 )
 
 /**
@@ -182,6 +185,7 @@ private fun addSpriteCommand(
             vertices = quadVertices(corners, uv),
             color = tintedVertexColor(node.color, node.colorBlendFactor, alpha),
             clipRect = context.clipRect,
+            shader = node.shader,
         ),
         node.zPosition,
     )

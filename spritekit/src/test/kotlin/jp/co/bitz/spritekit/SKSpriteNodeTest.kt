@@ -16,6 +16,7 @@ class SKSpriteNodeTest {
         assertEquals(SKBlendMode.Alpha, sprite.blendMode)
         assertEquals(Vector2(0.5f, 0.5f), sprite.anchorPoint)
         assertEquals(Vector2.Zero, sprite.size)
+        assertNull(sprite.shader)
     }
 
     @Test

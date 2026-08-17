@@ -27,6 +27,12 @@ public open class SKSpriteNode(
     public var blendMode: SKBlendMode = SKBlendMode.Alpha
 
     /**
+     * A custom fragment shader this sprite draws with, replacing the renderer's default fragment
+     * shader — `null` (the default) draws normally. See `SKShader.kt`.
+     */
+    public var shader: SKShader? = null
+
+    /**
      * The point within [size] (normalized `0..1` on each axis) that [SKNode.position] refers to.
      * `(0.5, 0.5)` (the default) centers the sprite on its position; `(0, 0)` anchors its
      * bottom-left corner there instead.

@@ -3,6 +3,7 @@ package jp.co.bitz.spritekit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -29,6 +30,23 @@ class SKRenderCommandListTest {
             ),
             command.vertices.map { it.position },
         )
+    }
+
+    @Test
+    fun `a sprite with no shader produces a command with a null shader`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        scene.addChild(SKSpriteNode(size = Vector2(4f, 2f)))
+
+        assertNull(buildRenderCommands(scene).single().shader)
+    }
+
+    @Test
+    fun `a sprite's shader carries through to its render command`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val shader = SKShader.grayscale()
+        scene.addChild(SKSpriteNode(size = Vector2(4f, 2f)).apply { this.shader = shader })
+
+        assertSame(shader, buildRenderCommands(scene).single().shader)
     }
 
     @Test
