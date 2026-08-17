@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (project scaffolding) is complete: a Gradle Android library project builds, lints, and has
-a `maven-publish` scaffold. No `SK*` source classes are implemented yet. See
+Phase 0 (project scaffolding) and Phase 1 (threading & view foundation: `SKScene`'s per-frame
+lifecycle shell, `SKView`, the render-thread bridge utilities, touch-event marshaling,
+`SKResourceRegistry`, and the `:spritekit-compose` wrapper) are complete. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
 
 ## Intent
@@ -68,9 +69,9 @@ now — see `docs/ROADMAP.md` Phase 0.
 - `spritekit/` — the core library module (`jp.co.bitz.spritekit`), zero third-party dependencies;
   `SKView` here is a plain `GLSurfaceView` subclass. Namespace/group configured via
   `gradle.properties` (`GROUP`, `VERSION_NAME`) and `spritekit/build.gradle.kts`.
-- `spritekit-compose/` — (Phase 1) thin Jetpack Compose wrapper module, depends on `:spritekit` +
-  Compose; exposes `SKView` as a `@Composable` via `AndroidView`. The documented, recommended way
-  to use this library, but not the only way — see `docs/ARCHITECTURE.md`.
+- `spritekit-compose/` — thin Jetpack Compose wrapper module, depends on `:spritekit` + Compose;
+  exposes `SKView` as a `@Composable` via `AndroidView`. The documented, recommended way to use
+  this library, but not the only way — see `docs/ARCHITECTURE.md`.
 - `gradle/libs.versions.toml` — version catalog; add new dependencies/plugins here, not as
   hardcoded version strings in build files.
 - `config/detekt/detekt.yml` — detekt rule overrides (builds upon detekt's default ruleset).

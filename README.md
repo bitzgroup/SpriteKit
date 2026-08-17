@@ -43,9 +43,10 @@ which follows the same porting philosophy for Apple's GameplayKit.
 
 ## Status
 
-This project is under active development. Phase 0 (project scaffolding) is complete; no `SK*`
-classes are implemented yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and
-progress checklist.
+This project is under active development. Phase 0 (project scaffolding) and Phase 1 (threading &
+view foundation — `SKView`, its Compose wrapper, and the render-thread bridge utilities) are
+complete; the scene graph (`SKNode`/`SKScene`) and rendering land in Phases 2–3. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and progress checklist.
 
 ## Requirements
 
