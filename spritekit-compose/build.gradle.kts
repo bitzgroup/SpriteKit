@@ -51,7 +51,16 @@ android {
 }
 
 dependencies {
-    api(project(":spritekit"))
+    // Resolved relative to this module's own parent project rather than a hardcoded absolute
+    // path (":spritekit"), so this dependency resolves correctly both in this repo's own
+    // standalone build (flat ":spritekit") and when a host app embeds this repo as a git
+    // submodule nested under a grouping project name, e.g. ":SpriteKit:spritekit" per this
+    // repo's own README "Usage as a git submodule" — the same nested shape
+    // https://github.com/bitzgroup/GKSKBridge already depends on, so both can be embedded
+    // together in one host app's settings.gradle.kts.
+    val parentPath = project.parent?.path
+    val spritekitPath = if (parentPath == null || parentPath == ":") ":spritekit" else "$parentPath:spritekit"
+    api(project(spritekitPath))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
