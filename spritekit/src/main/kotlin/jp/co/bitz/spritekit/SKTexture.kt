@@ -24,6 +24,7 @@ internal class SKTextureGpuState {
  */
 public class SKTexture internal constructor(
     internal val bitmap: Bitmap,
+    /** This texture's region within [bitmap], normalized `0..1` on each axis — the full bitmap by default. */
     public val textureRect: Rect = Rect(0f, 0f, 1f, 1f),
     internal val gpuState: SKTextureGpuState = SKTextureGpuState(),
 ) {

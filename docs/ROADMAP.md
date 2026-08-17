@@ -495,10 +495,20 @@ full parity; see `docs/ARCHITECTURE.md`.
 
 ## Phase 14 — Documentation
 
-- [ ] KDoc for all public API surfaces
-- [ ] `docs/API_COMPATIBILITY.md` fully filled in (per-subsystem deviation notes, as GameplayKit's
-      equivalent document does)
-- [ ] README usage examples per module
+- [x] KDoc for all public API surfaces. Coverage was already thorough (each phase's own KDoc pass
+      as it landed); this phase audited every public declaration across the module and filled in
+      the real remaining gaps — mostly a run of undocumented `SKAction`/`SKConstraint` companion
+      factories, `SKEffectNode`'s parity-only properties, `SKPhysicsContact`'s coordinate-space-
+      dependent fields, `SKTexture.textureRect`, `SKTileMapNode.tileSize`, and `Vector2.Zero`/
+      `Rect.Zero`. Primary-constructor properties already covered by their class's own KDoc (this
+      library's established convention — referencing `[paramName]` in prose rather than annotating
+      every constructor parameter individually) were left as-is
+- [x] `docs/API_COMPATIBILITY.md` fully filled in (per-subsystem deviation notes, as GameplayKit's
+      equivalent document does) — kept in sync incrementally as each phase landed; verified
+      complete against every phase in this pass
+- [x] README usage examples per module — a `## Usage` section with one short, API-accurate
+      snippet per subsystem (scenes/nodes, sprites/shapes/labels, actions, physics, particles,
+      tile maps, camera/crop, constraints, input, transitions, audio, shaders)
 - **Not in this repo**: no sample/demo app — this repo is consumed as a git submodule by host
       apps, so it stays library code + docs only, same policy as GameplayKit
 

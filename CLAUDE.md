@@ -30,15 +30,17 @@ by a plain path/URL string rather than an app-bundle `fileNamed:` lookup, driven
 frame-stepped action machinery; `SKAction.playSoundFileNamed` is a fire-and-forget `MediaPlayer`
 clip special-cased in the action executor since its real duration isn't known ahead of time; real
 playback is isolated behind an `SKAudioPlaybackHandle`/`SKAudioPlaybackFactory` seam so
-`SKAudioNode` itself stays pure/unit-testable), and Phase 13 (shaders: `SKShader`/`SKUniform` on
+`SKAudioNode` itself stays pure/unit-testable), Phase 13 (shaders: `SKShader`/`SKUniform` on
 `SKSpriteNode` only — `SKShader.source` is a complete GLSL ES fragment shader compiled in place of
 the renderer's default one, rather than Apple's unspecified shader-modifier snippet system;
 `SKUniform` is a Kotlin sealed-value shape covering `float`/`vector_float2`/`texture`; every
 batched run of render commands now also shares a shader identity, resolved to a lazily-(re)compiled
 `SKProgramBinding` the same way `SKTexture` lazily re-uploads; a shader that fails to compile falls
 back to the default program rather than crashing the render thread; ships with one built-in example,
-`SKShader.grayscale`) are complete — the internal renderer (`SKSceneRenderer`) draws
-sprites/labels/shapes/particles/tile maps through one generalized triangle-list pipeline,
+`SKShader.grayscale`), and Phase 14 (documentation: full public-API KDoc coverage,
+`docs/API_COMPATIBILITY.md`, and README usage examples per subsystem) are complete — the internal
+renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile maps through one
+generalized triangle-list pipeline,
 camera-relative and crop-clipped via `glScissor` when applicable. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
 
