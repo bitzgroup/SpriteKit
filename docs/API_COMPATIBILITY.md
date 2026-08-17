@@ -203,8 +203,15 @@ categories recur throughout and are called out once here rather than per item:
   measured from where the local shape's +x edge lands after the node's transform, which is exact
   under uniform scale/rotation but treats a non-uniformly-scaled circle as a (slightly wrong-sized)
   circle rather than the ellipse it should become.
-- `SKPhysicsContact`/`SKPhysicsContactDelegate` (Phase 7b), the `SKPhysicsJoint` family (Phase
-  7c), and `SKFieldNode` (Phase 7d) aren't implemented yet.
+- **`SKPhysicsContact.collisionImpulse`** is always `0` — the resolved impulse magnitude isn't
+  threaded back out of the solver to the notification path in this port. Apple's own docs are
+  vague about its exact precision/derivation too.
+- **Contact notification (`contactTestBitMask`) is decoupled from collision response
+  (`collisionBitMask`)**, matching Apple's documented contract: a pair can report contact via
+  `SKPhysicsContactDelegate` without ever physically colliding (a zero-`collisionBitMask` sensor
+  body), and vice versa. Both are independent of the narrow phase itself, which runs once per
+  candidate pair regardless of either bitmask.
+- The `SKPhysicsJoint` family (Phase 7c) and `SKFieldNode` (Phase 7d) aren't implemented yet.
 
 ## Particles (`SKEmitterNode`, `SKKeyframeSequence`)
 

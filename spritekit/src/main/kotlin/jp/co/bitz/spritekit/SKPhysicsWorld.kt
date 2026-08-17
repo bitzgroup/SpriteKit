@@ -6,8 +6,7 @@ package jp.co.bitz.spritekit
  * presented scene; there's no public step function here, matching Apple (the scene drives
  * simulation implicitly).
  *
- * `SKPhysicsContact`/`SKPhysicsContactDelegate` (Phase 7b) and joints (Phase 7c) aren't
- * implemented yet — see `docs/ROADMAP.md`.
+ * The `SKPhysicsJoint` family (Phase 7c) isn't implemented yet — see `docs/ROADMAP.md`.
  */
 public class SKPhysicsWorld {
     /**
@@ -18,4 +17,17 @@ public class SKPhysicsWorld {
 
     /** Simulation rate multiplier — `2` runs physics twice as fast as real time, `0` freezes it. Defaults to `1`. */
     public var speed: Float = 1f
+
+    /**
+     * Receives [SKPhysicsContact] notifications for bodies whose bitmasks opt into them. `null`
+     * (the default) receives none.
+     */
+    public var contactDelegate: SKPhysicsContactDelegate? = null
+
+    /**
+     * The body pairs currently touching (per [SKPhysicsBody.contactTestBitMask]), each keyed by
+     * its most recent contact manifold -- lets the simulation report `didEnd` with the last known
+     * contact point/normal even on the frame the bodies actually separate.
+     */
+    internal val activeContacts: MutableMap<Pair<SKPhysicsBody, SKPhysicsBody>, SKContactManifold> = mutableMapOf()
 }

@@ -250,7 +250,17 @@ algorithms (steering, noise, Gaussian sampling).
       Pure Kotlin, unit-tested without a live GL/Android context (36 new tests: mass/inertia
       formulas, collision manifolds, and full simulation steps — gravity, resting contacts,
       bitmask filtering, `isPaused`/`pinned` bodies)
-- [ ] **7b** — `SKPhysicsContact`/`SKPhysicsContactDelegate` (`didBegin`/`didEnd`)
+- [x] **7b** — `SKPhysicsContact`/`SKPhysicsContactDelegate` (`didBegin`/`didEnd`). Contact
+      notification is decoupled from physical collision response: every touching pair found by
+      the narrow phase is checked against `contactTestBitMask` (Apple's documented rule — reported
+      if either body's category is in the *other*'s contact-test mask) independent of whether
+      `collisionBitMask` lets them physically collide, so a zero-`collisionBitMask` "sensor" body
+      still reports contact without ever being pushed. `SKPhysicsWorld` tracks the set of
+      currently-touching pairs (keyed by object identity, not equality) across frames to fire
+      `didBegin` only on the first touching frame and `didEnd` only once they stop being observed
+      touching — including when one body leaves the scene entirely, since it simply stops
+      appearing in that frame's observations. `SKPhysicsContact.collisionImpulse` is always `0` —
+      not threaded back from the solver in this port, see `docs/API_COMPATIBILITY.md`. 5 new tests
 - [ ] **7c** — `SKPhysicsJoint` family: pin, spring, fixed, sliding, limit
 - [ ] **7d** — `SKFieldNode`, subset: radial gravity, linear gravity, drag, velocity (noise,
       turbulence, electric, magnetic fields deferred — see "Explicitly Out of Scope")

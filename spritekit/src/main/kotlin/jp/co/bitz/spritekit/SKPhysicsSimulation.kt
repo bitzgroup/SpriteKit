@@ -15,9 +15,10 @@ private const val POSITION_CORRECTION_PERCENT = 0.2f
 /**
  * Advances [scene]'s [SKScene.physicsWorld] simulation by [deltaTime] -- called once per frame by
  * [SKView], between action evaluation and [SKScene.didSimulatePhysics]. Semi-implicit Euler
- * integration, an O(n²) AABB broad phase, [narrowPhase] for shape-pair detection, and a
- * linear-only sequential-impulse solver (contact-point torque -- i.e. spin from an off-center hit
- * -- is deferred; see `docs/API_COMPATIBILITY.md`).
+ * integration, an O(n²) AABB broad phase, [narrowPhase] for shape-pair detection, a linear-only
+ * sequential-impulse solver (contact-point torque -- i.e. spin from an off-center hit -- is
+ * deferred; see `docs/API_COMPATIBILITY.md`), and [SKPhysicsContactDelegate] notifications for
+ * whichever touching pairs opt in via [SKPhysicsBody.contactTestBitMask].
  */
 internal fun simulatePhysics(
     scene: SKScene,
@@ -33,9 +34,13 @@ internal fun simulatePhysics(
     for (entry in bodies) integrateForces(entry.body, world.gravity, dt)
 
     val shapes = bodies.associateWith { worldShape(it.node, scene, it.body.shape) }
-    val contacts = findContacts(bodies, shapes)
-    repeat(VELOCITY_ITERATIONS) { contacts.forEach(::resolveVelocity) }
-    contacts.forEach(::correctPosition)
+    val observations = findContactObservations(bodies, shapes)
+
+    val physicalContacts = observations.mapNotNull(::toResolvedContact)
+    repeat(VELOCITY_ITERATIONS) { physicalContacts.forEach(::resolveVelocity) }
+    physicalContacts.forEach(::correctPosition)
+
+    reportContacts(world, observations)
 
     for (entry in bodies) integrateVelocity(entry.node, entry.body, dt)
 }
@@ -141,45 +146,69 @@ private fun shouldCollide(
 ): Boolean = (a.categoryBitMask and b.collisionBitMask) != 0 && (b.categoryBitMask and a.collisionBitMask) != 0
 
 /**
- * The O(n²) broad phase, narrowed by [narrowPhase] -- not scoped to handle very large body
- * counts, see `docs/API_COMPATIBILITY.md`.
+ * Two bodies actually found touching this step -- the shared basis for both physical resolution
+ * and contact reporting.
  */
-private fun findContacts(
+private data class SKContactObservation(
+    val nodeA: SKNode,
+    val bodyA: SKPhysicsBody,
+    val nodeB: SKNode,
+    val bodyB: SKPhysicsBody,
+    val manifold: SKContactManifold,
+)
+
+/**
+ * The O(n²) broad phase, narrowed by [narrowPhase] -- not scoped to handle very large body
+ * counts, see `docs/API_COMPATIBILITY.md`. Independent of [shouldCollide]/[shouldNotifyContact]:
+ * those bitmask tests are applied downstream by [toResolvedContact]/[reportContacts]
+ * respectively, since Apple's `collisionBitMask` and `contactTestBitMask` are independent knobs.
+ */
+private fun findContactObservations(
     bodies: List<SKPhysicsEntry>,
     shapes: Map<SKPhysicsEntry, SKWorldShape>,
-): List<SKResolvedContact> {
-    val contacts = mutableListOf<SKResolvedContact>()
+): List<SKContactObservation> {
+    val observations = mutableListOf<SKContactObservation>()
     for (i in bodies.indices) {
         for (j in i + 1 until bodies.size) {
-            contactBetween(bodies[i], bodies[j], shapes)?.let { contacts += it }
+            observeContact(bodies[i], bodies[j], shapes)?.let { observations += it }
         }
     }
-    return contacts
+    return observations
 }
 
-// Early returns are the clearest way to express "these two bodies don't need a contact" at each
-// stage (mass, bitmasks, broad phase, narrow phase).
+// Early returns cover the "no contact this step" cases (broad phase, then narrow phase).
 @Suppress("ReturnCount")
-private fun contactBetween(
+private fun observeContact(
     entryA: SKPhysicsEntry,
     entryB: SKPhysicsEntry,
     shapes: Map<SKPhysicsEntry, SKWorldShape>,
-): SKResolvedContact? {
-    if (entryA.body.inverseMass == 0f && entryB.body.inverseMass == 0f) return null // both immovable
-    if (!shouldCollide(entryA.body, entryB.body)) return null
+): SKContactObservation? {
     val shapeA = shapes.getValue(entryA)
     val shapeB = shapes.getValue(entryB)
     if (!broadPhaseOverlap(shapeA, shapeB)) return null
     val manifold = narrowPhase(shapeA, shapeB) ?: return null
+    return SKContactObservation(entryA.node, entryA.body, entryB.node, entryB.body, manifold)
+}
+
+/**
+ * [observation], if its bodies should physically collide and aren't both immovable -- `null`
+ * otherwise (e.g. a sensor-only pair).
+ */
+@Suppress("ReturnCount")
+private fun toResolvedContact(observation: SKContactObservation): SKResolvedContact? {
+    val a = observation.bodyA
+    val b = observation.bodyB
+    if (a.inverseMass == 0f && b.inverseMass == 0f) return null // both immovable
+    if (!shouldCollide(a, b)) return null
     return SKResolvedContact(
-        entryA.node,
-        entryA.body,
-        entryB.node,
-        entryB.body,
-        manifold.normal,
-        manifold.penetration,
-        maxOf(entryA.body.restitution, entryB.body.restitution),
-        kotlin.math.sqrt(entryA.body.friction * entryB.body.friction),
+        observation.nodeA,
+        a,
+        observation.nodeB,
+        b,
+        observation.manifold.normal,
+        observation.manifold.penetration,
+        maxOf(a.restitution, b.restitution),
+        kotlin.math.sqrt(a.friction * b.friction),
     )
 }
 
@@ -233,4 +262,59 @@ private fun correctPosition(contact: SKResolvedContact) {
     val correction = contact.normal * (depth / invMassSum * POSITION_CORRECTION_PERCENT)
     if (!contact.bodyA.pinned) contact.nodeA.position -= correction * contact.bodyA.inverseMass
     if (!contact.bodyB.pinned) contact.nodeB.position += correction * contact.bodyB.inverseMass
+}
+
+/**
+ * Apple's documented contact-test contract: a pair is reported if either body's category is in
+ * the *other* body's [SKPhysicsBody.contactTestBitMask] -- independent of [shouldCollide].
+ */
+private fun shouldNotifyContact(
+    a: SKPhysicsBody,
+    b: SKPhysicsBody,
+): Boolean = (a.categoryBitMask and b.contactTestBitMask) != 0 || (b.categoryBitMask and a.contactTestBitMask) != 0
+
+/** A stable, order-independent key identifying a body pair, for [SKPhysicsWorld.activeContacts]. */
+private fun contactPairKey(
+    a: SKPhysicsBody,
+    b: SKPhysicsBody,
+): Pair<SKPhysicsBody, SKPhysicsBody> = if (System.identityHashCode(a) <= System.identityHashCode(b)) a to b else b to a
+
+private fun SKContactObservation.toContact(): SKPhysicsContact =
+    SKPhysicsContact(
+        bodyA,
+        bodyB,
+        manifold.point,
+        manifold.normal,
+        0f,
+    )
+
+private fun contactFrom(
+    key: Pair<SKPhysicsBody, SKPhysicsBody>,
+    manifold: SKContactManifold,
+): SKPhysicsContact = SKPhysicsContact(key.first, key.second, manifold.point, manifold.normal, 0f)
+
+/**
+ * Diffs this step's touching pairs (from [observations], filtered by [shouldNotifyContact])
+ * against [SKPhysicsWorld.activeContacts] to fire [SKPhysicsContactDelegate.didBegin] for newly
+ * touching pairs and [SKPhysicsContactDelegate.didEnd] for pairs that stopped touching --
+ * including a pair where one body left the scene entirely, since it simply won't appear in
+ * [observations] anymore either.
+ */
+private fun reportContacts(
+    world: SKPhysicsWorld,
+    observations: List<SKContactObservation>,
+) {
+    val delegate = world.contactDelegate
+    val seenThisFrame = mutableSetOf<Pair<SKPhysicsBody, SKPhysicsBody>>()
+    for (observation in observations) {
+        if (!shouldNotifyContact(observation.bodyA, observation.bodyB)) continue
+        val key = contactPairKey(observation.bodyA, observation.bodyB)
+        seenThisFrame += key
+        val isNewContact = world.activeContacts.put(key, observation.manifold) == null
+        if (isNewContact) delegate?.didBegin(observation.toContact())
+    }
+    for (key in world.activeContacts.keys.filter { it !in seenThisFrame }) {
+        val manifold = world.activeContacts.remove(key) ?: continue
+        delegate?.didEnd(contactFrom(key, manifold))
+    }
 }
