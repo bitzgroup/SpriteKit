@@ -303,4 +303,41 @@ class SKRenderCommandListTest {
             command.vertices.map { it.position }.toSet(),
         )
     }
+
+    @Test
+    fun `a tile map produces one untextured command per non-empty cell`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val group = SKTileGroup(SKTileDefinition(size = Vector2(10f, 10f)))
+        val tileSet = SKTileSet(listOf(group))
+        val tileMap = SKTileMapNode(tileSet, numberOfColumns = 2, numberOfRows = 1, tileSize = Vector2(10f, 10f))
+        tileMap.setTileGroup(group, 0, 0) // only one of the two cells is filled
+        scene.addChild(tileMap)
+
+        val commands = buildRenderCommands(scene)
+
+        assertEquals(1, commands.size)
+        assertNull(commands.single().texture)
+    }
+
+    @Test
+    fun `a tile's quad is centered on centerOfTile, sized by its definition rather than the map's tileSize`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val group = SKTileGroup(SKTileDefinition(size = Vector2(4f, 4f)))
+        val tileSet = SKTileSet(listOf(group))
+        val tileMap =
+            SKTileMapNode(tileSet, numberOfColumns = 1, numberOfRows = 1, tileSize = Vector2(10f, 10f)).apply {
+                position = Vector2(10f, 20f)
+            }
+        tileMap.setTileGroup(group, 0, 0)
+        scene.addChild(tileMap)
+
+        val command = buildRenderCommands(scene).single()
+
+        // A 4x4 quad (the definition's own size) centered on the map's single-cell center,
+        // which coincides with the map's own (10, 20) position for a 1x1 map.
+        assertEquals(
+            setOf(Vector2(8f, 18f), Vector2(12f, 18f), Vector2(12f, 22f), Vector2(8f, 22f)),
+            command.vertices.map { it.position }.toSet(),
+        )
+    }
 }

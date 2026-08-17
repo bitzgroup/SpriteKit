@@ -146,6 +146,7 @@ public class SKView
                     scene.applyConstraints()
                     scene.didApplyConstraints()
                     stepEmitters(scene, deltaTime)
+                    stepTileMaps(scene, deltaTime)
                     renderFrame()
                     scene.didFinishUpdate()
                 } else {

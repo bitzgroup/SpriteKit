@@ -278,6 +278,37 @@ categories recur throughout and are called out once here rather than per item:
   vertex color" shape `SKSpriteNode`/`SKLabelNode`/`SKShapeNode` already produce), so
   `SKSceneRenderer` itself needed no changes to support particles.
 
+## Tile maps (`SKTileSet`, `SKTileGroup`, `SKTileGroupRule`, `SKTileDefinition`, `SKTileMapNode`)
+
+- **Configured programmatically only** — no `.sks` tile-set archive format to parse, and no
+  bundled/built-in tile sets (Apple ships several) to draw from.
+- **Only grid-shaped maps are supported.** Apple's `SKTileSetType` (and the isometric/hexagonal
+  variants it selects) isn't implemented, so `SKTileSet` has no corresponding property at all.
+- **`SKTileDefinition.textures` may be empty**, unlike Apple (which always requires at least one)
+  — an empty-textures definition renders flat-colored, this port's usual "no texture" convention
+  (matching untextured `SKSpriteNode`/`SKEmitterNode` particles). Chosen deliberately so
+  `SKTileMapNode`'s grid/automapping logic stays fully unit-testable without ever constructing a
+  real `SKTexture` (which wraps an `android.graphics.Bitmap`, unsafe to construct in a plain JVM
+  test).
+- **`SKTileAdjacencyMask` is a plain `Int`-bitmask `object`** (`SKTileAdjacencyMask.UP`, `.ALL`,
+  etc.), matching this library's existing `categoryBitMask`-style bitmask convention, rather than
+  a dedicated option-set type.
+- **`SKTileMapNode.numberOfColumns`/`numberOfRows` are fixed at construction** — Apple allows
+  resizing a live map (preserving existing tiles); this port doesn't.
+- **Automapping's rule-matching algorithm is *contract-conformant, not bit-identical*** with
+  Apple's own (undocumented) version: it scores each candidate `SKTileGroupRule` by how many
+  adjacency bits it shares with the tile's actual same-group 8-neighbor configuration (an exact
+  match always wins outright; otherwise the closest by Hamming distance), rather than Apple's
+  unpublished matching/tie-breaking behavior.
+- **Placement/rotation/flip variants of `SKTileDefinition`** aren't implemented — every tile
+  renders axis-aligned, unrotated.
+- **Tile map rendering reuses the existing `SKRenderCommandList.kt` pipeline** — each non-empty
+  cell contributes its own quad command (the same shape `SKSpriteNode`/`SKEmitterNode` particles
+  already produce), sized by that cell's own `SKTileDefinition.size` (which need not match the
+  map's `tileSize`) rather than a fixed per-map size, so `SKSceneRenderer` itself needed no
+  changes. Every tile in one map shares that map node's own `zPosition` — a tile map is one flat
+  layer, unlike particles' per-particle z-position.
+
 ## Shaders (`SKShader`, `SKUniform`)
 
 - Ships an extensibility hook plus one trivial built-in example (Phase 13) rather than full

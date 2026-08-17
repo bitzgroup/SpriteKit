@@ -337,8 +337,38 @@ algorithms (steering, noise, Gaussian sampling).
 
 ## Phase 9 — Tile Maps
 
-- [ ] `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/`SKTileDefinition`
-- [ ] `SKTileMapNode`
+- [x] `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/`SKTileDefinition` — configured programmatically
+      (no `.sks` tile-set archive format and no bundled/built-in tile sets to parse — see
+      `docs/API_COMPATIBILITY.md`). Only grid-shaped maps are supported — Apple's
+      `SKTileSetType`/isometric/hexagonal variants aren't, so `SKTileSet` has no corresponding
+      property at all. `SKTileDefinition.textures` may be empty (renders flat-colored, this
+      port's usual convention, unlike Apple which always requires at least one texture) — chosen
+      specifically so `SKTileMapNode`'s grid/automapping logic stays fully unit-testable without
+      ever constructing a real `SKTexture` (which wraps an `android.graphics.Bitmap`, unsafe in a
+      plain JVM test). `SKTileAdjacencyMask` is a plain `Int`-bitmask `object`
+      (`UP`/`UPPER_RIGHT`/.../`ALL_EDGES`/`ALL`/`NONE`), matching this library's existing
+      `categoryBitMask`-style bitmask convention rather than introducing a dedicated option-set type
+- [x] `SKTileMapNode` — `numberOfColumns`/`numberOfRows` fixed at construction (Apple allows
+      resizing a live map; this port doesn't), `tileSize`, `anchorPoint`, `tileGroup`/
+      `tileDefinition` lookup, `setTileGroup` (3-argument, rule-matched or first-rule depending on
+      `enableAutomapping`; 4-argument, sets an exact definition bypassing rule matching entirely),
+      `centerOfTile`/`tileColumnIndex`/`tileRowIndex`, `fillWith`-at-construction convenience.
+      Automapping picks each tile's best-matching `SKTileGroupRule` by comparing its actual
+      same-group 8-neighbor configuration against each candidate rule's `adjacency`, preferring an
+      exact match and otherwise the rule sharing the most bits (Hamming-distance-style) —
+      *contract-conformant, not bit-identical* with Apple's own (undocumented) matching algorithm;
+      placing or clearing a tile re-evaluates that tile and all 8 neighbors, matching Apple's
+      documented auto-tiling behavior. Rendered by contributing one flat-colored-or-textured quad
+      `SKRenderCommand` per non-empty cell (reusing the same triangle-list pipeline
+      `SKSpriteNode`/`SKEmitterNode` particles already produce — `SKSceneRenderer` needed no
+      changes), sized by each cell's own `SKTileDefinition.size` rather than the map's `tileSize`,
+      all sharing the map node's own `zPosition` (a tile map is one flat layer, unlike particles'
+      per-particle z-position). `SKView`'s frame loop advances each map's own animation clock
+      (`stepTileMaps`, mirroring `stepEmitters`) so multi-texture `SKTileDefinition`s animate.
+      26 new tests: `SKTileDefinition`/`SKTileGroupRule`/`SKTileGroup`/`SKTileSet` basics and
+      animation-frame math (10), `SKTileMapNode` grid operations, bounds handling, automapping
+      (placement, clearing, non-automapped fallback), and coordinate conversions (14), plus 2 new
+      tile-map render tests in `SKRenderCommandListTest.kt`
 
 ## Phase 10 — Input
 
