@@ -98,7 +98,9 @@ branching model.
   (`ktlintCheck detekt assemble testDebugUnitTest`) must pass first.
 - `release/*`/`hotfix/*` don't exist yet: the first release (`release/0.1.0`, tagged on `main`) is cut
   once the full `docs/ROADMAP.md` plan is complete. Until then, all work happens on `feature/*`
-  branches merged into `develop`.
+  branches merged into `develop` — `main` is not touched again until that first release; PRs #2 and
+  #4 (bootstrapping `main` from an empty initial state early in Phase 0) were a one-time exception,
+  not an ongoing pattern.
 
 ## Working in this repo
 
