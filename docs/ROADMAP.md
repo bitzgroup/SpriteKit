@@ -170,13 +170,26 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
 
 ## Phase 5 — Actions
 
-- [ ] `SKAction` — full factory surface: move/scale/rotate/fade/resize/wait/run/sequence/group/
-      repeat/repeatForever/speed/reversed/customAction/colorize/follow-path/animate-with-textures/
-      playSoundFileNamed
-- [ ] `SKActionTimingMode` — linear/easeIn/easeOut/easeInEaseOut/custom timing function
-- [ ] Frame-stepped executor (a per-node list of running action state machines evaluated each
-      `update(deltaTime)`) — not coroutines/suspend, to match SpriteKit's exact per-frame
-      evaluation timing and keep `speed`/pause semantics simple
+- [x] `SKAction` — factory surface: `moveTo`/`moveBy`, `scaleTo`/`scaleBy` (uniform and per-axis),
+      `rotateTo`/`rotateBy` (shortest angular path), `resizeTo`/`resizeBy`, `fadeIn`/`fadeOut`/
+      `fadeAlphaTo`/`fadeAlphaBy`, `hide`/`unhide`, `colorize`, `wait`/`wait(withRange:)`, `run`
+      (block), `removeFromParent`, `sequence`/`group`/`repeat`/`repeatForever`, `customAction`,
+      `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`. **Deferred**
+      (see "Explicitly Out of Scope" below): `followPath`, `playSoundFileNamed`,
+      `run(_:onChildWithName:)`
+- [x] `SKActionTimingMode` — linear/easeIn/easeOut/easeInEaseOut, plus a custom `timingFunction`
+      property
+- [x] Frame-stepped executor (`SKActionState`/`stepAction`, per running action — not
+      coroutines/suspend, to match SpriteKit's exact per-frame evaluation timing and keep
+      `speed`/pause semantics simple), wired into `SKNode.run`/`removeAction`/`stepActions` and
+      `SKView`'s frame loop (between `update(deltaTime)` and `didEvaluateActions()`). Correctly
+      carries "leftover" time from a finished leaf action into the next step of an enclosing
+      `sequence`/`repeat` within the same frame (important at low frame rates); a `group`'s
+      children may each finish at a different point within a frame, but the group itself always
+      reports finishing with zero leftover rather than tracking the exact remainder — a documented
+      simplification, see `docs/API_COMPATIBILITY.md`. Pure Kotlin, no OpenGL/Android
+      dependency — fully unit-tested (28 tests covering leaf interpolation, overflow/leftover
+      carrying, sequence/group/repeat composition, `reversed()`, and `SKNode` integration)
 
 ## Phase 6 — Camera, Effects, Crop, Constraints
 
@@ -256,6 +269,12 @@ full parity; see `docs/ARCHITECTURE.md`.
 
 ## Explicitly Out of Scope
 
+- `SKAction.follow(_:asOffset:orientToPath:duration:)` — path-following actions; would need
+  path-length parameterization on top of `SKShapeNode`'s existing path-flattening machinery,
+  deferred for scope
+- `SKAction.playSoundFileNamed` — needs the audio system (Phase 12)
+- `SKAction.run(_:onChildWithName:)` — a niche convenience over `childNode`/`enumerateChildNodes`
+  plus a plain `run`
 - `SKEffectNode.filter` — Core Image, no Android equivalent
 - `SKVideoNode` — video-texture playback; no immediate `SurfaceTexture`/`MediaPlayer` bridge
 - `SKLightNode` / normal-map lighting and shadows — shader-dependent, deferred with the rest of

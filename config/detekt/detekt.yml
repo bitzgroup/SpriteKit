@@ -12,6 +12,14 @@ complexity:
     # a wide surface by design, not poor organization. Raised generously since these classes grow
     # across roadmap phases.
     thresholdInClasses: 25
+    # SKAction's companion mirrors SpriteKit's own ~30-factory-method SKAction API 1:1 — a
+    # deliberate, cohesive API surface, not poor organization (same rationale GameplayKit-for-
+    # Android's detekt.yml documents for GKGoal's companion).
+    thresholdInObjects: 30
+    # SKActionExecution.kt is the frame-stepped action interpreter: one function per SKActionKind
+    # composite (sequence/group/repeat) plus one apply-effect function per leaf kind. Splitting it
+    # into more files wouldn't reduce the function count, just scatter closely related code.
+    thresholdInFiles: 20
 
 naming:
   # @Composable functions are conventionally PascalCase (they're used like components), which
