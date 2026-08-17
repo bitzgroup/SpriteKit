@@ -39,10 +39,19 @@ categories recur throughout and are called out once here rather than per item:
   extension functions are used where they fit naturally; class/member names still follow
   SpriteKit's naming (`SKNode`, `SKAction`, `SKPhysicsBody`, ...) for discoverability.
 - **Threading.** SpriteKit assumes all scene-graph access happens on Apple's single main thread;
-  this library confines the same access to Android's GL thread instead, with new (Apple has no
-  equivalent) bridge utilities for coordinating with the UI thread. See `docs/ARCHITECTURE.md` for
-  the full design — this is the one subsystem that isn't a reshaping of an existing Apple API, since
-  there's nothing on Apple's side to mirror.
+  this library confines the same access to a dedicated render thread it owns instead, with new
+  (Apple has no equivalent) bridge utilities for coordinating with the UI thread. See
+  `docs/ARCHITECTURE.md` for the full design — this is one of two subsystems (with `SKView`
+  hosting, below) that isn't a reshaping of an existing Apple API, since there's nothing on Apple's
+  side to mirror.
+- **`SKView` has two forms: a `View` core and a `@Composable` wrapper.** Apple's `SKView` is a
+  single `UIView`/`NSView` subclass. This library's `SKView` core (`:spritekit`) is a
+  `GLSurfaceView` subclass usable directly in XML/View apps with zero third-party dependencies; a
+  separate `:spritekit-compose` module wraps it in a `@Composable` (via `AndroidView`) as the
+  documented, recommended way to use it, since Jetpack Compose — not the classic `View` system —
+  is where Android's UI toolkit investment goes now. Compose and the `View` system are officially
+  interoperable (`AndroidView`/`ComposeView`), so this is additive, not a fork of the API surface.
+  See `docs/ARCHITECTURE.md`'s "Hosting: a View core, a Compose wrapper" section.
 
 ## Scene graph (`SKNode`, `SKScene`)
 
