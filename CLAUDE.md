@@ -13,7 +13,12 @@ a `maven-publish` scaffold. No `SK*` source classes are implemented yet. See
 This repo implements a **Kotlin library for Android that mirrors Apple's
 [SpriteKit](https://developer.apple.com/documentation/spritekit) API** — a scene graph
 (`SKNode`/`SKScene`), sprites/shapes/labels, an action system, 2D physics, particles, tile maps,
-camera/effects/constraints, transitions, and shaders — built on `GLSurfaceView`.
+camera/effects/constraints, transitions, and shaders. `SKView`'s core (`:spritekit`) is a plain
+`GLSurfaceView` subclass with zero third-party dependencies, usable directly from XML/View apps; a
+separate `:spritekit-compose` module wraps it in a `@Composable` (via `AndroidView`) as the
+documented, recommended way to use it, since Jetpack Compose — not the classic `View` system,
+which is in maintenance mode — is where Android's UI toolkit investment goes now. See
+`docs/ARCHITECTURE.md`'s "Hosting: a View core, a Compose wrapper" section.
 
 The goal is API and behavioral parity with Apple's SpriteKit types (`SKNode`, `SKScene`,
 `SKAction`, `SKPhysicsBody`, etc.), but expressed in **idiomatic Kotlin** rather than a literal
@@ -23,11 +28,14 @@ project to [GameplayKit for Android](https://github.com/bitzgroup/GameplayKit), 
 same philosophy for Apple's GameplayKit; the two are not integrated with each other (no
 `GKScene`-style binding — see `docs/ROADMAP.md`'s "Explicitly Out of Scope").
 
-**Threading is the one part of this design with no Apple equivalent to mirror.** Apple's SpriteKit
-runs scene mutation, actions, physics, and rendering on the same main thread that delivers UI/touch
-events. Android splits that: `GLSurfaceView` owns a dedicated GL thread separate from the UI
-thread. This library treats **the GL thread as the scene's main thread** and provides UI-thread ↔
-GL-thread bridge utilities (`SKView.runOnGLThread`/`runOnUiThread`) to coordinate the two. See
+**Hosting and threading are the two parts of this design with no Apple equivalent to mirror.**
+`SKView`'s core is a `GLSurfaceView` subclass (`:spritekit`), with a `@Composable` wrapper
+(`:spritekit-compose`) built via `AndroidView` — see `docs/ARCHITECTURE.md`'s "Hosting: a View
+core, a Compose wrapper" section. And where Apple's SpriteKit runs scene mutation, actions,
+physics, and rendering on the same main thread that delivers UI/touch events, this library owns a
+dedicated render thread itself (`GLSurfaceView`'s own `Renderer` thread) and treats **that thread
+as the scene's main thread**, providing UI-thread ↔ render-thread bridge utilities
+(`SKView.runOnGLThread`/`runOnUiThread`) to coordinate the two. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design — read this before touching
 anything related to `SKView`, the frame loop, touch dispatch, or GPU resource lifecycle.
 
@@ -57,14 +65,19 @@ now — see `docs/ROADMAP.md` Phase 0.
 
 ## Project structure
 
-- `spritekit/` — the library module (`jp.co.bitz.spritekit`), namespace/group configured via
+- `spritekit/` — the core library module (`jp.co.bitz.spritekit`), zero third-party dependencies;
+  `SKView` here is a plain `GLSurfaceView` subclass. Namespace/group configured via
   `gradle.properties` (`GROUP`, `VERSION_NAME`) and `spritekit/build.gradle.kts`.
+- `spritekit-compose/` — (Phase 1) thin Jetpack Compose wrapper module, depends on `:spritekit` +
+  Compose; exposes `SKView` as a `@Composable` via `AndroidView`. The documented, recommended way
+  to use this library, but not the only way — see `docs/ARCHITECTURE.md`.
 - `gradle/libs.versions.toml` — version catalog; add new dependencies/plugins here, not as
   hardcoded version strings in build files.
 - `config/detekt/detekt.yml` — detekt rule overrides (builds upon detekt's default ruleset).
 - `docs/ROADMAP.md` — phased implementation plan and progress checklist.
-- `docs/ARCHITECTURE.md` — the Android-specific threading/rendering design (GL thread as main
-  thread, UI↔GL bridge utilities, GPU resource lifecycle, frame loop, coordinate systems).
+- `docs/ARCHITECTURE.md` — the Android-specific hosting/threading/rendering design (View core +
+  Compose wrapper, render-thread-as-main-thread, UI↔render-thread bridge utilities, GPU resource
+  lifecycle, frame loop, coordinate systems).
 - `docs/API_COMPATIBILITY.md` — deviation log from Apple's SpriteKit API shape, filled in per
   subsystem as each roadmap phase lands.
 

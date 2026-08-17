@@ -1,64 +1,122 @@
 # Architecture: Threading & Rendering
 
 This document covers the parts of this library's design that have **no Apple equivalent to
-mirror** — how it reconciles SpriteKit's single-main-thread model with Android's split between the
-UI thread and a `GLSurfaceView`'s dedicated GL thread. Everything else (API shape, node semantics,
-per-frame evaluation order) follows Apple's documented SpriteKit behavior; this document exists
-because the threading model is the one place Android's platform constraints force a genuinely new
-design, not just a Kotlin-idiomatic reshaping of an existing Apple API.
+mirror** — how it hosts a scene inside a modern Android UI, and how it reconciles SpriteKit's
+single-main-thread model with Android's split between the UI thread and a dedicated render
+thread. Everything else (API shape, node semantics, per-frame evaluation order) follows Apple's
+documented SpriteKit behavior; this document exists because these two areas are where Android's
+platform constraints force a genuinely new design, not just a Kotlin-idiomatic reshaping of an
+existing Apple API.
 
-## Why this is needed
+## Hosting: a View core, a Compose wrapper
 
-On iOS/macOS, `SKView` is a regular `UIView`/`NSView`. SpriteKit's per-frame scene update,
-action evaluation, physics simulation, and rendering all run on the main thread — the same thread
-that delivers touch/mouse events and drives the rest of the UI, via `CADisplayLink`. A single
-thread confinement rule covers everything: "touch this scene graph from the main thread."
+Apple's `SKView` is a `UIView`/`NSView` subclass, embedded the way any other platform view is.
+Jetpack Compose and the classic Android `View` system are not mutually exclusive — `AndroidView`
+lets Compose host a `View`, and `ComposeView` lets a `View` hierarchy host Compose content, both
+officially supported, bidirectional interop paths. This library uses that interop rather than
+picking one toolkit exclusively:
 
-On Android, `GLSurfaceView` spawns its own dedicated background thread per instance to own the
-`EGLContext` and invoke `Renderer` callbacks (`onSurfaceCreated`/`onSurfaceChanged`/`onDrawFrame`).
-The `View`/`Activity` lifecycle and raw touch input (`MotionEvent`) stay on the UI thread. There is
-no single thread that naturally plays the role of SpriteKit's main thread.
+- **`SKView` (core) is a plain Android `View`** — a `GLSurfaceView` subclass, in the
+  `:spritekit` module. It owns its `Renderer`/render thread and `EGLContext` the same well-worn
+  way any `GLSurfaceView`-based Android graphics code does. It works directly in XML layouts or
+  via plain `addView` calls, and **`:spritekit` has zero third-party runtime dependencies** —
+  Compose is not required to use it.
+- **`SKView` (Compose wrapper) is a `@Composable`** — a thin function in a separate
+  `:spritekit-compose` module, implemented with `AndroidView(factory = { context -> SKView(context) })`.
+  It additionally wires Compose's `LocalLifecycleOwner` to the underlying `GLSurfaceView`'s
+  `onPause`/`onResume` automatically (something classic-View consumers have to do by hand from
+  their `Activity`/`Fragment` callbacks), and exposes a `rememberSKViewState()` controller handle.
+  A Kotlin class and a top-level function are allowed to share a name when their signatures don't
+  collide (an established Kotlin idiom for "constructor-like factory functions"); the composable
+  and the `View` class both being callable as `SKView(...)` is deliberate; it keeps SpriteKit's own
+  `SKView` naming discoverable in both hosting contexts.
+
+Google's ongoing UI investment is in Compose — the classic `View` system is in maintenance mode —
+so **the Compose wrapper is the documented, recommended way to use this library**, and gets top
+billing in the README. The `View` core exists so classic-View/XML apps aren't forced to adopt
+Compose (even indirectly via an internal `ComposeView`) just to embed a scene, and so the render
+thread/`EGLContext` lifecycle can be built on `GLSurfaceView`'s long-proven implementation instead
+of the newer, less-battle-tested `AndroidEmbeddedExternalSurface` Compose surface-interop API. (An
+earlier draft of this document explored making `AndroidEmbeddedExternalSurface` the core primitive
+and dropping `View`/XML support entirely — reconsidered once it was clear Compose/View interop
+covers the same ground with a more conservative implementation.)
+
+```kotlin
+// :spritekit-compose (recommended)
+@Composable
+fun MyGameScreen() {
+    val viewState = rememberSKViewState()
+    Box {
+        SKView(scene = myScene, state = viewState, modifier = Modifier.fillMaxSize())
+        MyComposeHud(modifier = Modifier.align(Alignment.TopEnd)) // draws over the scene
+    }
+}
+```
+
+```xml
+<!-- :spritekit only, classic View/XML -->
+<jp.co.bitz.spritekit.SKView
+    android:id="@+id/skView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+```
+```kotlin
+// classic View/XML — the app wires Activity lifecycle to SKView itself
+override fun onPause() { super.onPause(); binding.skView.onPause() }
+override fun onResume() { super.onResume(); binding.skView.onResume() }
+```
+
+For transition-driven scene swaps (Apple's `SKView.presentScene(_:transition:)`, Phase 11), both
+the `View` and the Compose wrapper expose an imperative `presentScene(scene, transition)` call,
+since animating between two scenes over time isn't naturally expressed as a single property/
+parameter swap. On the Compose side this lives on `SKViewState`; the composable's `scene`
+parameter itself is a plain state-hoisted convenience for the common "just show this scene" case.
 
 ## Thread ownership rules
 
-- **The GL thread is the scene's main thread.** All `SKNode`/`SKScene`/`SKAction`/physics/
-  constraint state is confined to it — this is where node mutation, the frame loop, and rendering
-  all happen, mirroring SpriteKit's own single-thread-confinement contract but relocating "main"
-  from Android's UI thread to the `GLSurfaceView` render thread.
-- **The UI thread** owns `SKView`'s Android `View`/`Activity`/`Fragment` lifecycle plumbing and raw
-  touch/input event delivery. It never reads or writes scene graph state directly.
+- **The render thread — `GLSurfaceView`'s own `Renderer` thread — is the scene's main thread.**
+  All `SKNode`/`SKScene`/`SKAction`/physics state is confined to it, mirroring SpriteKit's own
+  single-thread-confinement contract but relocating "main" to Android's render thread instead of
+  the UI thread.
+- **The UI thread** owns `SKView`'s Android `View`/`Activity`/`Fragment` (or Compose composition)
+  lifecycle and raw `MotionEvent` delivery. It never reads or writes scene graph state directly.
 - Crossing threads always goes through one of the bridge utilities below — never direct field
   access, and no locking on the node graph itself.
 
 ## Bridge utilities
 
-`SKView` exposes two primitives for crossing the UI-thread/GL-thread boundary:
+`SKView` (the `View`) exposes the primitives for crossing the UI-thread/render-thread boundary;
+the Compose wrapper's `SKViewState` simply delegates to the same methods on the `SKView` instance
+it wraps internally, so the two hosting paths behave identically underneath:
 
 - **`SKView.runOnGLThread { block }`** — wraps `GLSurfaceView.queueEvent(Runnable)`. Queues
-  `block` to run on the GL thread before the next frame is drawn. Fire-and-forget, FIFO-ordered
-  relative to other queued blocks.
+  `block` to run on the render thread before the next frame is drawn. Fire-and-forget,
+  FIFO-ordered relative to other queued blocks.
 - **`SKView.runOnUiThread { block }`** — wraps `Handler(Looper.getMainLooper()).post(Runnable)`.
-  For GL-thread code that needs to reach Android APIs that are themselves UI-thread-confined (e.g.
-  triggering a platform dialog, updating a Jetpack Compose state holder that mirrors game state for
-  a HUD overlay).
+  For render-thread code that needs to reach Android APIs that are themselves UI-thread-confined
+  (e.g. triggering a platform dialog, or — from the Compose wrapper — mutating a `MutableState`
+  that drives a Compose HUD overlay).
 
 ### Touch event routing
 
 `SKView.onTouchEvent(MotionEvent)` runs on the UI thread, as required by the Android `View`
-contract. It snapshots the parts of the event the scene graph needs (pointer id, position in view
-space, action) into an immutable value type, then hands that snapshot to the GL thread via
+contract — this works unchanged whether `SKView` is placed via XML or wrapped by `AndroidView` in
+the Compose module, since `AndroidView` forwards touch dispatch to the wrapped `View` transparently.
+It snapshots the parts of the event the scene graph needs (pointer id, position in view space,
+action) into an immutable value, then hands that snapshot to the render thread via
 `runOnGLThread`. `SKNode`/`SKScene`'s `touchesBegan`/`touchesMoved`/`touchesEnded`/
-`touchesCancelled` (Phase 10) always run on the GL thread — the same thread as node mutation — so
-hit-testing and touch handling need no synchronization with the render/update loop.
+`touchesCancelled` (Phase 10) always run on the render thread — the same thread as node mutation —
+so hit-testing and touch handling need no synchronization with the render/update loop.
 
 ### What this deliberately does not provide
 
-There is no general "read live node state from the UI thread" API in v1 — querying, say, a sprite's
-current `position` from the UI thread (to sync a native Android overlay view to it, for example)
-requires an explicit `runOnGLThread` round trip. Apple has no equivalent split to design against
-here, so there's no precedent to mirror; this is a deliberate v1 scope cut, not an oversight. If a
-real need for cheap cross-thread reads of specific "hot" properties shows up later, the likely
-design is a double-buffered snapshot the GL thread publishes once per frame — not exposed yet.
+There is no general "read live node state from the UI thread" API in v1 — querying, say, a
+sprite's current `position` from the UI thread (to sync a native Android overlay view to it, or a
+Compose `MutableState`, for example) requires an explicit `runOnGLThread` round trip. Apple has no
+equivalent split to design against here, so there's no precedent to mirror; this is a deliberate
+v1 scope cut, not an oversight. If a real need for cheap cross-thread reads of specific "hot"
+properties shows up later, the likely design is a double-buffered snapshot the render thread
+publishes once per frame — not exposed yet.
 
 ## GPU resource lifecycle and context loss
 
@@ -77,8 +135,8 @@ therefore split into two parts:
 2. A **lazily-(re)created GPU handle** — the actual `GLES20` texture/program/buffer name. Invalid
    after context loss until re-uploaded.
 
-A GL-thread-confined `SKResourceRegistry` tracks every live descriptor→handle mapping and
-re-uploads GPU handles from their descriptors on `onSurfaceCreated`, transparent to library users —
+A render-thread-confined `SKResourceRegistry` tracks every live descriptor→handle mapping and
+re-uploads GPU handles from their descriptors in `onSurfaceCreated`, transparent to library users —
 code holding an `SKTexture` never needs to know whether its underlying GPU texture was just
 recreated.
 
@@ -96,17 +154,19 @@ update(deltaTime)
   → SKScene.didFinishUpdate()
 ```
 
-Activity/Fragment lifecycle events map onto this as follows: `onPause`/`onResume` call through to
-`GLSurfaceView.onPause`/`onResume` (which suspend/resume the GL thread itself) and additionally set
-`scene.isPaused`, so a backgrounded scene neither burns CPU nor advances simulation time.
+Lifecycle mapping: classic-View consumers call `SKView.onPause()`/`onResume()` from their own
+`Activity`/`Fragment` callbacks (plain `GLSurfaceView.onPause`/`onResume`, which suspend/resume the
+render thread, plus `scene.isPaused`) — the same thing any `GLSurfaceView`-based Android code
+already does. The Compose wrapper does this automatically via a `DisposableEffect` observing
+`LocalLifecycleOwner`, so Compose consumers don't have to.
 
 ## Coordinate systems
 
-SpriteKit's scene/node space is y-up, matching Apple's documented convention. Android's
+SpriteKit's scene/node space is y-up, matching Apple's documented convention. Android
 `MotionEvent`/`View` coordinate space is y-down, with the origin at the view's top-left in pixels.
-The conversion happens exactly once, at the UI→GL touch-event bridge boundary described above —
-`SKNode`/`SKScene` touch-handling code always sees Apple's y-up convention, never Android's raw
-view-space coordinates.
+The conversion happens exactly once, at the UI→render-thread touch bridge boundary described
+above — `SKNode`/`SKScene` touch-handling code always sees Apple's y-up convention, never
+Android's raw view-space coordinates.
 
 ## Rendering pipeline (summary)
 

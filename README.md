@@ -3,7 +3,7 @@
 A Kotlin library for Android that implements the same API as Apple's
 [SpriteKit](https://developer.apple.com/documentation/spritekit) framework — a scene graph
 (`SKNode`/`SKScene`), sprites/shapes/labels, an action system, 2D physics, particles, tile maps,
-camera/effects/constraints, transitions, and shaders — built on `GLSurfaceView`.
+camera/effects/constraints, transitions, and shaders.
 
 The goal is API and behavioral parity with SpriteKit's types (`SKNode`, `SKScene`, `SKAction`,
 `SKPhysicsBody`, and so on), expressed in idiomatic Kotlin rather than a literal port. See
@@ -11,10 +11,32 @@ The goal is API and behavioral parity with SpriteKit's types (`SKNode`, `SKScene
 implementation progress checklist, and [`docs/API_COMPATIBILITY.md`](docs/API_COMPATIBILITY.md)
 for a quick reference of exactly where (and why) this library's API shape differs from Apple's.
 
-Unlike Apple's platforms, Android splits SpriteKit's single main thread into a UI thread and a
-separate GL thread; this library treats the GL thread as the scene's main thread and provides
-UI-thread ↔ GL-thread bridge utilities to coordinate the two. See
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full threading and rendering design.
+`SKView`'s core (`:spritekit`) is a plain `GLSurfaceView` subclass — zero third-party
+dependencies, usable directly from XML/View apps. A separate `:spritekit-compose` module wraps it
+in a `@Composable`, the documented, recommended way to use this library, since Jetpack Compose —
+not the classic Android `View` system, which is in maintenance mode — is where Android's UI
+toolkit investment goes now (Compose and `View` interoperate officially, so this is additive, not
+a fork of the API). Android also splits SpriteKit's single main thread into a UI thread and a
+separate render thread this library owns itself; `SKView` treats that render thread as the scene's
+main thread and provides UI-thread ↔ render-thread bridge utilities to coordinate the two. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full hosting, threading, and rendering
+design.
+
+```kotlin
+// recommended: :spritekit-compose
+@Composable
+fun MyGameScreen() {
+    SKView(scene = myScene, modifier = Modifier.fillMaxSize())
+}
+```
+
+```xml
+<!-- also works: :spritekit only, classic View/XML -->
+<jp.co.bitz.spritekit.SKView
+    android:id="@+id/skView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+```
 
 This is a sibling project to [GameplayKit for Android](https://github.com/bitzgroup/GameplayKit),
 which follows the same porting philosophy for Apple's GameplayKit.
@@ -44,12 +66,13 @@ See [`CLAUDE.md`](CLAUDE.md) for the full command reference and project structur
 ## Usage as a git submodule
 
 This repository is intended to be embedded into host apps as a git submodule, so it contains no
-app/demo module — only the `:spritekit` library module (and docs). A host app's own
-`settings.gradle.kts` includes it directly, e.g.:
+app/demo module — only library modules (`:spritekit`, and `:spritekit-compose` once Phase 1 lands)
+and docs. A host app's own `settings.gradle.kts` includes them directly, e.g.:
 
 ```kotlin
-include(":SpriteKit:spritekit")
+include(":SpriteKit:spritekit", ":SpriteKit:spritekit-compose")
 project(":SpriteKit:spritekit").projectDir = file("SpriteKit/spritekit")
+project(":SpriteKit:spritekit-compose").projectDir = file("SpriteKit/spritekit-compose")
 ```
 
 ## License

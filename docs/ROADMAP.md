@@ -1,8 +1,10 @@
 # Implementation Roadmap
 
 This document tracks progress implementing a Kotlin/Android library that mirrors Apple's
-[SpriteKit](https://developer.apple.com/documentation/spritekit) API and behavior, built on
-`GLSurfaceView`.
+[SpriteKit](https://developer.apple.com/documentation/spritekit) API and behavior. `SKView`'s core
+is a plain Android `View` (`:spritekit`, zero third-party dependencies), with a Jetpack Compose
+wrapper (`:spritekit-compose`) as the documented, recommended way to use it — see
+`docs/ARCHITECTURE.md`'s "Hosting: a View core, a Compose wrapper" section.
 
 Check off items as they are implemented and tested. Items tied to Apple-platform-only concerns
 (Core Image filters, Metal, CoreText, `.sks` archive files) are noted as **out of scope** since
@@ -28,18 +30,31 @@ rather than a literal Obj-C/Swift-to-Kotlin transliteration — the same princip
 - Deviations from the Apple API shape are recorded as they happen — see
   `docs/API_COMPATIBILITY.md`.
 
-### GL thread is the scene's main thread
+### A dedicated render thread is the scene's main thread
 
 Apple's SpriteKit runs scene mutation, action evaluation, physics, and rendering on the same
 thread that also delivers UI/touch events (the main thread, driven by `CADisplayLink`). Android
-splits these naturally: a `GLSurfaceView` owns a dedicated GL thread for its `Renderer` callbacks,
-separate from the UI thread that owns the `View`/`Activity` lifecycle and raw touch events.
+splits these naturally: a `GLSurfaceView` owns a dedicated render thread for its `Renderer`
+callbacks, separate from the UI thread that owns the `View`/`Activity` lifecycle and raw touch
+events.
 
-This library treats **the GL thread as the scene's main thread** — all `SKNode`/`SKScene`/
+This library treats **that render thread as the scene's main thread** — all `SKNode`/`SKScene`/
 `SKAction`/physics state is confined to it, mirroring SpriteKit's own single-thread-confinement
-contract but relocating "main" to Android's render thread. See `docs/ARCHITECTURE.md` for the full
-threading model and the UI-thread ↔ GL-thread bridge utilities this requires (the one piece of
-this library with no Apple equivalent to mirror).
+contract but relocating "main" away from Android's UI thread. See `docs/ARCHITECTURE.md` for the
+full threading model and the UI-thread ↔ render-thread bridge utilities this requires (one of two
+pieces of this library with no Apple equivalent to mirror).
+
+### A View core, a Compose wrapper
+
+Jetpack Compose and Android's classic `View` system aren't mutually exclusive — `AndroidView` and
+`ComposeView` are officially supported, bidirectional interop points between them. This library's
+`SKView` core (`:spritekit`) is a plain `GLSurfaceView` subclass, so it works directly in XML/View
+apps with zero third-party dependencies, and its render-thread/`EGLContext` lifecycle is built on
+`GLSurfaceView`'s long-proven implementation. A separate `:spritekit-compose` module wraps it in a
+`@Composable` via `AndroidView` — since Google's ongoing UI investment is in Compose (the `View`
+system is in maintenance mode), that wrapper is the documented, recommended way to use this
+library, even though it isn't the only way. See `docs/ARCHITECTURE.md`'s "Hosting: a View core, a
+Compose wrapper" section for the full rationale and API shape.
 
 ## Phase 0 — Project Setup
 
@@ -51,27 +66,34 @@ this library with no Apple equivalent to mirror).
 - [x] Set up Maven publishing configuration (`maven-publish` scaffold, verified with
       `publishToMavenLocal`); actual Maven Central/JitPack release credentials still TBD
 - [x] No app/demo module anywhere in `settings.gradle.kts` — this repo is consumed as a git
-      submodule by host apps, so only the `:spritekit` library module exists (see
-      `CLAUDE.md`'s "Working in this repo" section)
+      submodule by host apps, so only library module(s) exist (see `CLAUDE.md`'s "Working in this
+      repo" section)
+- [ ] Add the `:spritekit-compose` module (Phase 1) — a thin Jetpack Compose wrapper around
+      `:spritekit`'s `View`-based `SKView`; `:spritekit` itself stays dependency-free (see
+      `docs/ARCHITECTURE.md`'s "Hosting: a View core, a Compose wrapper" section)
 
 ## Phase 1 — Threading & View Foundation
 
 *No GameplayKit precedent — this is the Android-specific infrastructure layer everything else is
 built on. See `docs/ARCHITECTURE.md` for the full design.*
 
-- [ ] `SKView` — `GLSurfaceView` subclass hosting a scene (`presentScene`), owns the
-      `GLSurfaceView.Renderer` that drives the frame loop
+- [ ] `SKView` (`:spritekit`) — `GLSurfaceView` subclass hosting a scene (`presentScene`), owns the
+      `GLSurfaceView.Renderer` that drives the frame loop; works directly in XML/View apps
 - [ ] Frame loop: `RENDERMODE_CONTINUOUSLY`; per-frame order matches SpriteKit's documented
       sequence — `update(deltaTime)` → evaluate actions → simulate physics → apply constraints →
       render → `didFinishUpdate()`
-- [ ] `SKView.runOnGLThread { }` / `SKView.runOnUiThread { }` — the UI-thread ↔ GL-thread bridge
+- [ ] `SKView.runOnGLThread { }` / `SKView.runOnUiThread { }` — the UI-thread ↔ render-thread bridge
       utilities
 - [ ] Touch-event marshaling: UI-thread `MotionEvent` snapshotted into an immutable value, handed
-      to the GL thread via `runOnGLThread`
-- [ ] `SKResourceRegistry` — GL-thread-confined GPU resource lifecycle groundwork (context-loss
+      to the render thread via `runOnGLThread`
+- [ ] `SKResourceRegistry` — render-thread-confined GPU resource lifecycle groundwork (context-loss
       recovery on `onSurfaceCreated`); no actual GPU resources yet (those start in Phase 3)
-- [ ] Activity/Fragment lifecycle mapping: `onPause`/`onResume` → `GLSurfaceView.onPause`/
-      `onResume` + `scene.isPaused`
+- [ ] Classic-View lifecycle: `SKView.onPause()`/`onResume()`, callable from `Activity`/`Fragment`
+      callbacks (plain `GLSurfaceView.onPause`/`onResume` + `scene.isPaused`)
+- [ ] `:spritekit-compose` module — `@Composable fun SKView(scene, modifier, state)` via
+      `AndroidView(factory = { context -> SKView(context) })`, `rememberSKViewState()` delegating
+      to the wrapped `SKView`'s bridge utilities, and a `DisposableEffect` on `LocalLifecycleOwner`
+      that calls the wrapped view's `onPause`/`onResume` automatically
 
 ## Phase 2 — Scene Graph Core
 
