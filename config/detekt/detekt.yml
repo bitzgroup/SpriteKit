@@ -5,6 +5,14 @@ style:
   MagicNumber:
     active: false
 
+complexity:
+  TooManyFunctions:
+    # SKNode (and later SKScene/SKSpriteNode/...) mirror SpriteKit's own large per-node APIs
+    # (transform properties, child management, coordinate conversion, actions, physics, ...) —
+    # a wide surface by design, not poor organization. Raised generously since these classes grow
+    # across roadmap phases.
+    thresholdInClasses: 25
+
 naming:
   # @Composable functions are conventionally PascalCase (they're used like components), which
   # the default lowerCamelCase function-naming rule would otherwise flag.

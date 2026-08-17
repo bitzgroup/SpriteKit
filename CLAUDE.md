@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (project scaffolding) and Phase 1 (threading & view foundation: `SKScene`'s per-frame
+Phase 0 (project scaffolding), Phase 1 (threading & view foundation: `SKScene`'s per-frame
 lifecycle shell, `SKView`, the render-thread bridge utilities, touch-event marshaling,
-`SKResourceRegistry`, and the `:spritekit-compose` wrapper) are complete. See
+`SKResourceRegistry`, and the `:spritekit-compose` wrapper), and Phase 2 (scene graph core:
+`SKNode`'s transform hierarchy/child management/coordinate conversion/accumulated-frame &
+intersection logic, `SKScene` extended to subclass `SKNode`) are complete. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
 
 ## Intent
