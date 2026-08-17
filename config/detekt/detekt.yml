@@ -5,6 +5,12 @@ style:
   MagicNumber:
     active: false
 
+naming:
+  # @Composable functions are conventionally PascalCase (they're used like components), which
+  # the default lowerCamelCase function-naming rule would otherwise flag.
+  FunctionNaming:
+    ignoreAnnotated: ["Composable"]
+
 comments:
   UndocumentedPublicClass:
     active: false

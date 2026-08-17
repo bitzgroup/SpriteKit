@@ -77,20 +77,29 @@ Compose wrapper" section for the full rationale and API shape.
 *No GameplayKit precedent — this is the Android-specific infrastructure layer everything else is
 built on. See `docs/ARCHITECTURE.md` for the full design.*
 
-- [ ] `SKView` (`:spritekit`) — `GLSurfaceView` subclass hosting a scene (`presentScene`), owns the
+- [x] `SKScene` — minimal Phase 1 shell: just the per-frame lifecycle callbacks
+      (`update`/`didEvaluateActions`/`didSimulatePhysics`/`didApplyConstraints`/`didFinishUpdate`)
+      and `isPaused`. Apple's `SKScene` also extends `SKNode` for the scene graph (`size`/
+      `scaleMode`/`anchorPoint`/background/children) — Phase 2 extends this class to subclass
+      `SKNode` once it exists, rather than introducing a throwaway placeholder type
+- [x] `SKView` (`:spritekit`) — `GLSurfaceView` subclass hosting a scene (`presentScene`), owns the
       `GLSurfaceView.Renderer` that drives the frame loop; works directly in XML/View apps
-- [ ] Frame loop: `RENDERMODE_CONTINUOUSLY`; per-frame order matches SpriteKit's documented
+- [x] Frame loop: `RENDERMODE_CONTINUOUSLY`; per-frame order matches SpriteKit's documented
       sequence — `update(deltaTime)` → evaluate actions → simulate physics → apply constraints →
-      render → `didFinishUpdate()`
-- [ ] `SKView.runOnGLThread { }` / `SKView.runOnUiThread { }` — the UI-thread ↔ render-thread bridge
+      render → `didFinishUpdate()` (render step is just a `glClear` until Phase 3's pipeline lands)
+- [x] `SKView.runOnGLThread { }` / `SKView.runOnUiThread { }` — the UI-thread ↔ render-thread bridge
       utilities
-- [ ] Touch-event marshaling: UI-thread `MotionEvent` snapshotted into an immutable value, handed
-      to the render thread via `runOnGLThread`
-- [ ] `SKResourceRegistry` — render-thread-confined GPU resource lifecycle groundwork (context-loss
-      recovery on `onSurfaceCreated`); no actual GPU resources yet (those start in Phase 3)
-- [ ] Classic-View lifecycle: `SKView.onPause()`/`onResume()`, callable from `Activity`/`Fragment`
+- [x] Touch-event marshaling: UI-thread `MotionEvent` snapshotted into an immutable `SKTouchEvent`,
+      handed to the render thread via `runOnGLThread` and delivered through a settable
+      `SKView.onTouch` callback; real `SKNode`/`SKScene` touch dispatch replaces that callback in
+      Phase 10 once nodes exist. Coordinates stay in view space (pixels, y-down) at this stage —
+      converting to the scene's y-up space needs the scene size/scale Phase 2/3 add
+- [x] `SKResourceRegistry` — render-thread-confined GPU resource lifecycle groundwork (reload hook
+      for context loss, via `SKReloadableResource`); no actual GPU resources yet (those start in
+      Phase 3)
+- [x] Classic-View lifecycle: `SKView.onPause()`/`onResume()`, callable from `Activity`/`Fragment`
       callbacks (plain `GLSurfaceView.onPause`/`onResume` + `scene.isPaused`)
-- [ ] `:spritekit-compose` module — `@Composable fun SKView(scene, modifier, state)` via
+- [x] `:spritekit-compose` module — `@Composable fun SKView(scene, modifier, state)` via
       `AndroidView(factory = { context -> SKView(context) })`, `rememberSKViewState()` delegating
       to the wrapped `SKView`'s bridge utilities, and a `DisposableEffect` on `LocalLifecycleOwner`
       that calls the wrapped view's `onPause`/`onResume` automatically
@@ -101,9 +110,9 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `alpha`, `isHidden`, `isPaused`, `name`, `userData`), `addChild`/`removeFromParent`,
       `childNode(withName:)`, `enumerateChildNodes(withName:)`, coordinate conversion
       (`convert(_:to:)`/`convert(_:from:)`), `calculateAccumulatedFrame()`, `intersects(_:)`
-- [ ] `SKScene` — `size`, `scaleMode` (`.fill`/`.aspectFill`/`.aspectFit`/`.resizeFill`),
-      `anchorPoint`, background color, lifecycle callbacks (`update`, `didEvaluateActions`,
-      `didSimulatePhysics`, `didApplyConstraints`, `didFinishUpdate`)
+- [ ] `SKScene` — extend Phase 1's lifecycle-callback-only shell to subclass `SKNode` (now that it
+      exists) and add `size`, `scaleMode` (`.fill`/`.aspectFill`/`.aspectFit`/`.resizeFill`),
+      `anchorPoint`, background color
 - [ ] Pure Kotlin, no GL dependency — fully unit-testable independent of a live GL context
 
 ## Phase 3 — Textures & Sprite Rendering

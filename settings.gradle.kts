@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "SpriteKit"
 
 include(":spritekit")
+include(":spritekit-compose")
