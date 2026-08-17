@@ -427,8 +427,36 @@ algorithms (steering, noise, Gaussian sampling).
 
 ## Phase 12 — Audio
 
-- [ ] `SKAudioNode` wrapping `SoundPool` (short sound effects) / `MediaPlayer` (music);
-      positional/spatial audio is **out of scope** initially
+- [x] `SKAudioNode` — a single persistent audio clip per node (mirrors Apple's own 1:1
+      node-to-player model), backed by `android.media.MediaPlayer` rather than `SoundPool`:
+      `MediaPlayer.setDataSource(String)` needs no `Context`, unlike `SoundPool`/
+      `MediaPlayer.create()`, so clips are addressed by a plain path/URL string
+      (`SKAudioNode.path`) with no Apple-style app-bundle `fileNamed:` lookup — an absolute file
+      path, an `http(s)://` URL, or a bundled asset via `"file:///android_asset/..."`; see
+      `docs/API_COMPATIBILITY.md`. `autoplayLooped` (Apple's combined "plays automatically AND
+      loops" flag) is driven by a new per-frame `stepAudioNodes(scene)` (mirroring
+      `stepEmitters`/`stepTileMaps`), triggering exactly once per node's lifetime. Positional/
+      spatial audio is **out of scope**, same as originally scoped
+- [x] `SKAction.play`/`pause`/`stop`/`changeVolume(to:duration:)`/`changePlaybackRate(to:duration:)`
+      — no-ops when run on anything but an `SKAudioNode`. Reuses the existing frame-stepped
+      `SKAction`/`SKActionExecution` machinery unchanged; `changeVolume`/`changePlaybackRate`
+      interpolate exactly like `fadeAlphaTo` via `SKActionState.captureOnce`
+- [x] `SKAction.playSoundFileNamed(fileNamed:waitForCompletion:)` — also `MediaPlayer`-backed
+      (not `SoundPool`), fire-and-forget, self-releasing on completion. Its real clip duration
+      isn't known ahead of time, so it's special-cased entirely in `stepLeaf` (`stepPlaySound`)
+      rather than going through the normal fixed-`SKAction.duration` progress path: it starts
+      playback once (via `SKActionState.captureOnce`) and, when `waitForCompletion` is `true`,
+      polls `handle.isPlaying` each frame until playback ends. Its reported `SKAction.duration` is
+      always `0`, since the real duration is unknown until the clip is actually playing; see
+      `docs/API_COMPATIBILITY.md`
+- [x] `SKAudioPlaybackHandle`/`SKAudioPlaybackFactory` — the seam keeping `SKAudioNode.kt`/
+      `SKActionExecution.kt` pure/testable while the real `MediaPlayer` calls live in a dedicated,
+      untested Android-only file (`SKAudioPlayback.kt`), installed by `SKView` at construction —
+      same isolation convention as `SKSceneRenderer.kt`/`SKLabelRendering.kt`/
+      `SKPathFlattening.kt`. Every real-backend operation is wrapped in `runCatching` and silently
+      ignored on failure, so a bad path or a player in the wrong state can't crash the render
+      thread. 21 new tests, all against a fake `SKAudioPlaybackHandle` — no real `MediaPlayer`
+      touched
 
 ## Phase 13 — Shaders
 
@@ -459,7 +487,6 @@ full parity; see `docs/ARCHITECTURE.md`.
 - `SKAction.follow(_:asOffset:orientToPath:duration:)` — path-following actions; would need
   path-length parameterization on top of `SKShapeNode`'s existing path-flattening machinery,
   deferred for scope
-- `SKAction.playSoundFileNamed` — needs the audio system (Phase 12)
 - `SKAction.run(_:onChildWithName:)` — a niche convenience over `childNode`/`enumerateChildNodes`
   plus a plain `run`
 - `SKEffectNode.filter` — Core Image, no Android equivalent

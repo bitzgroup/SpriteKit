@@ -50,6 +50,7 @@ public class SKView
             setEGLContextClientVersion(2)
             setRenderer(SceneRenderer())
             renderMode = RENDERMODE_CONTINUOUSLY
+            audioPlaybackFactory = realAudioPlaybackFactory
         }
 
         /**
@@ -237,6 +238,7 @@ public class SKView
                     scene.didApplyConstraints()
                     stepEmitters(scene, deltaTime)
                     stepTileMaps(scene, deltaTime)
+                    stepAudioNodes(scene)
                     renderTransitionFrame(deltaTime)
                     scene.didFinishUpdate()
                 } else {

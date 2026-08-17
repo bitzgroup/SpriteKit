@@ -23,11 +23,17 @@ dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, on
 time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKScene`), and Phase
 11 (transitions: `SKTransition` fade/crossFade/moveIn/push/reveal/doorway/flip,
 `SKView.presentScene(_:transition:)` — no offscreen-framebuffer support, so every effect reduces
-to `glViewport` offset/size, a whole-scene alpha multiplier, and (`doorway` only) a scissor clip)
-are complete — the internal renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile
-maps through one generalized triangle-list pipeline, camera-relative and crop-clipped via
-`glScissor` when applicable. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase
-plan and progress checklist.
+to `glViewport` offset/size, a whole-scene alpha multiplier, and (`doorway` only) a scissor clip),
+and Phase 12 (audio: `SKAudioNode` — one persistent `android.media.MediaPlayer` per node, addressed
+by a plain path/URL string rather than an app-bundle `fileNamed:` lookup, driven by
+`play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate` `SKAction`s reusing the existing
+frame-stepped action machinery; `SKAction.playSoundFileNamed` is a fire-and-forget `MediaPlayer`
+clip special-cased in the action executor since its real duration isn't known ahead of time; real
+playback is isolated behind an `SKAudioPlaybackHandle`/`SKAudioPlaybackFactory` seam so
+`SKAudioNode` itself stays pure/unit-testable) are complete — the internal renderer
+(`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile maps through one generalized
+triangle-list pipeline, camera-relative and crop-clipped via `glScissor` when applicable. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
 
 ## Intent
 

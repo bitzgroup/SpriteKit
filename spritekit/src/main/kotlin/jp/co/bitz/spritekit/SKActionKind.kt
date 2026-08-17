@@ -45,6 +45,18 @@ internal sealed class SKActionKind {
     data class Custom(val block: (SKNode, Duration) -> Unit) : SKActionKind()
 
     data class Animate(val textures: List<SKTexture>, val timePerFrame: Duration, val restore: Boolean) : SKActionKind()
+
+    data object Play : SKActionKind()
+
+    data object Pause : SKActionKind()
+
+    data object Stop : SKActionKind()
+
+    data class ChangeVolumeTo(val volume: Float) : SKActionKind()
+
+    data class ChangePlaybackRateTo(val rate: Float) : SKActionKind()
+
+    data class PlaySoundFileNamed(val path: String, val waitForCompletion: Boolean) : SKActionKind()
 }
 
 /**

@@ -346,6 +346,31 @@ categories recur throughout and are called out once here rather than per item:
 - **Transition progress is linear** — no easing curve (Apple's transitions may use one; exact
   timing isn't documented).
 
+## Audio (`SKAudioNode`, audio `SKAction`s)
+
+- **No app-bundle `fileNamed:` lookup** — `SKAudioNode.path` and
+  `SKAction.playSoundFileNamed(fileNamed:)` take a plain path/URL string, exactly as
+  `android.media.MediaPlayer.setDataSource(String)` accepts: an absolute file path, an
+  `http(s)://` URL, or a bundled asset via `"file:///android_asset/..."`. There's no Android
+  equivalent of an app's bundled `.caf`/`.mp3` resource resolved by filename alone, so the caller
+  resolves whatever path is appropriate.
+- **`MediaPlayer`-backed only, no `SoundPool`** — including for `SKAction.playSoundFileNamed`
+  (typically a `SoundPool` use case on Apple/elsewhere, for short fire-and-forget sound effects).
+  `SoundPool`/`MediaPlayer.create()` both need a `Context`, which isn't threaded through this
+  library's scene graph; `MediaPlayer.setDataSource(String)` doesn't. One `MediaPlayer` per
+  `SKAudioNode` also matches Apple's own persistent 1:1 node-to-player model more directly than
+  `SoundPool`'s shared-pool model would.
+- **No positional/spatial audio** — no distance attenuation, panning, or `SKNode` position
+  influencing playback; deferred, see `docs/ROADMAP.md`.
+- **`SKAction.playSoundFileNamed`'s reported `duration` is always `0`** — the real clip length
+  isn't known until `MediaPlayer` actually starts playing it, so unlike every other `SKAction`,
+  its progress isn't duration-driven; `waitForCompletion` instead polls the underlying player's
+  `isPlaying` state each frame.
+- **Playback failures are silently absorbed**, not surfaced as errors — every `MediaPlayer` call
+  (`setDataSource`, `prepare`, `start`, ...) is wrapped in a catch-and-ignore, so a bad path or a
+  player in the wrong state can't crash the render thread; there's no delegate/callback equivalent
+  of Apple's own (rare) audio error reporting.
+
 ## Shaders (`SKShader`, `SKUniform`)
 
 - Ships an extensibility hook plus one trivial built-in example (Phase 13) rather than full
