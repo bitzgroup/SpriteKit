@@ -50,8 +50,9 @@ foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (texture
 `SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`), Phase 7 (physics —
 `SKPhysicsWorld`/`SKPhysicsBody`, `SKPhysicsContact`/`SKPhysicsContactDelegate`, the
 `SKPhysicsJoint` family, and `SKFieldNode`), Phase 8 (particles — `SKEmitterNode`,
-`SKKeyframeSequence`), and Phase 9 (tile maps — `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/
-`SKTileDefinition`/`SKTileMapNode`) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
+`SKKeyframeSequence`), Phase 9 (tile maps — `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/
+`SKTileDefinition`/`SKTileMapNode`), and Phase 10 (input — `SKNode` touch dispatch) are complete.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
 full phased plan and progress checklist.
 
 ## Requirements

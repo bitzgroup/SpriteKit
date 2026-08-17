@@ -309,6 +309,27 @@ categories recur throughout and are called out once here rather than per item:
   changes. Every tile in one map shares that map node's own `zPosition` — a tile map is one flat
   layer, unlike particles' per-particle z-position.
 
+## Input (`SKNode` touch dispatch)
+
+- **Touches are delivered one `SKTouch` at a time** (`pointerId` plus `location`, already
+  converted into the *receiving* node's own local space) per `touchesBegan`/`touchesMoved`/
+  `touchesEnded`/`touchesCancelled` call, rather than Apple's batched `Set<UITouch>`. Idiomatic
+  Kotlin given this library's per-pointer `SKTouchEvent` model (Phase 1) and Android's own
+  per-pointer `MotionEvent` API — Apple's batching is largely an iOS multitouch-coalescing
+  artifact, not essential to mirror.
+- **Hit-testing uses each candidate node's own `localBounds`** (axis-aligned, un-rotated
+  bounding-box containment in that node's local space) rather than Apple's (undocumented, possibly
+  per-node-type/shape-aware) precise hit-testing — e.g. `SKShapeNode`'s actual path isn't tested,
+  just its bounds.
+- **`SKCropNode` clipping isn't considered during hit-testing** — a touch can still reach a node
+  positioned somewhere an ancestor crop node would actually clip it from view.
+- **A touch is hit-tested once, on `touchesBegan`**, then delivered to that same node for
+  `touchesMoved`/`touchesEnded`/`touchesCancelled` regardless of where the pointer travels
+  afterward (tracked per pointer ID), matching Apple's documented tracking behavior — not
+  re-hit-tested every frame.
+- **No responder-chain bubbling**: a node with `isUserInteractionEnabled == false` is never a hit
+  candidate and never receives touches at all — no walking up to find an enabled ancestor.
+
 ## Shaders (`SKShader`, `SKUniform`)
 
 - Ships an extensibility hook plus one trivial built-in example (Phase 13) rather than full

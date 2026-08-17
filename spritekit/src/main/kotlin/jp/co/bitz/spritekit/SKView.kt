@@ -30,8 +30,9 @@ public class SKView
 
         /**
          * Render-thread-confined callback invoked for each [SKTouchEvent] snapshotted from
-         * [onTouchEvent]. `null` (the default) drops touch input on the floor; Phase 10 replaces
-         * this with real `SKNode`/`SKScene` touch dispatch.
+         * [onTouchEvent], in addition to (not instead of) this view's automatic
+         * `SKNode`/`SKScene` touch dispatch (see `SKTouchDispatch.kt`) — an escape hatch for raw
+         * view-space touch access. `null` (the default) means nothing extra happens.
          */
         public var onTouch: ((SKTouchEvent) -> Unit)? = null
 
@@ -92,7 +93,10 @@ public class SKView
                         y = event.getY(index),
                         phase = phase,
                     )
-                runOnGLThread { onTouch?.invoke(snapshot) }
+                runOnGLThread {
+                    currentScene?.let { dispatchTouch(it, snapshot, viewWidth, viewHeight) }
+                    onTouch?.invoke(snapshot)
+                }
             }
             return true
         }
