@@ -403,8 +403,27 @@ algorithms (steering, noise, Gaussian sampling).
 
 ## Phase 11 — Transitions
 
-- [ ] `SKTransition` — fade/crossFade/moveIn/push/reveal/doorway/flip
-- [ ] `SKView.presentScene(_:transition:)`
+- [x] `SKTransition` — `fade`/`crossFade`/`moveIn`/`push`/`reveal`/`doorway`/`flipHorizontal`/
+      `flipVertical`. One concrete class configured by factory functions, matching Apple's own
+      shape here (same pattern `SKFieldNode`/`SKTransition` already established). This renderer
+      has no offscreen-framebuffer support (see `docs/ARCHITECTURE.md`), so every effect reduces
+      to the same primitives — drawing each scene at a `glViewport` offset/size, an overall alpha
+      multiplier, and (`doorway` only) a plain rectangular clip reusing the existing
+      `SKCropNode`-style scissor machinery — computed by the pure, unit-tested
+      `transitionLayers(transition, progress, viewWidth, viewHeight)` (`SKTransitionLayers.kt`),
+      independent of any actual GL call. `flipHorizontal`/`flipVertical` approximate Apple's true
+      3D flip as a 2D squash-then-grow, since this renderer has no 3D perspective transform
+      either. All *contract-conformant, not bit-identical* with Apple's own effects — see
+      `docs/API_COMPATIBILITY.md`
+- [x] `SKView.presentScene(_:transition:)` — an overload alongside the existing instant-cut
+      `presentScene(_:)`; a no-op transition (an instant cut) if no scene was already presented,
+      since there'd be nothing to transition from. Only the *new* scene's `update`/actions/
+      physics/etc. run during a transition — the outgoing scene is frozen, drawn only as a visual
+      snapshot via the new `SKSceneRenderer.draw` parameters (`viewportOffset`/`viewportSize`/
+      `globalAlpha`/`clearFirst`/`outerClip`) `SKTransitionLayers.kt`'s output maps onto directly.
+      17 new tests: `SKTransition`'s factories (4), and `transitionLayers`' per-effect
+      geometry/timing (13) — start/end/midpoint states, `push`'s "always exactly one screen apart"
+      invariant, `doorway`'s panel-split clipping, and progress clamping
 
 ## Phase 12 — Audio
 

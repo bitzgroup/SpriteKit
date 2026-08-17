@@ -51,9 +51,9 @@ foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (texture
 `SKPhysicsWorld`/`SKPhysicsBody`, `SKPhysicsContact`/`SKPhysicsContactDelegate`, the
 `SKPhysicsJoint` family, and `SKFieldNode`), Phase 8 (particles — `SKEmitterNode`,
 `SKKeyframeSequence`), Phase 9 (tile maps — `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/
-`SKTileDefinition`/`SKTileMapNode`), and Phase 10 (input — `SKNode` touch dispatch) are complete.
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the
-full phased plan and progress checklist.
+`SKTileDefinition`/`SKTileMapNode`), Phase 10 (input — `SKNode` touch dispatch), and Phase 11
+(transitions — `SKTransition`, `SKView.presentScene(_:transition:)`) are complete. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and progress checklist.
 
 ## Requirements
 

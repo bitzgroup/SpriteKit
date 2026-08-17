@@ -330,6 +330,22 @@ categories recur throughout and are called out once here rather than per item:
 - **No responder-chain bubbling**: a node with `isUserInteractionEnabled == false` is never a hit
   candidate and never receives touches at all — no walking up to find an enabled ancestor.
 
+## Transitions (`SKTransition`)
+
+- **No offscreen-framebuffer (FBO) support** — this renderer never draws a scene to a texture, so
+  every transition effect is built purely from `glViewport` offset/size, a whole-scene alpha
+  multiplier, and (for `doorway` only) a plain rectangular clip, rather than true compositing.
+- **`flipHorizontal`/`flipVertical` approximate Apple's true 3D flip as a 2D squash-then-grow**
+  (the outgoing scene narrows to nothing, then the incoming scene grows back out) — this renderer
+  has no 3D perspective transform to do an actual flip with.
+- **`doorway`'s split is a plain vertical line down the middle**, each half sliding straight
+  sideways — not Apple's (undocumented) exact panel geometry/easing.
+- **The outgoing scene is frozen for the whole transition** — only the *incoming* scene's
+  `update`/actions/physics/etc. continue running; the outgoing scene is drawn purely as a visual
+  snapshot of whatever state it was in when the transition began.
+- **Transition progress is linear** — no easing curve (Apple's transitions may use one; exact
+  timing isn't documented).
+
 ## Shaders (`SKShader`, `SKUniform`)
 
 - Ships an extensibility hook plus one trivial built-in example (Phase 13) rather than full
