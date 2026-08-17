@@ -77,8 +77,32 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Textures & sprites (`SKTexture`, `SKTextureAtlas`, `SKSpriteNode`)
 
-- **`SKTextureAtlas`** will be a runtime atlas packer rather than Apple's build-time
-  (Xcode-integrated) atlas compiler — there is no equivalent Android build step to hook into.
+- **`SKTextureAtlas.pack`** is a runtime atlas packer rather than Apple's build-time
+  (Xcode-integrated) atlas compiler — there is no equivalent Android build step to hook into. It
+  uses a classic shelf/next-fit bin-packing algorithm (simple, not space-optimal); Apple's own
+  atlas-packing algorithm isn't documented, so there's nothing to match even if this library could
+  hook into a build step.
+- **`SKTexture(rect:in:)`** doesn't compose nested sub-rects — `rect` is always interpreted
+  relative to the passed-in texture's *underlying bitmap*, even if that texture is itself already
+  a sub-rect. `SKTextureAtlas` (this constructor's only real use case in this library) never
+  chains sub-rects, so this doesn't come up in practice.
+- **`SKSpriteNode.size`** always defaults to `Vector2.Zero`, even when a `texture` is set. Apple
+  auto-sizes a sprite to its texture's pixel dimensions (adjusted by scale factor) at construction
+  time; matching that would mean calling `Bitmap.getWidth()`/`getHeight()` from inside
+  `SKSpriteNode`'s own logic, which — like this library's approach throughout — stays out of code
+  paths meant to be pure-Kotlin/unit-testable. Set `size` explicitly.
+- **`SKBlendMode.multiplyX2`** is not implemented (Apple's other cases —
+  `.alpha`/`.add`/`.subtract`/`.multiply`/`.screen`/`.replace` — all are), a rarely-used blend mode
+  this library didn't prioritize. Blending is implemented via standard `glBlendFunc`/
+  `glBlendEquation` combinations — *contract-conformant, not bit-identical*, since Apple's own
+  blending isn't independently documented beyond its observable effect.
+- **`SKSpriteNode.colorBlendFactor`** is applied as a CPU-computed-per-sprite vertex-color
+  multiplier (`mix(white, color, colorBlendFactor)`, scaled by the node's accumulated alpha) rather
+  than a per-pixel shader `mix` between the sampled texture color and `color` — a modulate
+  approximation of Apple's per-pixel blend, chosen because `color`/`colorBlendFactor` are per-node
+  scalars, not textures, so precomputing them once per sprite (rather than per-fragment) is both
+  simpler and cheaper. Reasonable for the common case; not pixel-identical to Apple's for textures
+  with partial transparency.
 
 ## Shapes & labels (`SKShapeNode`, `SKLabelNode`)
 

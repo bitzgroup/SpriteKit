@@ -125,14 +125,28 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
 
 ## Phase 3 — Textures & Sprite Rendering
 
-- [ ] `SKTexture` — from `Bitmap`/drawable resource/asset, `filteringMode`, rect subset
-- [ ] GPU resource manager wired into Phase 1's `SKResourceRegistry`
-- [ ] OpenGL ES 2.0 sprite renderer: default vertex/fragment shader program, draw list flattened
-      from the scene graph and sorted by `zPosition` (ties broken by tree order, per Apple's
-      documented rule), batched by texture + blend mode
-- [ ] `SKSpriteNode` — `texture`, `color`/`colorBlendFactor`, `size`, `anchorPoint`, `blendMode`
-- [ ] `SKTextureAtlas` — runtime atlas packer (Apple auto-packs atlases at Xcode build time; no
-      Android equivalent, so this is a runtime alternative — see `docs/API_COMPATIBILITY.md`)
+- [x] `SKTexture` — wraps a `Bitmap`, `filteringMode`, rect subset (`SKTexture(rect:in:)`, sharing
+      GPU state with the texture it's carved from — see `docs/ARCHITECTURE.md`)
+- [x] `SKBlendMode`, `SKTextureFilteringMode`
+- [x] GPU resource manager: `SKResourceRegistry.generation`, a lazy-upload counter added alongside
+      Phase 1's register/`reloadAll` callback list — see `docs/ARCHITECTURE.md`
+- [x] OpenGL ES 2.0 sprite renderer (`SKSpriteRenderer`, internal): default vertex/fragment shader
+      program, draw list flattened from the scene graph (`buildSpriteDrawList`) and sorted by
+      `zPosition` (ties broken by tree order, per Apple's documented rule), batched by texture +
+      blend mode. `SKScene.scaleMode` letterbox/crop math (`computeSceneProjection`) is pure
+      Kotlin and unit-tested; the actual `GLES20`/`GLUtils`/`Matrix` calls are not — see this
+      phase's testing note below
+- [x] `SKSpriteNode` — `texture`, `color`/`colorBlendFactor`, `size`, `anchorPoint`, `blendMode`
+- [x] `SKTextureAtlas` — runtime atlas packer (Apple auto-packs atlases at Xcode build time; no
+      Android equivalent, so this is a runtime alternative — see `docs/API_COMPATIBILITY.md`); the
+      packing layout algorithm (`packTextureAtlas`) is pure Kotlin and unit-tested separately from
+      the actual bitmap compositing
+- [x] Testing note: `SKTexture`/`SKSpriteRenderer`/`SKTextureAtlas.pack` all ultimately touch
+      `android.graphics.Bitmap`/`Canvas` or `GLES20`/`GLUtils`, none of which are safe to call from
+      plain JVM unit tests without Robolectric — consistent with `CLAUDE.md`'s documented testing
+      gap. Everything reachable *without* constructing a real `Bitmap` (draw-list building,
+      alpha/visibility inheritance, zPosition sorting, color-blend math, scaleMode projection math,
+      atlas packing layout) is still pure Kotlin and unit-tested
 
 ## Phase 4 — Shapes & Labels
 

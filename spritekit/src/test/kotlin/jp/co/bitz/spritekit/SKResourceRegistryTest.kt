@@ -36,4 +36,15 @@ class SKResourceRegistryTest {
 
         registry.reloadAll() // must not throw
     }
+
+    @Test
+    fun `generation starts at zero and is bumped by every reloadAll call`() {
+        val registry = SKResourceRegistry()
+
+        assertEquals(0, registry.generation)
+        registry.reloadAll()
+        assertEquals(1, registry.generation)
+        registry.reloadAll()
+        assertEquals(2, registry.generation)
+    }
 }
