@@ -21,6 +21,15 @@ public open class SKScene(
         isUserInteractionEnabled = true
     }
 
+    /**
+     * The [SKView] currently presenting this scene, or `null` if it isn't presented by any view
+     * right now. Set by [SKView.presentScene] — lets scene code reach the view that's hosting it
+     * (e.g. to call `view?.presentScene(nextScene, transition)` for scene-to-scene navigation)
+     * without the app having to thread that reference through separately.
+     */
+    public var view: SKView? = null
+        internal set
+
     /** How this scene scales to fit the [SKView] presenting it. Defaults to [SKSceneScaleMode.Fill]. */
     public var scaleMode: SKSceneScaleMode = SKSceneScaleMode.Fill
 

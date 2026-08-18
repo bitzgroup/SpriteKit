@@ -58,7 +58,7 @@ public class SKView
          * the render thread before the next frame — see [runOnGLThread].
          */
         public fun presentScene(scene: SKScene) {
-            runOnGLThread { currentScene = scene }
+            runOnGLThread { setCurrentScene(scene) }
         }
 
         /**
@@ -77,8 +77,19 @@ public class SKView
                     transitionSpec = transition
                     transitionElapsed = Duration.ZERO
                 }
-                currentScene = scene
+                setCurrentScene(scene)
             }
+        }
+
+        /**
+         * Swaps [currentScene] to [scene], keeping [SKScene.view] in sync on both the outgoing and
+         * incoming scene — matching Apple's documented behavior that a scene's `view` becomes
+         * `nil` once another scene replaces it. Must only be called on the render thread.
+         */
+        private fun setCurrentScene(scene: SKScene) {
+            currentScene?.view = null
+            currentScene = scene
+            scene.view = this
         }
 
         /**

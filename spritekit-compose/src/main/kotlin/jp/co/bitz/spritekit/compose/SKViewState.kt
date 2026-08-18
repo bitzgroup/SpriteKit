@@ -3,6 +3,7 @@ package jp.co.bitz.spritekit.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import jp.co.bitz.spritekit.SKScene
+import jp.co.bitz.spritekit.SKTransition
 import jp.co.bitz.spritekit.SKView as SKViewClassic
 
 /**
@@ -17,6 +18,17 @@ public class SKViewState internal constructor() {
     /** Presents [scene] on the hosted [SKViewClassic], once it exists. See [SKViewClassic.presentScene]. */
     public fun presentScene(scene: SKScene) {
         view?.presentScene(scene)
+    }
+
+    /**
+     * Presents [scene] like [presentScene], but plays [transition] instead of cutting instantly.
+     * See [SKViewClassic.presentScene].
+     */
+    public fun presentScene(
+        scene: SKScene,
+        transition: SKTransition,
+    ) {
+        view?.presentScene(scene, transition)
     }
 
     /** See [SKViewClassic.runOnGLThread]. No-op if the hosted view doesn't exist yet. */
