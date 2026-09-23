@@ -50,7 +50,7 @@ public class SKView
             setEGLContextClientVersion(2)
             setRenderer(SceneRenderer())
             renderMode = RENDERMODE_CONTINUOUSLY
-            audioPlaybackFactory = realAudioPlaybackFactory
+            audioPlaybackFactory = realAudioPlaybackFactory(context.applicationContext)
         }
 
         /**
