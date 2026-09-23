@@ -65,9 +65,10 @@ categories recur throughout and are called out once here rather than per item:
   `/`-separated path syntax with `//` for recursive descent and `*` wildcards — not implemented.
   `enumerateChildNodes` also drops the `UnsafeMutablePointer<ObjCBool>` "stop" out-parameter from
   its callback (no Kotlin/Obj-C runtime equivalent); the callback is a plain `(SKNode) -> Unit`.
-- **`Vector2` stands in for both `CGPoint` and `CGVector`** (position vs. velocity/force/gravity in
-  Apple's API) — one Kotlin type covers both roles, since the split is a Core Graphics/Objective-C
-  legacy this port doesn't need. **`Rect` stands in for `CGRect`**, returned by
+- **`Vector2` stands in for `CGPoint`, `CGVector`, and `CGSize`** (position vs. velocity/force/
+  gravity vs. size in Apple's API) — one Kotlin type covers every role, since the split is a Core
+  Graphics/Objective-C legacy this port doesn't need. A size-valued `Vector2` (e.g.
+  `SKScene.size`) also exposes `width`/`height`, so `size.width` reads exactly as on Apple. **`Rect` stands in for `CGRect`**, returned by
   `calculateAccumulatedFrame()` — a plain Kotlin value type, not `android.graphics.RectF` (see
   `docs/ROADMAP.md`'s Phase 2 entry for why).
 - **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
