@@ -87,11 +87,12 @@ categories recur throughout and are called out once here rather than per item:
   relative to the passed-in texture's *underlying bitmap*, even if that texture is itself already
   a sub-rect. `SKTextureAtlas` (this constructor's only real use case in this library) never
   chains sub-rects, so this doesn't come up in practice.
-- **`SKSpriteNode.size`** always defaults to `Vector2.Zero`, even when a `texture` is set. Apple
-  auto-sizes a sprite to its texture's pixel dimensions (adjusted by scale factor) at construction
-  time; matching that would mean calling `Bitmap.getWidth()`/`getHeight()` from inside
-  `SKSpriteNode`'s own logic, which — like this library's approach throughout — stays out of code
-  paths meant to be pure-Kotlin/unit-testable. Set `size` explicitly.
+- **`SKTexture.size()`** is the underlying `Bitmap`'s pixel dimensions (scaled by `textureRect`
+  for a sub-region), the same as Apple reports for a texture made from a `CGImage` — an Android
+  `Bitmap` carries no separate point/pixel scale factor the way a `UIImage` does. As on Apple,
+  `SKSpriteNode(texture:)` sizes itself to that at construction, `SKEmitterNode.particleSize`
+  defaults to `(0, 0)` meaning "use the texture's size", and `SKAction.animate`'s `resize: true`
+  follows each frame's texture size.
 - **`SKBlendMode.multiplyX2`** is not implemented (Apple's other cases —
   `.alpha`/`.add`/`.subtract`/`.multiply`/`.screen`/`.replace` — all are), a rarely-used blend mode
   this library didn't prioritize. Blending is implemented via standard `glBlendFunc`/
@@ -146,8 +147,6 @@ categories recur throughout and are called out once here rather than per item:
 - **`resizeTo`/`resizeBy`/`colorize`/`animate` are no-ops on any node that isn't an
   `SKSpriteNode`** (the only node type with a mutable `size`/`color`/`colorBlendFactor`/
   `texture`), same as their underlying properties.
-- **`animate`'s `resize` parameter isn't implemented** — same reason `SKSpriteNode.size` doesn't
-  auto-size from a texture in the first place (see the "Textures & sprites" section above).
 - **`customAction`'s block receives raw elapsed time** (`0` to the action's duration), not eased
   by `timingMode`/`timingFunction` — matches Apple's own documented behavior.
 
@@ -255,11 +254,6 @@ categories recur throughout and are called out once here rather than per item:
 
 - **`SKEmitterNode`** supports programmatic configuration only — Apple's `.sks` particle-editor
   archive format has no Android equivalent parser to build against.
-- **`SKEmitterNode.particleSize`** has no Apple equivalent. Apple auto-sizes each particle from
-  `particleTexture`'s pixel dimensions; this port can't do that without reading a `Bitmap`'s
-  dimensions from inside otherwise-pure-Kotlin node/config classes — the same reason
-  `SKSpriteNode.size` must be set explicitly instead of inferred from its texture. Set
-  `particleSize` explicitly (defaults to `32x32`).
 - **`SKEmitterNode.targetNode`** isn't implemented — every particle stays in the emitting node's
   own local space for its whole life (so moving the emitter drags its existing particles along,
   unlike Apple's default of reparenting particles into the emitter's *parent* so they don't).

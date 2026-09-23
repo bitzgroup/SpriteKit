@@ -43,6 +43,17 @@ public class SKTexture internal constructor(
      */
     public constructor(rect: Rect, texture: SKTexture) : this(texture.bitmap, rect, texture.gpuState)
 
+    /**
+     * This texture's size — Apple's `size()`: its bitmap's pixel dimensions, scaled by
+     * [textureRect] for a sub-region texture (the same thing Apple reports for a texture made from
+     * a `CGImage`, whose size is likewise its pixel dimensions).
+     */
+    public fun size(): Vector2 =
+        Vector2(
+            bitmap.width * (textureRect.right - textureRect.left),
+            bitmap.height * (textureRect.bottom - textureRect.top),
+        )
+
     /** How this texture is sampled when scaled. Defaults to [SKTextureFilteringMode.Linear]. */
     public var filteringMode: SKTextureFilteringMode = SKTextureFilteringMode.Linear
 }

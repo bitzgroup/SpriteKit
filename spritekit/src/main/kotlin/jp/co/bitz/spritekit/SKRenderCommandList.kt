@@ -373,7 +373,7 @@ private fun addEmitterCommands(
 ) {
     val texture = node.particleTexture
     val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
-    val halfSize = node.particleSize * 0.5f
+    val halfSize = node.effectiveParticleSize() * 0.5f
     for (particle in node.particles) {
         val scale = particle.initialScale + particle.scaleSpeed * particle.age
         val rotation = particle.initialRotation + particle.rotationSpeed * particle.age

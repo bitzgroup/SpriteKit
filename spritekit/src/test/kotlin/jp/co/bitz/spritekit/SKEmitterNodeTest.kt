@@ -16,6 +16,21 @@ class SKEmitterNodeTest {
     }
 
     @Test
+    fun `particleSize defaults to zero, and an untextured emitter left there draws zero-size particles`() {
+        val emitter = SKEmitterNode()
+
+        assertEquals(Vector2.Zero, emitter.particleSize)
+        assertEquals(Vector2.Zero, emitter.effectiveParticleSize())
+    }
+
+    @Test
+    fun `an explicit particleSize is used as-is`() {
+        val emitter = SKEmitterNode().apply { particleSize = Vector2(12f, 12f) }
+
+        assertEquals(Vector2(12f, 12f), emitter.effectiveParticleSize())
+    }
+
+    @Test
     fun `particleBirthRate emits particles at the expected rate`() {
         val scene = SKScene(size = Vector2(100f, 100f))
         val emitter = SKEmitterNode().apply { particleBirthRate = 10f }

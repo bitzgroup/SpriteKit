@@ -312,9 +312,10 @@ algorithms (steering, noise, Gaussian sampling).
       `fieldBitMask` (particles respond to matching `SKFieldNode`s — reuses Phase 7d's field-force
       formulas, refactored to work from a world position/velocity pair instead of an
       `SKPhysicsBody` so both can share them), `advanceSimulationTime`/`resetSimulation`.
-      `particleSize` has no Apple equivalent (Apple auto-sizes from the texture's pixel
-      dimensions; this port can't without reading `Bitmap` dimensions outside the GL-only code
-      paths, the same reason `SKSpriteNode.size` isn't auto-derived either). `targetNode` and the
+      `particleSize` defaults to `(0, 0)`, meaning "use the texture's size", like Apple's
+      (originally shipped as a fixed `32x32` default with no texture-derived sizing; revised
+      post-`v0.1.0` once `SKTexture.size()` existed, after checking Apple's real defaults on an iOS
+      Simulator — see `docs/API_COMPATIBILITY.md`). `targetNode` and the
       scale/rotation/alpha sibling `SKKeyframeSequence` properties aren't implemented — see
       `docs/API_COMPATIBILITY.md`. Stepped once per frame by `SKView` (`stepEmitters`, after
       constraints, before rendering), independent of `SKPhysicsWorld`

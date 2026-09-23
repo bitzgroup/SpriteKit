@@ -44,7 +44,12 @@ internal sealed class SKActionKind {
 
     data class Custom(val block: (SKNode, Duration) -> Unit) : SKActionKind()
 
-    data class Animate(val textures: List<SKTexture>, val timePerFrame: Duration, val restore: Boolean) : SKActionKind()
+    data class Animate(
+        val textures: List<SKTexture>,
+        val timePerFrame: Duration,
+        val resize: Boolean,
+        val restore: Boolean,
+    ) : SKActionKind()
 
     data object Play : SKActionKind()
 

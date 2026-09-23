@@ -206,20 +206,23 @@ public class SKAction internal constructor(
         ): SKAction = SKAction(duration, SKActionKind.Custom(block))
 
         /**
-         * Steps [SKSpriteNode.texture] through [textures], holding each for [timePerFrame]. If
-         * [restore] is `true`, the sprite's original texture (from before this action started)
-         * is restored once it finishes. No-op on nodes other than [SKSpriteNode].
-         *
-         * Deviation: Apple's `resize` parameter (also resizing the sprite to match each
-         * texture's pixel dimensions) isn't implemented, for the same reason
-         * [SKSpriteNode.size] doesn't auto-size from a texture in the first place — see
-         * `docs/API_COMPATIBILITY.md`.
+         * Steps [SKSpriteNode.texture] through [textures], holding each for [timePerFrame] —
+         * Apple's `animate(with:timePerFrame:resize:restore:)`. If [resize] is `true`, the
+         * sprite's [SKSpriteNode.size] follows each texture's [SKTexture.size]. If [restore] is
+         * `true`, the sprite's original texture (from before this action started) is restored
+         * once it finishes — resized back to that texture's size too, if [resize] is also `true`.
+         * No-op on nodes other than [SKSpriteNode].
          */
         public fun animate(
             textures: List<SKTexture>,
             timePerFrame: Duration,
+            resize: Boolean = false,
             restore: Boolean = false,
-        ): SKAction = SKAction(timePerFrame * textures.size, SKActionKind.Animate(textures, timePerFrame, restore))
+        ): SKAction =
+            SKAction(
+                timePerFrame * textures.size,
+                SKActionKind.Animate(textures, timePerFrame, resize, restore),
+            )
 
         /** Starts (or resumes) playback. No-op on nodes other than [SKAudioNode]. */
         public fun play(): SKAction = SKAction(Duration.ZERO, SKActionKind.Play)

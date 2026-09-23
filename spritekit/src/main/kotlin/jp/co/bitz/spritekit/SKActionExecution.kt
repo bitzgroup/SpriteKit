@@ -290,7 +290,6 @@ private fun applyColorize(
     sprite.colorBlendFactor = fromBlend + (targetBlend - fromBlend) * progress
 }
 
-@Suppress("ReturnCount") // three independent guard clauses read more clearly here than nesting them
 private fun applyAnimate(
     state: SKActionState,
     kind: SKActionKind.Animate,
@@ -300,12 +299,14 @@ private fun applyAnimate(
     val sprite = node as? SKSpriteNode ?: return
     if (kind.textures.isEmpty()) return
     val originalTexture = state.captureOnce { sprite.texture }
-    if (kind.restore && elapsed >= kind.timePerFrame * kind.textures.size) {
-        sprite.texture = originalTexture
-        return
-    }
-    val frameIndex = animationFrameIndex(elapsed, kind.timePerFrame, kind.textures.size)
-    sprite.texture = kind.textures[frameIndex]
+    val texture =
+        if (kind.restore && elapsed >= kind.timePerFrame * kind.textures.size) {
+            originalTexture
+        } else {
+            kind.textures[animationFrameIndex(elapsed, kind.timePerFrame, kind.textures.size)]
+        }
+    sprite.texture = texture
+    if (kind.resize && texture != null) sprite.size = texture.size()
 }
 
 /**
