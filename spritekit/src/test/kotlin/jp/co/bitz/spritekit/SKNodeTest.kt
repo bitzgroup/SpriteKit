@@ -183,6 +183,121 @@ class SKNodeTest {
     }
 
     @Test
+    fun `convertAllTo matches mapping convertTo point-by-point, through a rotated scaled multi-level chain`() {
+        val root = SKNode().apply { position = Vector2(3f, -4f) }
+        val middle =
+            SKNode().apply {
+                position = Vector2(-2f, 5f)
+                zRotation = (PI / 6).toFloat()
+            }
+        val leaf =
+            SKNode().apply {
+                position = Vector2(2f, 2f)
+                zRotation = (PI / 4).toFloat()
+                xScale = 2f
+                yScale = 0.5f
+            }
+        root.addChild(middle)
+        middle.addChild(leaf)
+        val points = listOf(Vector2(7f, -3f), Vector2(0f, 0f), Vector2(-1.5f, 4f))
+
+        val batched = leaf.convertAllTo(points, root)
+        val mapped = points.map { leaf.convertTo(it, root) }
+
+        assertEquals(mapped.size, batched.size)
+        mapped.zip(batched).forEach { (expected, actual) -> assertVector2Equals(expected, actual) }
+    }
+
+    @Test
+    fun `convertAllTo of an empty list is empty`() {
+        val root = SKNode()
+        val child = SKNode()
+        root.addChild(child)
+
+        assertTrue(child.convertAllTo(emptyList(), root).isEmpty())
+    }
+
+    @Test
+    fun `worldTransformVersion is unchanged across calls when nothing moved`() {
+        val root = SKNode()
+        val child = SKNode().apply { position = Vector2(1f, 2f) }
+        root.addChild(child)
+
+        val rootVersion = root.worldTransformVersion(0L)
+        val childVersion = child.worldTransformVersion(rootVersion)
+
+        assertEquals(rootVersion, root.worldTransformVersion(0L))
+        assertEquals(childVersion, child.worldTransformVersion(rootVersion))
+    }
+
+    @Test
+    fun `worldTransformVersion changes when the node's own position changes`() {
+        val node = SKNode().apply { position = Vector2(1f, 2f) }
+        val before = node.worldTransformVersion(0L)
+
+        node.position = Vector2(3f, 4f)
+
+        assertTrue(before != node.worldTransformVersion(0L))
+    }
+
+    @Test
+    fun `worldTransformVersion does not change when a property is set to its current value`() {
+        val node = SKNode().apply { position = Vector2(1f, 2f) }
+        val before = node.worldTransformVersion(0L)
+
+        node.position = Vector2(1f, 2f) // same value -- not a real change
+
+        assertEquals(before, node.worldTransformVersion(0L))
+    }
+
+    @Test
+    fun `worldTransformVersion changes for zRotation, xScale, and yScale changes too`() {
+        val rotated = SKNode()
+        val beforeRotation = rotated.worldTransformVersion(0L)
+        rotated.zRotation = (PI / 2).toFloat()
+        assertTrue(beforeRotation != rotated.worldTransformVersion(0L))
+
+        val scaledX = SKNode()
+        val beforeXScale = scaledX.worldTransformVersion(0L)
+        scaledX.xScale = 2f
+        assertTrue(beforeXScale != scaledX.worldTransformVersion(0L))
+
+        val scaledY = SKNode()
+        val beforeYScale = scaledY.worldTransformVersion(0L)
+        scaledY.yScale = 2f
+        assertTrue(beforeYScale != scaledY.worldTransformVersion(0L))
+    }
+
+    @Test
+    fun `worldTransformVersion changes for a child when only its parent moves`() {
+        val root = SKNode()
+        val child = SKNode()
+        root.addChild(child)
+        val rootVersionBefore = root.worldTransformVersion(0L)
+        val childVersionBefore = child.worldTransformVersion(rootVersionBefore)
+
+        root.position = Vector2(5f, 5f)
+
+        val rootVersionAfter = root.worldTransformVersion(0L)
+        assertTrue(rootVersionBefore != rootVersionAfter)
+        assertTrue(childVersionBefore != child.worldTransformVersion(rootVersionAfter))
+    }
+
+    @Test
+    fun `worldTransformVersion changes when a node is re-parented`() {
+        val firstParent = SKNode()
+        val secondParent = SKNode().apply { position = Vector2(9f, 9f) }
+        val child = SKNode()
+        firstParent.addChild(child)
+        val before = child.worldTransformVersion(firstParent.worldTransformVersion(0L))
+
+        child.removeFromParent()
+        secondParent.addChild(child)
+
+        assertTrue(before != child.worldTransformVersion(secondParent.worldTransformVersion(0L)))
+    }
+
+    @Test
     fun `calculateAccumulatedFrame for a leaf node with no content is a degenerate rect at its position`() {
         val node = SKNode().apply { position = Vector2(5f, 6f) }
         val parent = SKNode()

@@ -77,6 +77,8 @@ private class RenderContext(
     val clipRect: Rect?,
     val add: (SKRenderCommand, Float) -> Unit,
     val zPosition: Float,
+    val worldVersion: Long,
+    val referenceVersion: Long,
 )
 
 /**
@@ -89,8 +91,21 @@ private class SKRenderCommandCollector(
     private val commands = mutableListOf<Pair<SKRenderCommand, Pair<Float, Int>>>()
     private var order = 0
 
+    // Computed once up front (root to referenceNode), not during the main walk below, since
+    // referenceNode (the scene, or its camera) isn't necessarily visited before the nodes being
+    // converted into its space. Calling `worldTransformVersion` again for the same nodes when the
+    // main walk does reach them is harmless -- see that function's KDoc.
+    private val referenceVersion = referenceWorldVersion(referenceNode)
+
     fun collect(scene: SKScene): List<SKRenderCommand> {
-        visit(scene, inheritedAlpha = 1f, inheritedHidden = false, inheritedClip = null, inheritedZPosition = 0f)
+        visit(
+            scene,
+            inheritedAlpha = 1f,
+            inheritedHidden = false,
+            inheritedClip = null,
+            inheritedZPosition = 0f,
+            parentWorldVersion = 0L,
+        )
         return commands.sortedWith(compareBy({ it.second.first }, { it.second.second })).map { it.first }
     }
 
@@ -101,17 +116,20 @@ private class SKRenderCommandCollector(
         commands += command to (zPosition to order)
     }
 
+    @Suppress("LongParameterList")
     private fun visit(
         node: SKNode,
         inheritedAlpha: Float,
         inheritedHidden: Boolean,
         inheritedClip: Rect?,
         inheritedZPosition: Float,
+        parentWorldVersion: Long,
     ) {
         order++
         val hidden = inheritedHidden || node.isHidden
         val alpha = inheritedAlpha * node.alpha
         val zPosition = inheritedZPosition + node.zPosition
+        val worldVersion = node.worldTransformVersion(parentWorldVersion)
         val clip =
             if (node is SKCropNode) {
                 cropClip(
@@ -129,10 +147,23 @@ private class SKRenderCommandCollector(
         // rendered a second time as ordinary content.
         val isCropMask = (node.parent as? SKCropNode)?.maskNode === node
         if (!isCropMask && !hidden && alpha > 0f) {
-            addCommand(node, RenderContext(referenceNode, clip.rect, ::add, zPosition), alpha)
+            val context = RenderContext(referenceNode, clip.rect, ::add, zPosition, worldVersion, referenceVersion)
+            addCommand(node, context, alpha)
         }
-        for (child in node.children) visit(child, alpha, hidden, clip.rect, zPosition)
+        for (child in node.children) visit(child, alpha, hidden, clip.rect, zPosition, worldVersion)
     }
+}
+
+/**
+ * [referenceNode]'s own [SKNode.worldTransformVersion], walking from the topmost ancestor down to
+ * [referenceNode] itself (the order [SKNode.worldTransformVersion] requires) — see
+ * [SKRenderCommandCollector.referenceVersion].
+ */
+private fun referenceWorldVersion(referenceNode: SKNode): Long {
+    val rootToReference = generateSequence(referenceNode) { it.parent }.toList().asReversed()
+    var version = 0L
+    for (node in rootToReference) version = node.worldTransformVersion(version)
+    return version
 }
 
 private fun addCommand(
@@ -185,7 +216,7 @@ private fun addSpriteCommand(
     context: RenderContext,
     alpha: Float,
 ) {
-    val corners = node.localQuadCorners().map { node.convertTo(it, context.referenceNode) }
+    val corners = node.convertAllTo(node.localQuadCorners(), context.referenceNode)
     val uv = node.texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
     context.add(
         SKRenderCommand(
@@ -207,9 +238,10 @@ private fun addLabelCommand(
 ) {
     val (texture, metrics) = node.renderedLabel() ?: return
     val corners =
-        labelQuadCorners(metrics, node.horizontalAlignmentMode, node.verticalAlignmentMode).map {
-            node.convertTo(it, context.referenceNode)
-        }
+        node.convertAllTo(
+            labelQuadCorners(metrics, node.horizontalAlignmentMode, node.verticalAlignmentMode),
+            context.referenceNode,
+        )
     context.add(
         SKRenderCommand(
             texture = texture,
@@ -233,21 +265,30 @@ private fun addShapeCommands(
     val strokeAlpha = alphaOf(node.strokeColor) * alpha
     if (fillAlpha <= 0f && (strokeAlpha <= 0f || node.lineWidth <= 0f)) return
 
-    for (contour in flattenPath(path)) {
+    // Flattening + triangulating a curved path (an ear-clip over the ~100+ points a typical
+    // circle flattens to) is expensive enough that redoing it unconditionally every frame is the
+    // difference between a static board of a few dozen shapes rendering fine and it pegging the
+    // render thread -- see `triangulatedShape`'s KDoc. The per-vertex world-space transform below
+    // is cached the same way (`worldVertices`): most shapes on a mostly-static scene haven't
+    // actually moved on any given frame, and `SKNode.worldTransformVersion` tells us so without
+    // redoing the conversion to find out.
+    val shape = triangulatedShape(node, path)
+    val worldVertices = worldVertices(node, shape, context)
+    for (index in shape.fillRanges.indices) {
         if (fillAlpha > 0f) {
-            val triangles = triangulateFill(contour.points)
-            if (triangles.isNotEmpty()) {
+            val range = shape.fillRanges[index]
+            if (!range.isEmpty()) {
                 context.add(
-                    shapeCommand(node, context, triangles, node.fillColor, alpha = fillAlpha),
+                    shapeCommand(worldVertices.slice(range), node.fillColor, fillAlpha, context.clipRect),
                     context.zPosition,
                 )
             }
         }
         if (strokeAlpha > 0f && node.lineWidth > 0f) {
-            val triangles = triangulateStroke(contour.points, node.lineWidth, contour.closed)
-            if (triangles.isNotEmpty()) {
+            val range = shape.strokeRanges[index]
+            if (!range.isEmpty()) {
                 context.add(
-                    shapeCommand(node, context, triangles, node.strokeColor, alpha = strokeAlpha),
+                    shapeCommand(worldVertices.slice(range), node.strokeColor, strokeAlpha, context.clipRect),
                     context.zPosition,
                 )
             }
@@ -255,19 +296,66 @@ private fun addShapeCommands(
     }
 }
 
-private fun shapeCommand(
+/**
+ * [SKShapeNode.worldVerticesCache]'s contents: [vertices] is [triangulationCache]'s
+ * [SKShapeTriangulationCache.allLocalVertices] already converted into [referenceNode]'s space, as
+ * of [worldVersion] (the owning node's [SKNode.worldTransformVersion] at the time) and
+ * [referenceVersion] ([referenceNode]'s own, since it can itself move — e.g. a panning camera).
+ */
+internal class SKShapeWorldVerticesCache(
+    val triangulationCache: SKShapeTriangulationCache,
+    val referenceNode: SKNode,
+    val referenceVersion: Long,
+    val worldVersion: Long,
+    val vertices: List<SKRenderVertex>,
+)
+
+/**
+ * [shape]'s [SKShapeTriangulationCache.allLocalVertices] converted into [RenderContext.referenceNode]'s
+ * space, reusing [SKShapeNode.worldVerticesCache] when neither [node]'s effective world transform
+ * ([SKNode.worldTransformVersion]) nor [RenderContext.referenceNode]'s own has changed since it
+ * was computed, and [shape] itself is still the node's current triangulation. Recomputes (one
+ * batched [SKNode.convertAllTo] call, wrapping each result as an [SKRenderVertex]) otherwise.
+ */
+private fun worldVertices(
     node: SKShapeNode,
+    shape: SKShapeTriangulationCache,
     context: RenderContext,
-    localTriangleVertices: List<Vector2>,
+): List<SKRenderVertex> {
+    val cached = node.worldVerticesCache
+    if (cached != null && cached.isFresh(shape, context)) return cached.vertices
+
+    val fresh = node.convertAllTo(shape.allLocalVertices, context.referenceNode).map { SKRenderVertex(it, 0f, 0f) }
+    node.worldVerticesCache =
+        SKShapeWorldVerticesCache(shape, context.referenceNode, context.referenceVersion, context.worldVersion, fresh)
+    return fresh
+}
+
+/** Whether this cache is still valid for [shape] and [context] -- see [worldVertices]. */
+private fun SKShapeWorldVerticesCache.isFresh(
+    shape: SKShapeTriangulationCache,
+    context: RenderContext,
+): Boolean =
+    triangulationCache === shape &&
+        referenceNode === context.referenceNode &&
+        referenceVersion == context.referenceVersion &&
+        worldVersion == context.worldVersion
+
+/** [range]'s slice of this list — a view ([List.subList]), not a copy. */
+private fun <T> List<T>.slice(range: IntRange): List<T> = subList(range.first, range.last + 1)
+
+private fun shapeCommand(
+    vertices: List<SKRenderVertex>,
     colorInt: Int,
     alpha: Float,
+    clipRect: Rect?,
 ): SKRenderCommand =
     SKRenderCommand(
         texture = null,
         blendMode = SKBlendMode.Alpha,
-        vertices = localTriangleVertices.map { SKRenderVertex(node.convertTo(it, context.referenceNode), 0f, 0f) },
+        vertices = vertices,
         color = SKVertexColor(redOf(colorInt), greenOf(colorInt), blueOf(colorInt), alpha),
-        clipRect = context.clipRect,
+        clipRect = clipRect,
     )
 
 /**
@@ -298,11 +386,8 @@ private fun addEmitterCommands(
         val lifeFraction = (particle.age / particle.lifetime).coerceIn(0f, 1f)
         val colorInt = node.particleColorSequence?.sample(lifeFraction, ::lerpColor) ?: node.particleColor
 
-        val corners =
-            rotatedQuadCorners(
-                halfSize * scale,
-                rotation,
-            ).map { node.convertTo(it + particle.position, context.referenceNode) }
+        val localCorners = rotatedQuadCorners(halfSize * scale, rotation).map { it + particle.position }
+        val corners = node.convertAllTo(localCorners, context.referenceNode)
         context.add(
             SKRenderCommand(
                 texture = texture,
@@ -346,13 +431,14 @@ private fun addTileCommand(
     val definition = node.tileDefinition(column, row) ?: return
     val center = node.centerOfTile(column, row)
     val halfSize = definition.size * 0.5f
-    val corners =
+    val localCorners =
         listOf(
             Vector2(center.x - halfSize.x, center.y - halfSize.y),
             Vector2(center.x + halfSize.x, center.y - halfSize.y),
             Vector2(center.x + halfSize.x, center.y + halfSize.y),
             Vector2(center.x - halfSize.x, center.y + halfSize.y),
-        ).map { node.convertTo(it, context.referenceNode) }
+        )
+    val corners = node.convertAllTo(localCorners, context.referenceNode)
     val texture = definition.textureAt(node.elapsedTime)
     val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
     context.add(
