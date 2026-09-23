@@ -209,10 +209,11 @@ skView.presentScene(nextLevelScene, transition = SKTransition.crossFade(duration
 ### Audio
 
 ```kotlin
-val music = SKAudioNode(path = "file:///android_asset/theme.mp3")
+// Plain file names resolve against the app's assets/ folder, like Apple's main-bundle lookup.
+val music = SKAudioNode(fileNamed = "theme.mp3")
 scene.addChild(music) // autoplayLooped defaults to true
 
-ship.run(SKAction.playSoundFileNamed("file:///android_asset/laser.wav", waitForCompletion = false))
+ship.run(SKAction.playSoundFileNamed("laser.wav", waitForCompletion = false))
 ```
 
 ### Shaders

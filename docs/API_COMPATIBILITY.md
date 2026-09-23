@@ -348,18 +348,17 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Audio (`SKAudioNode`, audio `SKAction`s)
 
-- **No app-bundle `fileNamed:` lookup** — `SKAudioNode.path` and
-  `SKAction.playSoundFileNamed(fileNamed:)` take a plain path/URL string, exactly as
-  `android.media.MediaPlayer.setDataSource(String)` accepts: an absolute file path, an
-  `http(s)://` URL, or a bundled asset via `"file:///android_asset/..."`. There's no Android
-  equivalent of an app's bundled `.caf`/`.mp3` resource resolved by filename alone, so the caller
-  resolves whatever path is appropriate.
+- **The host app's `assets/` folder stands in for Apple's main bundle.** `SKAudioNode(fileNamed:)`
+  and `SKAction.playSoundFileNamed(_:waitForCompletion:)` resolve a plain file name (`"tap.mp3"`)
+  — or a path relative to `assets/` (`"sounds/tap.mp3"`) — exactly as Apple resolves one against
+  the app bundle, so the same string works on both platforms. An absolute file path or a URL
+  (Apple's `SKAudioNode(url:)` case) is used as-is. Uncompressed assets (aapt's default for audio
+  formats) play straight from the APK; a compressed one is copied into `cacheDir` once first.
+  `SKAudioNode` has no public `path` property, matching Apple.
 - **`MediaPlayer`-backed only, no `SoundPool`** — including for `SKAction.playSoundFileNamed`
   (typically a `SoundPool` use case on Apple/elsewhere, for short fire-and-forget sound effects).
-  `SoundPool`/`MediaPlayer.create()` both need a `Context`, which isn't threaded through this
-  library's scene graph; `MediaPlayer.setDataSource(String)` doesn't. One `MediaPlayer` per
-  `SKAudioNode` also matches Apple's own persistent 1:1 node-to-player model more directly than
-  `SoundPool`'s shared-pool model would.
+  One `MediaPlayer` per `SKAudioNode` matches Apple's own persistent 1:1 node-to-player model more
+  directly than `SoundPool`'s shared-pool model would.
 - **No positional/spatial audio** — no distance attenuation, panning, or `SKNode` position
   influencing playback; deferred, see `docs/ROADMAP.md`.
 - **`SKAction.playSoundFileNamed`'s reported `duration` is always `0`** — the real clip length

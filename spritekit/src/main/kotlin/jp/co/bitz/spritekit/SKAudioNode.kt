@@ -6,14 +6,14 @@ package jp.co.bitz.spritekit
  * [SKAction.changePlaybackRate] run on this node (Apple's own action-based control model), or
  * read [isPlaying] directly.
  *
- * [path] identifies the clip the same way `android.media.MediaPlayer.setDataSource(String)`
- * does: an absolute file path, an `http(s)://` URL, or a bundled asset via
- * `"file:///android_asset/..."` — this port has no Apple-style app-bundle `fileNamed:` lookup, so
- * the caller resolves whatever path/URL is appropriate; see `docs/API_COMPATIBILITY.md`.
- * Positional/spatial audio isn't implemented either — see `docs/ROADMAP.md`.
+ * [fileNamed] names the clip the same way Apple's `SKAudioNode(fileNamed:)` does: a plain file
+ * name (`"theme.mp3"`, or a relative path such as `"music/theme.mp3"`) is looked up among the
+ * resources bundled with the app — here, the host app's `assets/` folder, Android's equivalent of
+ * Apple's main bundle. An absolute file path or a URL (Apple's `SKAudioNode(url:)`) is also
+ * accepted as-is. Positional/spatial audio isn't implemented — see `docs/ROADMAP.md`.
  */
 public class SKAudioNode(
-    public val path: String,
+    internal val fileNamed: String,
 ) : SKNode() {
     /**
      * When `true` (the default, matching Apple), this node starts playing on its own, looped,
@@ -63,7 +63,7 @@ public class SKAudioNode(
     }
 
     private fun newHandle(): SKAudioPlaybackHandle =
-        audioPlaybackFactory.create(path, releaseOnCompletion = false).also {
+        audioPlaybackFactory.create(fileNamed, releaseOnCompletion = false).also {
             it.setVolume(volume)
             it.setPlaybackRate(playbackRate)
             it.setLooping(autoplayLooped)

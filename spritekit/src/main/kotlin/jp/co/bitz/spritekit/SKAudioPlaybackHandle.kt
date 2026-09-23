@@ -23,6 +23,39 @@ internal interface SKAudioPlaybackHandle {
 }
 
 /**
+ * Where an [SKAudioNode]/[SKAction.playSoundFileNamed] clip string actually points — resolved by
+ * [resolveAudioSource].
+ */
+internal sealed interface SKAudioSource {
+    /** A file bundled in the host app's `assets/` folder, by its path relative to that folder. */
+    data class Asset(
+        val name: String,
+    ) : SKAudioSource
+
+    /** An absolute filesystem path or a URL, handed to `MediaPlayer` unchanged. */
+    data class Location(
+        val location: String,
+    ) : SKAudioSource
+}
+
+private const val ANDROID_ASSET_URL_PREFIX = "file:///android_asset/"
+
+/**
+ * Resolves a clip string the way Apple's `SKAction.playSoundFileNamed(_:waitForCompletion:)`/
+ * `SKAudioNode(fileNamed:)` resolve theirs: a plain file name (`"tap.mp3"`, or a relative path
+ * such as `"sounds/tap.mp3"`) names a resource bundled with the app — here, a file under the host
+ * app's `assets/` folder, Android's equivalent of Apple's main bundle. An absolute path (leading
+ * `/`) or any URL (`scheme://...`) is used as-is. `"file:///android_asset/..."` is also accepted
+ * and treated as the asset it names, since `MediaPlayer` itself can't open that URL form reliably.
+ */
+internal fun resolveAudioSource(clip: String): SKAudioSource =
+    when {
+        clip.startsWith(ANDROID_ASSET_URL_PREFIX) -> SKAudioSource.Asset(clip.removePrefix(ANDROID_ASSET_URL_PREFIX))
+        clip.startsWith("/") || "://" in clip -> SKAudioSource.Location(clip)
+        else -> SKAudioSource.Asset(clip)
+    }
+
+/**
  * Creates a new [SKAudioPlaybackHandle] for the audio at [path]. [releaseOnCompletion] governs
  * whether the underlying player frees itself once non-looping playback finishes naturally —
  * `true` for a fire-and-forget [SKAction.playSoundFileNamed] clip (nothing will touch it again),

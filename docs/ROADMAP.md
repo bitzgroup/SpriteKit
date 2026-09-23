@@ -428,12 +428,14 @@ algorithms (steering, noise, Gaussian sampling).
 ## Phase 12 — Audio
 
 - [x] `SKAudioNode` — a single persistent audio clip per node (mirrors Apple's own 1:1
-      node-to-player model), backed by `android.media.MediaPlayer` rather than `SoundPool`:
-      `MediaPlayer.setDataSource(String)` needs no `Context`, unlike `SoundPool`/
-      `MediaPlayer.create()`, so clips are addressed by a plain path/URL string
-      (`SKAudioNode.path`) with no Apple-style app-bundle `fileNamed:` lookup — an absolute file
-      path, an `http(s)://` URL, or a bundled asset via `"file:///android_asset/..."`; see
-      `docs/API_COMPATIBILITY.md`. `autoplayLooped` (Apple's combined "plays automatically AND
+      node-to-player model), backed by `android.media.MediaPlayer` rather than `SoundPool`.
+      Clips are addressed like Apple's `SKAudioNode(fileNamed:)`: a plain file name resolves
+      against the host app's `assets/` folder (Android's equivalent of Apple's main bundle;
+      `SKView` hands its application `Context` to the playback backend for this), while an
+      absolute path or URL is used as-is. (Originally shipped with no bundle lookup at all —
+      callers passed `"file:///android_asset/..."`, which `MediaPlayer` turned out not to play
+      on-device, silently; revised post-`v0.1.0` after `bitzgroup/tic-tac-toe` had to copy its
+      sounds into `cacheDir` to work around it.) See `docs/API_COMPATIBILITY.md`. `autoplayLooped` (Apple's combined "plays automatically AND
       loops" flag) is driven by a new per-frame `stepAudioNodes(scene)` (mirroring
       `stepEmitters`/`stepTileMaps`), triggering exactly once per node's lifetime. Positional/
       spatial audio is **out of scope**, same as originally scoped

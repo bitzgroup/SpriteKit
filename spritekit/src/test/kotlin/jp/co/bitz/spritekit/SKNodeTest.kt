@@ -24,6 +24,16 @@ private fun assertVector2Equals(
 
 class SKNodeTest {
     @Test
+    fun `setScale sets both xScale and yScale`() {
+        val node = SKNode().apply { xScale = 2f }
+
+        node.setScale(0f)
+
+        assertEquals(0f, node.xScale)
+        assertEquals(0f, node.yScale)
+    }
+
+    @Test
     fun `addChild sets parent and appends to children`() {
         val parent = SKNode()
         val child = SKNode()

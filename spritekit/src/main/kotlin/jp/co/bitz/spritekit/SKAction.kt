@@ -243,8 +243,10 @@ public class SKAction internal constructor(
         ): SKAction = SKAction(duration, SKActionKind.ChangePlaybackRateTo(to))
 
         /**
-         * Plays the clip at [fileNamed] once, fire-and-forget — independent of any [SKAudioNode]
-         * (runnable on any node). If [waitForCompletion] is `true`, this action doesn't finish
+         * Plays the clip [fileNamed] once, fire-and-forget — independent of any [SKAudioNode]
+         * (runnable on any node). Like Apple's, a plain file name (`"tap.mp3"`) is looked up among
+         * the resources bundled with the app — the host app's `assets/` folder here; an absolute
+         * file path or a URL is used as-is. If [waitForCompletion] is `true`, this action doesn't finish
          * until playback actually completes; its [SKAction.duration] is always reported as `0`
          * regardless, since the clip's real length isn't known ahead of time — see
          * `docs/API_COMPATIBILITY.md`.

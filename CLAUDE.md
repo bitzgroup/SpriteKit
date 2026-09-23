@@ -25,7 +25,8 @@ time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKS
 `SKView.presentScene(_:transition:)` — no offscreen-framebuffer support, so every effect reduces
 to `glViewport` offset/size, a whole-scene alpha multiplier, and (`doorway` only) a scissor clip),
 Phase 12 (audio: `SKAudioNode` — one persistent `android.media.MediaPlayer` per node, addressed
-by a plain path/URL string rather than an app-bundle `fileNamed:` lookup, driven by
+by Apple-style `fileNamed:` (a plain file name resolves against the host app's `assets/`,
+Android's main-bundle equivalent; absolute paths/URLs pass through), driven by
 `play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate` `SKAction`s reusing the existing
 frame-stepped action machinery; `SKAction.playSoundFileNamed` is a fire-and-forget `MediaPlayer`
 clip special-cased in the action executor since its real duration isn't known ahead of time; real
