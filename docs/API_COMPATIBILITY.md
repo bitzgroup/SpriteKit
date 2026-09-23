@@ -68,9 +68,21 @@ categories recur throughout and are called out once here rather than per item:
 - **`Vector2` stands in for `CGPoint`, `CGVector`, and `CGSize`** (position vs. velocity/force/
   gravity vs. size in Apple's API) — one Kotlin type covers every role, since the split is a Core
   Graphics/Objective-C legacy this port doesn't need. A size-valued `Vector2` (e.g.
-  `SKScene.size`) also exposes `width`/`height`, so `size.width` reads exactly as on Apple. **`Rect` stands in for `CGRect`**, returned by
-  `calculateAccumulatedFrame()` — a plain Kotlin value type, not `android.graphics.RectF` (see
-  `docs/ROADMAP.md`'s Phase 2 entry for why).
+  `SKScene.size`) also exposes `width`/`height`, so `size.width` reads exactly as on Apple.
+- **`Rect` stands in for `CGRect`**, returned by `calculateAccumulatedFrame()` — a plain Kotlin
+  value type, not `android.graphics.RectF` (see `docs/ROADMAP.md`'s Phase 2 entry for why).
+- **`SKScene.scaleMode` `.aspectFit`/`.aspectFill` always center the scaled scene within the
+  view, independent of `anchorPoint`** — `anchorPoint` only changes which local coordinate a node
+  must use to sit at a given point of that (fixed, centered) rect, never where the rect itself
+  renders. Verified against Apple's real `SKScene`/`SKView` on an iOS Simulator (default
+  `anchorPoint` `(0, 0)`, `.aspectFit`, and swept against `(0.5, 0.5)`/`(1, 1)` too): the extra
+  space `.aspectFit`/`.aspectFill` reveal or crop beyond `sceneSize` on the non-constraining axis
+  always splits evenly, whichever `anchorPoint` is set. (Originally implemented as a plain
+  `anchorPoint`-scaled offset into the letterboxed/cropped rect — correct for `.fill`/
+  `.resizeFill`, where there's no such extra space, but wrong for `.aspectFit`/`.aspectFill`,
+  which put *all* of it on the max-coordinate side for the default `anchorPoint (0, 0)`.
+  `bitzgroup/tic-tac-toe`'s Android build visibly sat lower on screen than its iOS twin because of
+  this — found comparing screenshots of the two apps, not from a written spec.)
 - **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
   action evaluation/physics simulation isn't implemented yet — there's no action or physics system
   to propagate to until later phases. Only `SKScene.isPaused` (inherited from here) is currently

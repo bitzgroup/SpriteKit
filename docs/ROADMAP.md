@@ -135,7 +135,12 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `zPosition` (ties broken by tree order, per Apple's documented rule), batched by texture +
       blend mode. `SKScene.scaleMode` letterbox/crop math (`computeSceneProjection`) is pure
       Kotlin and unit-tested; the actual `GLES20`/`GLUtils`/`Matrix` calls are not — see this
-      phase's testing note below
+      phase's testing note below. For `.aspectFit`/`.aspectFill`, the extra space beyond
+      `sceneSize` always splits evenly around the scene regardless of `anchorPoint` (originally
+      let `anchorPoint` shift the letterbox/crop itself, putting all the extra space to one side
+      for the default `anchorPoint (0, 0)`; revised post-`v0.1.0` after `bitzgroup/tic-tac-toe`'s
+      Android build visibly sat lower on screen than its iOS twin, confirmed against Apple's real
+      `SKScene`/`SKView` on an iOS Simulator — see `docs/API_COMPATIBILITY.md`)
 - [x] `SKSpriteNode` — `texture`, `color`/`colorBlendFactor`, `size`, `anchorPoint`, `blendMode`
 - [x] `SKTextureAtlas` — runtime atlas packer (Apple auto-packs atlases at Xcode build time; no
       Android equivalent, so this is a runtime alternative — see `docs/API_COMPATIBILITY.md`); the
