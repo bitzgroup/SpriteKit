@@ -123,6 +123,26 @@ class SKTouchDispatchTest {
     }
 
     @Test
+    fun `a container's zPosition lifts its subtree above a sibling even when children default to zero`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val backLayer = SKNode()
+        val frontLayer = SKNode().apply { zPosition = 1f }
+        scene.addChild(backLayer)
+        scene.addChild(frontLayer)
+
+        // Neither child sets its own zPosition -- only the containers do, matching Apple's
+        // documented "zPosition is relative to the parent" rule.
+        val back = sprite().apply { position = Vector2(50f, 50f) }
+        val front = sprite().apply { position = Vector2(50f, 50f) }
+        backLayer.addChild(back)
+        frontLayer.addChild(front)
+
+        dispatchTouch(scene, SKTouchEvent(0, 100f, 100f, SKTouchPhase.Began), viewWidth = 200, viewHeight = 200)
+
+        assertEquals(front, scene.activeTouchTargets[0])
+    }
+
+    @Test
     fun `a moved touch is delivered to the node that received touchesBegan, not re-hit-tested`() {
         val scene = SKScene(size = Vector2(100f, 100f))
         val node = sprite().apply { position = Vector2(50f, 50f) }
