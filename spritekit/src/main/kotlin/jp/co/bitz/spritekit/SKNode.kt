@@ -9,9 +9,9 @@ import kotlin.time.Duration
  * rotation, scale) relative to its parent, an optional list of children, and participates in
  * [SKView]'s per-frame update/render loop once it's part of a presented [SKScene]'s tree.
  *
- * All node state is confined to [SKView]'s render thread — see `docs/ARCHITECTURE.md`. Touch
- * dispatch ([touchesBegan] and friends) is delivered one [SKTouch] at a time, rather than Apple's
- * batched `Set<UITouch>` — see `docs/API_COMPATIBILITY.md`.
+ * All node state is confined to [SKView]'s render thread — see `docs/ARCHITECTURE.md`. Touches
+ * are delivered like Apple's: [touchesBegan] and friends receive a `Set` of [SKTouch]es plus the
+ * [SKEvent] they arrived in.
  */
 public open class SKNode {
     /** Position relative to the parent's coordinate system. */
@@ -289,25 +289,44 @@ public open class SKNode {
     }
 
     /**
-     * Called when a new touch begins on this node — only ever delivered to a node with
-     * [isUserInteractionEnabled] set. A no-op unless overridden.
+     * Called when one or more new [touches] begin on this node — Apple's
+     * `touchesBegan(_:with:)`. Only ever delivered to a node with [isUserInteractionEnabled] set;
+     * [touches] holds just the touches that began on this node in this delivery, while
+     * [event]'s [SKEvent.allTouches] holds every touch on the screen. A no-op unless overridden.
      */
-    public open fun touchesBegan(touch: SKTouch) {}
+    public open fun touchesBegan(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
 
     /**
-     * Called as an already-began touch moves, delivered to the same node [touchesBegan] was,
-     * regardless of where the touch moves to. A no-op unless overridden.
+     * Called as already-began [touches] move — Apple's `touchesMoved(_:with:)`. Delivered to the
+     * same node [touchesBegan] was, regardless of where the touches move to. A no-op unless
+     * overridden.
      */
-    public open fun touchesMoved(touch: SKTouch) {}
-
-    /** Called when a touch this node received [touchesBegan] for lifts. A no-op unless overridden. */
-    public open fun touchesEnded(touch: SKTouch) {}
+    public open fun touchesMoved(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
 
     /**
-     * Called when a touch this node received [touchesBegan] for is cancelled by the system
-     * instead of lifting normally. A no-op unless overridden.
+     * Called when [touches] this node received [touchesBegan] for lift — Apple's
+     * `touchesEnded(_:with:)`. A no-op unless overridden.
      */
-    public open fun touchesCancelled(touch: SKTouch) {}
+    public open fun touchesEnded(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
+
+    /**
+     * Called when [touches] this node received [touchesBegan] for are cancelled by the system
+     * instead of lifting normally — Apple's `touchesCancelled(_:with:)`. A no-op unless
+     * overridden.
+     */
+    public open fun touchesCancelled(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
 
     /**
      * Transforms [point] from this node's local space into its parent's space, applying

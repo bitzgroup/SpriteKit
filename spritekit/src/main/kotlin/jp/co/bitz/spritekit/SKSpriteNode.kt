@@ -5,15 +5,13 @@ import android.graphics.Color
 /**
  * A node that draws a textured (or plain-colored) rectangle — mirrors Apple's `SKSpriteNode`.
  *
- * Deviation: [size] always defaults to [Vector2.Zero], even when [texture] is set. Apple
- * auto-sizes a sprite to its texture's pixel dimensions (adjusted by scale factor); doing the
- * same here would mean reading [android.graphics.Bitmap.getWidth]/`getHeight` from inside this
- * class's own logic, which — like the rest of this library — stays out of code paths meant to be
- * pure-Kotlin/unit-testable (see `docs/API_COMPATIBILITY.md`). Set [size] explicitly.
+ * Like Apple's `SKSpriteNode(texture:)`, [size] defaults to [texture]'s own [SKTexture.size] when
+ * one is given (and to [Vector2.Zero] otherwise). As on Apple, that happens only at construction:
+ * assigning a different [texture] later leaves [size] unchanged.
  */
 public open class SKSpriteNode(
     public var texture: SKTexture? = null,
-    public var size: Vector2 = Vector2.Zero,
+    public var size: Vector2 = texture?.size() ?: Vector2.Zero,
     public var color: Int = Color.WHITE,
 ) : SKNode() {
     /**

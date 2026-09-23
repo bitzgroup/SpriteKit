@@ -14,10 +14,6 @@ import android.graphics.Color
  * Every `particleXxxSpeed` is a per-second rate of change applied over each particle's lifetime
  * (e.g. `particleAlphaSpeed` fades a particle in/out over time).
  *
- * [particleSize] has no Apple equivalent — Apple auto-sizes each particle from [particleTexture]'s
- * pixel dimensions, but reading a `Bitmap`'s dimensions is intentionally kept out of this port's
- * otherwise-pure-Kotlin node/config classes (the same reason [SKSpriteNode.size] must be set
- * explicitly instead of inferred from its texture) — see `docs/API_COMPATIBILITY.md`.
  * Apple's `targetNode` (reparenting newly-born particles into another node's space so they don't
  * move with the emitter) and [particleColorSequence]'s sibling `Sequence` properties for
  * scale/rotation/alpha aren't implemented — see `docs/API_COMPATIBILITY.md`.
@@ -30,10 +26,15 @@ public class SKEmitterNode : SKNode() {
     public var particleTexture: SKTexture? = null
 
     /**
-     * Each particle's rendered size — see this class's docs for why this has no Apple equivalent.
-     * Defaults to `32x32`.
+     * Each particle's starting size — Apple's `particleSize`. Defaults to [Vector2.Zero], which
+     * (as on Apple) means "use [particleTexture]'s own [SKTexture.size]"; an untextured emitter
+     * left at [Vector2.Zero] therefore draws nothing, again matching Apple.
      */
-    public var particleSize: Vector2 = Vector2(32f, 32f)
+    public var particleSize: Vector2 = Vector2.Zero
+
+    /** [particleSize], or [particleTexture]'s size when [particleSize] is left at [Vector2.Zero]. */
+    internal fun effectiveParticleSize(): Vector2 =
+        if (particleSize != Vector2.Zero) particleSize else particleTexture?.size() ?: Vector2.Zero
 
     /** New particles emitted per second. `0` (the default) emits nothing. */
     public var particleBirthRate: Float = 0f

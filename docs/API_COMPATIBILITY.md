@@ -65,9 +65,10 @@ categories recur throughout and are called out once here rather than per item:
   `/`-separated path syntax with `//` for recursive descent and `*` wildcards — not implemented.
   `enumerateChildNodes` also drops the `UnsafeMutablePointer<ObjCBool>` "stop" out-parameter from
   its callback (no Kotlin/Obj-C runtime equivalent); the callback is a plain `(SKNode) -> Unit`.
-- **`Vector2` stands in for both `CGPoint` and `CGVector`** (position vs. velocity/force/gravity in
-  Apple's API) — one Kotlin type covers both roles, since the split is a Core Graphics/Objective-C
-  legacy this port doesn't need. **`Rect` stands in for `CGRect`**, returned by
+- **`Vector2` stands in for `CGPoint`, `CGVector`, and `CGSize`** (position vs. velocity/force/
+  gravity vs. size in Apple's API) — one Kotlin type covers every role, since the split is a Core
+  Graphics/Objective-C legacy this port doesn't need. A size-valued `Vector2` (e.g.
+  `SKScene.size`) also exposes `width`/`height`, so `size.width` reads exactly as on Apple. **`Rect` stands in for `CGRect`**, returned by
   `calculateAccumulatedFrame()` — a plain Kotlin value type, not `android.graphics.RectF` (see
   `docs/ROADMAP.md`'s Phase 2 entry for why).
 - **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
@@ -86,11 +87,12 @@ categories recur throughout and are called out once here rather than per item:
   relative to the passed-in texture's *underlying bitmap*, even if that texture is itself already
   a sub-rect. `SKTextureAtlas` (this constructor's only real use case in this library) never
   chains sub-rects, so this doesn't come up in practice.
-- **`SKSpriteNode.size`** always defaults to `Vector2.Zero`, even when a `texture` is set. Apple
-  auto-sizes a sprite to its texture's pixel dimensions (adjusted by scale factor) at construction
-  time; matching that would mean calling `Bitmap.getWidth()`/`getHeight()` from inside
-  `SKSpriteNode`'s own logic, which — like this library's approach throughout — stays out of code
-  paths meant to be pure-Kotlin/unit-testable. Set `size` explicitly.
+- **`SKTexture.size()`** is the underlying `Bitmap`'s pixel dimensions (scaled by `textureRect`
+  for a sub-region), the same as Apple reports for a texture made from a `CGImage` — an Android
+  `Bitmap` carries no separate point/pixel scale factor the way a `UIImage` does. As on Apple,
+  `SKSpriteNode(texture:)` sizes itself to that at construction, `SKEmitterNode.particleSize`
+  defaults to `(0, 0)` meaning "use the texture's size", and `SKAction.animate`'s `resize: true`
+  follows each frame's texture size.
 - **`SKBlendMode.multiplyX2`** is not implemented (Apple's other cases —
   `.alpha`/`.add`/`.subtract`/`.multiply`/`.screen`/`.replace` — all are), a rarely-used blend mode
   this library didn't prioritize. Blending is implemented via standard `glBlendFunc`/
@@ -145,8 +147,6 @@ categories recur throughout and are called out once here rather than per item:
 - **`resizeTo`/`resizeBy`/`colorize`/`animate` are no-ops on any node that isn't an
   `SKSpriteNode`** (the only node type with a mutable `size`/`color`/`colorBlendFactor`/
   `texture`), same as their underlying properties.
-- **`animate`'s `resize` parameter isn't implemented** — same reason `SKSpriteNode.size` doesn't
-  auto-size from a texture in the first place (see the "Textures & sprites" section above).
 - **`customAction`'s block receives raw elapsed time** (`0` to the action's duration), not eased
   by `timingMode`/`timingFunction` — matches Apple's own documented behavior.
 
@@ -254,11 +254,6 @@ categories recur throughout and are called out once here rather than per item:
 
 - **`SKEmitterNode`** supports programmatic configuration only — Apple's `.sks` particle-editor
   archive format has no Android equivalent parser to build against.
-- **`SKEmitterNode.particleSize`** has no Apple equivalent. Apple auto-sizes each particle from
-  `particleTexture`'s pixel dimensions; this port can't do that without reading a `Bitmap`'s
-  dimensions from inside otherwise-pure-Kotlin node/config classes — the same reason
-  `SKSpriteNode.size` must be set explicitly instead of inferred from its texture. Set
-  `particleSize` explicitly (defaults to `32x32`).
 - **`SKEmitterNode.targetNode`** isn't implemented — every particle stays in the emitting node's
   own local space for its whole life (so moving the emitter drags its existing particles along,
   unlike Apple's default of reparenting particles into the emitter's *parent* so they don't).
@@ -311,12 +306,15 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Input (`SKNode` touch dispatch)
 
-- **Touches are delivered one `SKTouch` at a time** (`pointerId` plus `location`, already
-  converted into the *receiving* node's own local space) per `touchesBegan`/`touchesMoved`/
-  `touchesEnded`/`touchesCancelled` call, rather than Apple's batched `Set<UITouch>`. Idiomatic
-  Kotlin given this library's per-pointer `SKTouchEvent` model (Phase 1) and Android's own
-  per-pointer `MotionEvent` API — Apple's batching is largely an iOS multitouch-coalescing
-  artifact, not essential to mirror.
+- **`SKTouch`/`SKEvent` stand in for `UITouch`/`UIEvent`.** `touchesBegan(touches: Set<SKTouch>,
+  event: SKEvent?)` and its siblings match Apple's `touchesBegan(_:with:)` shape: touches sharing a
+  phase and target node arrive together in one call, each `SKTouch` persists for its finger's whole
+  lifetime (so identity/`Set` membership is stable across callbacks, like `UITouch`), and its
+  position is queried with `location(node)`/`previousLocation(node)` — Apple's
+  `location(in:)`/`previousLocation(in:)`, renamed only because `in` is a Kotlin keyword. A
+  pointer Android reports as moved without actually moving is left out of `touchesMoved`, like a
+  stationary `UITouch`. Only `SKEvent.allTouches` is mirrored from `UIEvent`; `UITouch`'s
+  `tapCount`/`force`/`timestamp` aren't. There is no `.stationary` phase.
 - **Hit-testing uses each candidate node's own `localBounds`** (axis-aligned, un-rotated
   bounding-box containment in that node's local space) rather than Apple's (undocumented, possibly
   per-node-type/shape-aware) precise hit-testing — e.g. `SKShapeNode`'s actual path isn't tested,
