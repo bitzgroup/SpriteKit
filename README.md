@@ -194,8 +194,12 @@ class Ship : SKSpriteNode(texture = shipTexture, size = Vector2(64f, 64f)) {
         isUserInteractionEnabled = true
     }
 
-    override fun touchesMoved(touch: SKTouch) {
-        position = touch.location
+    override fun touchesMoved(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {
+        val parent = parent ?: return
+        position = touches.first().location(parent)
     }
 }
 ```

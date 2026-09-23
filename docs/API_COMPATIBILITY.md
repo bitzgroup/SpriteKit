@@ -311,12 +311,15 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Input (`SKNode` touch dispatch)
 
-- **Touches are delivered one `SKTouch` at a time** (`pointerId` plus `location`, already
-  converted into the *receiving* node's own local space) per `touchesBegan`/`touchesMoved`/
-  `touchesEnded`/`touchesCancelled` call, rather than Apple's batched `Set<UITouch>`. Idiomatic
-  Kotlin given this library's per-pointer `SKTouchEvent` model (Phase 1) and Android's own
-  per-pointer `MotionEvent` API — Apple's batching is largely an iOS multitouch-coalescing
-  artifact, not essential to mirror.
+- **`SKTouch`/`SKEvent` stand in for `UITouch`/`UIEvent`.** `touchesBegan(touches: Set<SKTouch>,
+  event: SKEvent?)` and its siblings match Apple's `touchesBegan(_:with:)` shape: touches sharing a
+  phase and target node arrive together in one call, each `SKTouch` persists for its finger's whole
+  lifetime (so identity/`Set` membership is stable across callbacks, like `UITouch`), and its
+  position is queried with `location(node)`/`previousLocation(node)` — Apple's
+  `location(in:)`/`previousLocation(in:)`, renamed only because `in` is a Kotlin keyword. A
+  pointer Android reports as moved without actually moving is left out of `touchesMoved`, like a
+  stationary `UITouch`. Only `SKEvent.allTouches` is mirrored from `UIEvent`; `UITouch`'s
+  `tapCount`/`force`/`timestamp` aren't. There is no `.stationary` phase.
 - **Hit-testing uses each candidate node's own `localBounds`** (axis-aligned, un-rotated
   bounding-box containment in that node's local space) rather than Apple's (undocumented, possibly
   per-node-type/shape-aware) precise hit-testing — e.g. `SKShapeNode`'s actual path isn't tested,

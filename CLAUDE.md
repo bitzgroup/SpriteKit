@@ -19,8 +19,10 @@ stepped once per frame independent of `SKPhysicsWorld`, rendering through the sa
 pipeline sprites/labels/shapes already use), Phase 9 (tile maps: `SKTileSet`/`SKTileGroup`/
 `SKTileGroupRule`/`SKTileDefinition`/`SKTileMapNode`, grid-only, with adjacency-rule-based
 automapping and its own per-map animation clock), Phase 10 (input: full `SKNode` touch
-dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, one `SKTouch` at a
-time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKScene`), and Phase
+dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, Apple-shaped: a
+`Set<SKTouch>` plus an `SKEvent` per call, each `SKTouch` a persistent `UITouch`-like object
+queried via `location(node)`, hit-tested once on `touchesBegan` then tracked per pointer ID through
+`SKScene`), and Phase
 11 (transitions: `SKTransition` fade/crossFade/moveIn/push/reveal/doorway/flip,
 `SKView.presentScene(_:transition:)` — no offscreen-framebuffer support, so every effect reduces
 to `glViewport` offset/size, a whole-scene alpha multiplier, and (`doorway` only) a scissor clip),

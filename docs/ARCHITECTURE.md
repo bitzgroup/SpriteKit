@@ -103,8 +103,9 @@ it wraps internally, so the two hosting paths behave identically underneath:
 contract — this works unchanged whether `SKView` is placed via XML or wrapped by `AndroidView` in
 the Compose module, since `AndroidView` forwards touch dispatch to the wrapped `View` transparently.
 It snapshots the parts of the event the scene graph needs (pointer id, position in view space,
-action) into an immutable value, then hands that snapshot to the render thread via
-`runOnGLThread`. `SKNode`/`SKScene`'s `touchesBegan`/`touchesMoved`/`touchesEnded`/
+action) into one immutable value per reported pointer, then hands that batch to the render thread
+via `runOnGLThread`, where it's delivered as Apple does — one `Set<SKTouch>` per phase and target
+node. `SKNode`/`SKScene`'s `touchesBegan`/`touchesMoved`/`touchesEnded`/
 `touchesCancelled` (Phase 10) always run on the render thread — the same thread as node mutation —
 so hit-testing and touch handling need no synchronization with the render/update loop.
 

@@ -374,13 +374,14 @@ algorithms (steering, noise, Gaussian sampling).
 
 - [x] Full `SKNode` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
       `touchesCancelled`) wired through Phase 1's UI→GL bridge (`SKView.onTouchEvent` →
-      `runOnGLThread` → `dispatchTouch`, alongside — not replacing — the raw `SKView.onTouch`
+      `runOnGLThread` → `dispatchTouches`, alongside — not replacing — the raw `SKView.onTouch`
       escape hatch). `SKNode.isUserInteractionEnabled` (defaults `false`, except `SKScene`, which
-      defaults it `true`, matching Apple) gates which nodes are even candidates. Delivered one
-      `SKTouch` (`pointerId` + `location`, already converted into the *receiving* node's own local
-      space) at a time per callback, rather than Apple's batched `Set<UITouch>` — idiomatic Kotlin
-      given this library's per-pointer `SKTouchEvent` model from Phase 1, and a natural fit for
-      Android's per-pointer `MotionEvent` API; see `docs/API_COMPATIBILITY.md`. A touch is
+      defaults it `true`, matching Apple) gates which nodes are even candidates. Delivered in
+      Apple's shape — `touchesBegan(touches: Set<SKTouch>, event: SKEvent?)` and siblings, one call
+      per phase and target node, with each `SKTouch` a persistent `UITouch`-like object queried via
+      `location(node)`/`previousLocation(node)`. (Originally shipped delivering one immutable
+      `SKTouch` with a pre-converted `location` per call; revised post-`v0.1.0` so iOS touch code
+      ports unchanged — see `docs/API_COMPATIBILITY.md`.) A touch is
       hit-tested once, on `touchesBegan`; the same node keeps receiving `touchesMoved`/`Ended`/
       `Cancelled` for that pointer regardless of where it travels afterward (tracked per pointer ID
       in `SKScene.activeTouchTargets`), matching Apple's tracking behavior — not re-hit-tested
