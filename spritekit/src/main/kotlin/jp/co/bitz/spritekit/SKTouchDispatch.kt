@@ -104,10 +104,13 @@ private fun dispatchToReleasedTarget(
 }
 
 /**
- * The frontmost (highest [SKNode.zPosition], ties broken by tree-traversal order -- the same rule
- * [SKRenderCommandList.kt] sorts draw order by) [SKNode.isUserInteractionEnabled] node in
- * [scene]'s tree whose [SKNode.containsLocalPoint] contains [referencePoint] (expressed in
- * [referenceNode]'s space). Skips hidden subtrees, like rendering does. `null` if nothing matches.
+ * The frontmost (highest *effective* z-position -- this node's own [SKNode.zPosition] plus every
+ * ancestor's, accumulated down the tree the same way [SKRenderCommandList.kt] does for draw
+ * order, so a container's zPosition also wins it hit-test priority over its siblings even when
+ * its children are left at the default `0`; ties broken by tree-traversal order)
+ * [SKNode.isUserInteractionEnabled] node in [scene]'s tree whose [SKNode.containsLocalPoint]
+ * contains [referencePoint] (expressed in [referenceNode]'s space). Skips hidden subtrees, like
+ * rendering does. `null` if nothing matches.
  */
 private fun hitTestInteractiveNode(
     scene: SKScene,
@@ -120,16 +123,18 @@ private fun hitTestInteractiveNode(
     fun visit(
         node: SKNode,
         inheritedHidden: Boolean,
+        inheritedZPosition: Float,
     ) {
         order++
         val hidden = inheritedHidden || node.isHidden
+        val zPosition = inheritedZPosition + node.zPosition
         if (!hidden && node.isUserInteractionEnabled) {
             val localPoint = node.convertFrom(referencePoint, referenceNode)
-            if (node.containsLocalPoint(localPoint)) candidates += node to (node.zPosition to order)
+            if (node.containsLocalPoint(localPoint)) candidates += node to (zPosition to order)
         }
-        for (child in node.children) visit(child, hidden)
+        for (child in node.children) visit(child, hidden, zPosition)
     }
 
-    visit(scene, false)
+    visit(scene, inheritedHidden = false, inheritedZPosition = 0f)
     return candidates.maxWithOrNull(compareBy({ it.second.first }, { it.second.second }))?.first
 }

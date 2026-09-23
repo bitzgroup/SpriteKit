@@ -41,8 +41,12 @@ internal data class SKRenderCommand(
 
 /**
  * Flattens [scene]'s node tree into an ordered list of [SKRenderCommand]s, ready for
- * [SKSceneRenderer] to draw in order: sorted by [SKNode.zPosition] (ties broken by
- * tree-traversal order, matching Apple's documented rule — see `docs/ARCHITECTURE.md`).
+ * [SKSceneRenderer] to draw in order: sorted by each node's *effective* z-position — its own
+ * [SKNode.zPosition] plus every ancestor's, accumulated down the tree (ties broken by
+ * tree-traversal order) — matching Apple's documented rule that "the value \[of zPosition\] is
+ * relative to the parent node" (a container's zPosition lifts its whole subtree above/below
+ * sibling subtrees, even when the children themselves are left at the default `0`). See
+ * `docs/ARCHITECTURE.md`.
  * [SKSpriteNode]/[SKLabelNode] each contribute one command (a textured quad); [SKShapeNode]
  * contributes up to two per contour (an untextured fill, then an untextured stroke, in that
  * order) — they all reduce to the same "flat triangle list, texture, blend mode, vertex color"
@@ -63,13 +67,16 @@ internal fun buildRenderCommands(scene: SKScene): List<SKRenderCommand> =
     SKRenderCommandCollector(scene.camera ?: scene).collect(scene)
 
 /**
- * Everything a leaf node needs to build its [SKRenderCommand]: where it's drawn relative to, and
- * any inherited crop.
+ * Everything a leaf node needs to build its [SKRenderCommand]: where it's drawn relative to,
+ * any inherited crop, and [zPosition] — this node's *effective* z-position (its own
+ * [SKNode.zPosition] plus every ancestor's), used as the sort key instead of the node's own raw
+ * value so a container's zPosition lifts its whole subtree, matching Apple.
  */
 private class RenderContext(
     val referenceNode: SKNode,
     val clipRect: Rect?,
     val add: (SKRenderCommand, Float) -> Unit,
+    val zPosition: Float,
 )
 
 /**
@@ -83,7 +90,7 @@ private class SKRenderCommandCollector(
     private var order = 0
 
     fun collect(scene: SKScene): List<SKRenderCommand> {
-        visit(scene, inheritedAlpha = 1f, inheritedHidden = false, inheritedClip = null)
+        visit(scene, inheritedAlpha = 1f, inheritedHidden = false, inheritedClip = null, inheritedZPosition = 0f)
         return commands.sortedWith(compareBy({ it.second.first }, { it.second.second })).map { it.first }
     }
 
@@ -99,10 +106,12 @@ private class SKRenderCommandCollector(
         inheritedAlpha: Float,
         inheritedHidden: Boolean,
         inheritedClip: Rect?,
+        inheritedZPosition: Float,
     ) {
         order++
         val hidden = inheritedHidden || node.isHidden
         val alpha = inheritedAlpha * node.alpha
+        val zPosition = inheritedZPosition + node.zPosition
         val clip =
             if (node is SKCropNode) {
                 cropClip(
@@ -120,9 +129,9 @@ private class SKRenderCommandCollector(
         // rendered a second time as ordinary content.
         val isCropMask = (node.parent as? SKCropNode)?.maskNode === node
         if (!isCropMask && !hidden && alpha > 0f) {
-            addCommand(node, RenderContext(referenceNode, clip.rect, ::add), alpha)
+            addCommand(node, RenderContext(referenceNode, clip.rect, ::add, zPosition), alpha)
         }
-        for (child in node.children) visit(child, alpha, hidden, clip.rect)
+        for (child in node.children) visit(child, alpha, hidden, clip.rect, zPosition)
     }
 }
 
@@ -187,7 +196,7 @@ private fun addSpriteCommand(
             clipRect = context.clipRect,
             shader = node.shader,
         ),
-        node.zPosition,
+        context.zPosition,
     )
 }
 
@@ -210,7 +219,7 @@ private fun addLabelCommand(
             color = SKVertexColor(1f, 1f, 1f, alpha),
             clipRect = context.clipRect,
         ),
-        node.zPosition,
+        context.zPosition,
     )
 }
 
@@ -228,7 +237,10 @@ private fun addShapeCommands(
         if (fillAlpha > 0f) {
             val triangles = triangulateFill(contour.points)
             if (triangles.isNotEmpty()) {
-                context.add(shapeCommand(node, context, triangles, node.fillColor, alpha = fillAlpha), node.zPosition)
+                context.add(
+                    shapeCommand(node, context, triangles, node.fillColor, alpha = fillAlpha),
+                    context.zPosition,
+                )
             }
         }
         if (strokeAlpha > 0f && node.lineWidth > 0f) {
@@ -236,7 +248,7 @@ private fun addShapeCommands(
             if (triangles.isNotEmpty()) {
                 context.add(
                     shapeCommand(node, context, triangles, node.strokeColor, alpha = strokeAlpha),
-                    node.zPosition,
+                    context.zPosition,
                 )
             }
         }
@@ -260,7 +272,9 @@ private fun shapeCommand(
 
 /**
  * One [SKRenderCommand] per currently-alive particle -- each is its own small textured quad, with
- * its own scale/rotation/alpha/color/z-position sampled from its age, positioned by translating
+ * its own scale/rotation/alpha/color/z-position sampled from its age (that z-position offset is
+ * relative to [node]'s own effective z-position, i.e. [RenderContext.zPosition], the same way
+ * [SKNode.position] is relative to [node]'s own transform), positioned by translating
  * [SKParticle.position] (in [node]'s own local space) before converting to [context]'s reference
  * space, reusing the same [quadVertices] shape [addSpriteCommand] does.
  */
@@ -297,7 +311,7 @@ private fun addEmitterCommands(
                 color = tintedVertexColor(colorInt, colorBlendFactor, alpha * particleAlpha),
                 clipRect = context.clipRect,
             ),
-            particle.initialZPosition + particle.zPositionSpeed * particle.age,
+            context.zPosition + particle.initialZPosition + particle.zPositionSpeed * particle.age,
         )
     }
 }
@@ -306,8 +320,9 @@ private fun addEmitterCommands(
  * One [SKRenderCommand] per non-empty cell in [node]'s grid -- an axis-aligned quad sized by that
  * cell's [SKTileDefinition.size] (not necessarily [SKTileMapNode.tileSize]) and centered on
  * [SKTileMapNode.centerOfTile], sampling whichever animation frame [SKTileMapNode.elapsedTime]
- * currently lands on. Every tile in a map shares [node]'s own [SKNode.zPosition] -- a tile map
- * renders as one flat layer, unlike per-particle z-position.
+ * currently lands on. Every tile in a map shares [node]'s own effective z-position
+ * ([RenderContext.zPosition]) -- a tile map renders as one flat layer, unlike per-particle
+ * z-position.
  */
 private fun addTileMapCommands(
     node: SKTileMapNode,
@@ -348,7 +363,7 @@ private fun addTileCommand(
             color = SKVertexColor(1f, 1f, 1f, alpha),
             clipRect = context.clipRect,
         ),
-        node.zPosition,
+        context.zPosition,
     )
 }
 
