@@ -45,6 +45,12 @@ public open class SKNode {
             field = value
         }
 
+    /** Sets both [xScale] and [yScale] to [scale] — mirrors Apple's `setScale(_:)`. */
+    public fun setScale(scale: Float) {
+        xScale = scale
+        yScale = scale
+    }
+
     /**
      * Bumped whenever [position]/[zRotation]/[xScale]/[yScale] actually changes value, or this
      * node is re-parented ([addChild]/[removeFromParent]) — i.e., whenever this node's *local*
