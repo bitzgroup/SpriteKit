@@ -1,8 +1,11 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.Path
+import android.graphics.PathMeasure
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A single, reusable "recipe" for animating a node over time — mirrors Apple's `SKAction`.
@@ -98,6 +101,43 @@ public class SKAction internal constructor(
             delta: Vector2,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.ResizeBy(delta))
+
+        /**
+         * Moves this node along [path] over [duration]. Only the first contour of [path] is
+         * followed — see `docs/API_COMPATIBILITY.md`.
+         *
+         * If [asOffset] is `true`, [path]'s points are relative to this node's position when the
+         * action starts (so a path built around the origin can be reused at any position); if
+         * `false`, they're absolute coordinates in the node's parent, and the node jumps straight
+         * to the path's start point the moment the action begins.
+         *
+         * If [orientToPath] is `true`, [SKNode.zRotation] is continuously set to face the
+         * direction of travel along the path (`0` pointing along the positive x-axis, matching
+         * how zero rotation is interpreted everywhere else in this library).
+         */
+        public fun follow(
+            path: Path,
+            asOffset: Boolean,
+            orientToPath: Boolean,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.Follow(path, asOffset, orientToPath))
+
+        /**
+         * Like [follow], but [speed] (parent-space units per second) determines the duration
+         * instead of taking one directly — the length of [path]'s first contour divided by
+         * [speed]. A non-positive [speed] (or a path with no measurable length) produces a
+         * zero-duration action that jumps straight to the path's end.
+         */
+        public fun follow(
+            path: Path,
+            asOffset: Boolean,
+            orientToPath: Boolean,
+            speed: Float,
+        ): SKAction {
+            val length = PathMeasure(path, false).length
+            val duration = if (speed > 0f && length > 0f) (length / speed).toDouble().seconds else Duration.ZERO
+            return follow(path, asOffset, orientToPath, duration)
+        }
 
         /** Fades [SKNode.alpha] to `1` (fully opaque) over [duration]. */
         public fun fadeIn(duration: Duration): SKAction = fadeAlphaTo(1f, duration)

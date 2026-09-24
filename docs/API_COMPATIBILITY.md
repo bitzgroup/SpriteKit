@@ -161,6 +161,11 @@ categories recur throughout and are called out once here rather than per item:
   `texture`), same as their underlying properties.
 - **`customAction`'s block receives raw elapsed time** (`0` to the action's duration), not eased
   by `timingMode`/`timingFunction` — matches Apple's own documented behavior.
+- **`follow` only follows a path's first contour** (via `android.graphics.PathMeasure`); a
+  multi-contour `Path` (more than one `moveTo`) has its later contours ignored. `reversed()`
+  doesn't reverse the `Path` object itself (`android.graphics.Path` has no public API for that) —
+  it flips an internal "traverse back to front" flag instead, which produces the same visible
+  motion. Like `flattenPath`, it touches real `Path`/`PathMeasure` APIs and isn't unit-tested.
 
 ## Camera, effects, crop, constraints (`SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`)
 

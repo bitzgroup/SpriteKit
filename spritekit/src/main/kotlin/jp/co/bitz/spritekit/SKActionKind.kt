@@ -1,5 +1,6 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.Path
 import kotlin.time.Duration
 
 /** What an [SKAction] actually does — its "body," evaluated by [stepAction]. Not part of the public API. */
@@ -19,6 +20,17 @@ internal sealed class SKActionKind {
     data class ResizeTo(val size: Vector2) : SKActionKind()
 
     data class ResizeBy(val delta: Vector2) : SKActionKind()
+
+    /**
+     * [reversedDirection] tracks whether [SKActionKind.reversed] was applied — see that
+     * function's `Follow` branch for why this is a flag rather than an actually-reversed [Path].
+     */
+    data class Follow(
+        val path: Path,
+        val asOffset: Boolean,
+        val orientToPath: Boolean,
+        val reversedDirection: Boolean = false,
+    ) : SKActionKind()
 
     data class FadeAlphaTo(val alpha: Float) : SKActionKind()
 
@@ -79,6 +91,7 @@ internal fun SKActionKind.reversed(): SKActionKind =
         is SKActionKind.ScaleBy -> SKActionKind.ScaleBy(0f - dx, 0f - dy)
         is SKActionKind.RotateBy -> SKActionKind.RotateBy(0f - delta)
         is SKActionKind.ResizeBy -> SKActionKind.ResizeBy(-delta)
+        is SKActionKind.Follow -> copy(reversedDirection = !reversedDirection)
         is SKActionKind.FadeAlphaBy -> SKActionKind.FadeAlphaBy(0f - delta)
         is SKActionKind.Sequence -> SKActionKind.Sequence(actions.reversed().map { it.reversed() })
         is SKActionKind.Group -> SKActionKind.Group(actions.map { it.reversed() })
