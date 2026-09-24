@@ -180,8 +180,15 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `fadeAlphaTo`/`fadeAlphaBy`, `hide`/`unhide`, `colorize`, `wait`/`wait(withRange:)`, `run`
       (block), `removeFromParent`, `sequence`/`group`/`repeat`/`repeatForever`, `customAction`,
       `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`. **Deferred**
-      (see "Explicitly Out of Scope" below): `followPath`, `playSoundFileNamed`,
-      `run(_:onChildWithName:)`
+      (see "Explicitly Out of Scope" below): `run(_:onChildWithName:)`
+- [x] `SKAction.follow(_:asOffset:orientToPath:duration:)` / `follow(_:asOffset:orientToPath:speed:)`
+      — path-following, added after a host app (Backgammon) needed arc motion along a quadratic
+      curve and found it missing. Follows only a path's first contour, via
+      `android.graphics.PathMeasure.getPosTan` (arc-length parameterized, so it works for curves,
+      not just straight segments); `reversed()` flips a `reversedDirection` flag rather than
+      reversing the `Path` itself, since `android.graphics.Path` has no public reversal API.
+      Touches real `Path`/`PathMeasure` APIs, so — like `flattenPath` (Phase 4) — it isn't
+      covered by unit tests, for the same Android-API-safety reasons
 - [x] `SKActionTimingMode` — linear/easeIn/easeOut/easeInEaseOut, plus a custom `timingFunction`
       property
 - [x] Frame-stepped executor (`SKActionState`/`stepAction`, per running action — not
@@ -523,9 +530,6 @@ full parity; see `docs/ARCHITECTURE.md`.
 
 ## Explicitly Out of Scope
 
-- `SKAction.follow(_:asOffset:orientToPath:duration:)` — path-following actions; would need
-  path-length parameterization on top of `SKShapeNode`'s existing path-flattening machinery,
-  deferred for scope
 - `SKAction.run(_:onChildWithName:)` — a niche convenience over `childNode`/`enumerateChildNodes`
   plus a plain `run`
 - `SKEffectNode.filter` — Core Image, no Android equivalent
