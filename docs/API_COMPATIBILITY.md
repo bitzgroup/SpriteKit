@@ -134,6 +134,16 @@ categories recur throughout and are called out once here rather than per item:
   Apple's own (undocumented) shape rendering.
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
   blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13).
+- **No `SKShapeNode.fillTexture`/`fillColor` texture-fill equivalent.** Apple lets a shape's fill
+  sample an arbitrary texture instead of (or blended with) a solid color, clipped to the shape's
+  own path. This library's fill pipeline only carries a per-vertex solid color (see the shared
+  triangle-list renderer in `docs/ARCHITECTURE.md`), so there's no UV mapping for shape geometry to
+  hang a texture off yet. Not tracked as a numbered roadmap phase — no host app has needed it before
+  a consumer (bitzcojp/backgammon, `BoardTextures.kt`/`CheckerNode.kt`, Phase 8-4) hit it, and that
+  consumer worked around it by baking the shape itself (including transparent edges) into the
+  texture and drawing it with `SKSpriteNode` instead of `SKShapeNode`, which needs no renderer
+  change. Revisit if a future consumer needs a texture fill on a shape whose geometry changes too
+  often to bake (e.g. per-frame procedural paths).
 - **`SKLabelNode`** renders glyphs via `android.graphics.Paint`/`Typeface` into a cached texture —
   there is no CoreText equivalent on Android.
 - **`SKLabelNode` is single-line only** — Apple's `numberOfLines`/`preferredMaxLayoutWidth`
