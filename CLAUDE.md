@@ -135,11 +135,12 @@ branching model.
 
 - Every merge goes through a PR (no direct pushes to `main` or `develop`); CI
   (`ktlintCheck detekt assemble testDebugUnitTest`) must pass first.
-- `release/*`/`hotfix/*` don't exist yet: the first release (`release/0.1.0`, tagged on `main`) is cut
-  once the full `docs/ROADMAP.md` plan is complete. Until then, all work happens on `feature/*`
-  branches merged into `develop` — `main` is not touched again until that first release; PRs #2 and
-  #4 (bootstrapping `main` from an empty initial state early in Phase 0) were a one-time exception,
-  not an ongoing pattern.
+- `release/*`/`hotfix/*` are short-lived: cut, merged into `main` **and** `develop`, then deleted,
+  so neither normally exists between releases. The first release (`release/0.1.0`, tagged on
+  `main`) was cut once the full `docs/ROADMAP.md` plan was complete; PRs #2 and #4 (bootstrapping
+  `main` from an empty initial state early in Phase 0) were a one-time exception to `main` only
+  ever merging from `release/*`/`hotfix/*`, not an ongoing pattern. Later releases repeat the same
+  `release/<version>` pattern as `develop` accumulates enough work to warrant one.
 
 ## Working in this repo
 
