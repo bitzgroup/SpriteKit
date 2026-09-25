@@ -24,8 +24,20 @@ public open class SKShapeNode(
     /** The shape's outline color. Defaults to opaque white, matching Apple. */
     public var strokeColor: Int = Color.WHITE
 
-    /** The shape's fill color. Defaults to transparent (no fill), matching Apple. */
+    /**
+     * The shape's fill color. Defaults to transparent (no fill), matching Apple. When [fillTexture]
+     * is set, this color multiplies the sampled texture (so white shows the texture unmodified,
+     * and the default transparent shows nothing), matching Apple.
+     */
     public var fillColor: Int = Color.TRANSPARENT
+
+    /**
+     * A texture to fill the shape with instead of a flat color, or `null` (the default) for a
+     * plain [fillColor] fill — mirrors Apple's `fillTexture`. The texture is stretched across the
+     * bounding box of the shape's fill geometry and clipped to the shape's own outline, then
+     * multiplied by [fillColor].
+     */
+    public var fillTexture: SKTexture? = null
 
     /** The outline's width, in points. `0` (the default) draws no outline regardless of [strokeColor]. */
     public var lineWidth: Float = 0f

@@ -21,7 +21,23 @@ internal class SKShapeTriangulationCache(
     val allLocalVertices: List<Vector2>,
     val fillRanges: List<IntRange>,
     val strokeRanges: List<IntRange>,
-)
+) {
+    /**
+     * The local-space bounding box of every fill vertex across all contours — the area
+     * [SKShapeNode.fillTexture] is stretched across (see [fillTextureVertices]) — or `null` if the
+     * shape has no fill geometry at all. Computed once per triangulation, not per frame.
+     */
+    val fillBounds: Rect? by lazy { fillBoundsOf(allLocalVertices, fillRanges) }
+}
+
+/** The bounding box of [vertices]' [fillRanges] slices, or `null` if every range is empty. */
+internal fun fillBoundsOf(
+    vertices: List<Vector2>,
+    fillRanges: List<IntRange>,
+): Rect? {
+    val fillVertices = fillRanges.flatMap { range -> range.map { vertices[it] } }
+    return if (fillVertices.isEmpty()) null else boundingRectOf(fillVertices)
+}
 
 /**
  * [node]'s triangulated geometry for [path], reusing [SKShapeNode.triangulationCache] when it was

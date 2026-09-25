@@ -70,7 +70,9 @@ categories recur throughout and are called out once here rather than per item:
   Graphics/Objective-C legacy this port doesn't need. A size-valued `Vector2` (e.g.
   `SKScene.size`) also exposes `width`/`height`, so `size.width` reads exactly as on Apple.
 - **`Rect` stands in for `CGRect`**, returned by `calculateAccumulatedFrame()` — a plain Kotlin
-  value type, not `android.graphics.RectF` (see `docs/ROADMAP.md`'s Phase 2 entry for why).
+  value type, not `android.graphics.RectF` (see `docs/ROADMAP.md`'s Phase 2 entry for why). It's
+  edge-based (`left`/`top`/`right`/`bottom`) rather than origin-plus-size, but exposes
+  `width`/`height` so `frame.height` reads exactly as on Apple.
 - **`SKScene.scaleMode` `.aspectFit`/`.aspectFill` always center the scaled scene within the
   view, independent of `anchorPoint`** — `anchorPoint` only changes which local coordinate a node
   must use to sit at a given point of that (fixed, centered) rect, never where the rect itself
@@ -134,16 +136,12 @@ categories recur throughout and are called out once here rather than per item:
   Apple's own (undocumented) shape rendering.
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
   blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13).
-- **No `SKShapeNode.fillTexture`/`fillColor` texture-fill equivalent.** Apple lets a shape's fill
-  sample an arbitrary texture instead of (or blended with) a solid color, clipped to the shape's
-  own path. This library's fill pipeline only carries a per-vertex solid color (see the shared
-  triangle-list renderer in `docs/ARCHITECTURE.md`), so there's no UV mapping for shape geometry to
-  hang a texture off yet. Not tracked as a numbered roadmap phase — no host app has needed it before
-  a consumer (bitzcojp/backgammon, `BoardTextures.kt`/`CheckerNode.kt`, Phase 8-4) hit it, and that
-  consumer worked around it by baking the shape itself (including transparent edges) into the
-  texture and drawing it with `SKSpriteNode` instead of `SKShapeNode`, which needs no renderer
-  change. Revisit if a future consumer needs a texture fill on a shape whose geometry changes too
-  often to bake (e.g. per-frame procedural paths).
+- **`SKShapeNode.fillTexture`** is stretched across the bounding box of the shape's (flattened,
+  triangulated) fill geometry and multiplied by `fillColor` — so, as on Apple, `fillColor` must be
+  set to something visible (typically white) for the texture to show. Texture coordinates are
+  derived per fill vertex from its position within that box, so the texture is clipped to the
+  shape's own outline exactly where the fill triangulation is. **`strokeTexture` is not
+  implemented** — the stroke is still a flat `strokeColor` ribbon.
 - **`SKLabelNode`** renders glyphs via `android.graphics.Paint`/`Typeface` into a cached texture —
   there is no CoreText equivalent on Android.
 - **`SKLabelNode` is single-line only** — Apple's `numberOfLines`/`preferredMaxLayoutWidth`

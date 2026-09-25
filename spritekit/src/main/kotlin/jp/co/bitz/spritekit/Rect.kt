@@ -16,6 +16,12 @@ public data class Rect(
     public val right: Float,
     public val bottom: Float,
 ) {
+    /** The rectangle's horizontal extent (`right - left`) — Apple's `CGRect.width`. */
+    public val width: Float get() = right - left
+
+    /** The rectangle's vertical extent (`bottom - top`) — Apple's `CGRect.height`. */
+    public val height: Float get() = bottom - top
+
     /** The smallest [Rect] containing both this rectangle and [other]. */
     public fun union(other: Rect): Rect =
         Rect(
