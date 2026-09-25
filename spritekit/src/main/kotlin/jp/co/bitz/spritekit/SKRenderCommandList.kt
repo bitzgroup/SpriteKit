@@ -24,11 +24,11 @@ internal data class SKVertexColor(
 /**
  * One draw command ready for [SKSceneRenderer]: a flat triangle list ([vertices].size is always a
  * multiple of 3) to draw with [texture] (`null` renders flat-colored, via the renderer's built-in
- * white fallback texture — used by untextured [SKSpriteNode]s and every [SKShapeNode]
- * fill/stroke), [blendMode], [shader] (`null` draws with the renderer's default program — only
- * [SKSpriteNode] can set one, see `SKShader.kt`), and — if this command's node was under an
- * [SKCropNode] — [clipRect] (in the same space as [vertices], `null` meaning unclipped). Not part
- * of the public API.
+ * white fallback texture — used by untextured [SKSpriteNode]s, every [SKShapeNode] stroke, and
+ * every [SKShapeNode] fill without an [SKShapeNode.fillTexture]), [blendMode], [shader] (`null`
+ * draws with the renderer's default program — only [SKSpriteNode] can set one, see
+ * `SKShader.kt`), and — if this command's node was under an [SKCropNode] — [clipRect] (in the same
+ * space as [vertices], `null` meaning unclipped). Not part of the public API.
  */
 internal data class SKRenderCommand(
     val texture: SKTexture?,
@@ -48,9 +48,9 @@ internal data class SKRenderCommand(
  * sibling subtrees, even when the children themselves are left at the default `0`). See
  * `docs/ARCHITECTURE.md`.
  * [SKSpriteNode]/[SKLabelNode] each contribute one command (a textured quad); [SKShapeNode]
- * contributes up to two per contour (an untextured fill, then an untextured stroke, in that
- * order) — they all reduce to the same "flat triangle list, texture, blend mode, vertex color"
- * shape, so one renderer draws all three node types.
+ * contributes up to two per contour (a fill — flat, or sampling [SKShapeNode.fillTexture] — then
+ * an untextured stroke, in that order) — they all reduce to the same "flat triangle list,
+ * texture, blend mode, vertex color" shape, so one renderer draws all three node types.
  *
  * Every position is expressed relative to [SKScene.camera] if one is set, or [scene] itself
  * otherwise — see `docs/ARCHITECTURE.md`. Descendants of an [SKCropNode] carry that node's
@@ -278,8 +278,9 @@ private fun addShapeCommands(
         if (fillAlpha > 0f) {
             val range = shape.fillRanges[index]
             if (!range.isEmpty()) {
+                val vertices = fillVertices(node, shape, worldVertices.slice(range), range)
                 context.add(
-                    shapeCommand(worldVertices.slice(range), node.fillColor, fillAlpha, context.clipRect),
+                    shapeCommand(vertices, node.fillColor, fillAlpha, context.clipRect, node.fillTexture),
                     context.zPosition,
                 )
             }
@@ -349,9 +350,10 @@ private fun shapeCommand(
     colorInt: Int,
     alpha: Float,
     clipRect: Rect?,
+    texture: SKTexture? = null,
 ): SKRenderCommand =
     SKRenderCommand(
-        texture = null,
+        texture = texture,
         blendMode = SKBlendMode.Alpha,
         vertices = vertices,
         color = SKVertexColor(redOf(colorInt), greenOf(colorInt), blueOf(colorInt), alpha),

@@ -44,4 +44,12 @@ class RectTest {
 
         assertEquals(inner, outer.intersection(inner))
     }
+
+    @Test
+    fun `width and height are the extents of a normalized rect`() {
+        val rect = Rect(left = -2f, top = 1f, right = 6f, bottom = 4f)
+
+        assertEquals(8f, rect.width)
+        assertEquals(3f, rect.height)
+    }
 }
