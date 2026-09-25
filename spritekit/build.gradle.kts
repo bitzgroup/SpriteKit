@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "jp.co.bitz.spritekit"
-    compileSdk = 34
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 24

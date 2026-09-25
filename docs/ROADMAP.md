@@ -135,7 +135,12 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `zPosition` (ties broken by tree order, per Apple's documented rule), batched by texture +
       blend mode. `SKScene.scaleMode` letterbox/crop math (`computeSceneProjection`) is pure
       Kotlin and unit-tested; the actual `GLES20`/`GLUtils`/`Matrix` calls are not — see this
-      phase's testing note below
+      phase's testing note below. For `.aspectFit`/`.aspectFill`, the extra space beyond
+      `sceneSize` always splits evenly around the scene regardless of `anchorPoint` (originally
+      let `anchorPoint` shift the letterbox/crop itself, putting all the extra space to one side
+      for the default `anchorPoint (0, 0)`; revised post-`v0.1.0` after `bitzgroup/tic-tac-toe`'s
+      Android build visibly sat lower on screen than its iOS twin, confirmed against Apple's real
+      `SKScene`/`SKView` on an iOS Simulator — see `docs/API_COMPATIBILITY.md`)
 - [x] `SKSpriteNode` — `texture`, `color`/`colorBlendFactor`, `size`, `anchorPoint`, `blendMode`
 - [x] `SKTextureAtlas` — runtime atlas packer (Apple auto-packs atlases at Xcode build time; no
       Android equivalent, so this is a runtime alternative — see `docs/API_COMPATIBILITY.md`); the
@@ -175,8 +180,15 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `fadeAlphaTo`/`fadeAlphaBy`, `hide`/`unhide`, `colorize`, `wait`/`wait(withRange:)`, `run`
       (block), `removeFromParent`, `sequence`/`group`/`repeat`/`repeatForever`, `customAction`,
       `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`. **Deferred**
-      (see "Explicitly Out of Scope" below): `followPath`, `playSoundFileNamed`,
-      `run(_:onChildWithName:)`
+      (see "Explicitly Out of Scope" below): `run(_:onChildWithName:)`
+- [x] `SKAction.follow(_:asOffset:orientToPath:duration:)` / `follow(_:asOffset:orientToPath:speed:)`
+      — path-following, added after a host app (Backgammon) needed arc motion along a quadratic
+      curve and found it missing. Follows only a path's first contour, via
+      `android.graphics.PathMeasure.getPosTan` (arc-length parameterized, so it works for curves,
+      not just straight segments); `reversed()` flips a `reversedDirection` flag rather than
+      reversing the `Path` itself, since `android.graphics.Path` has no public reversal API.
+      Touches real `Path`/`PathMeasure` APIs, so — like `flattenPath` (Phase 4) — it isn't
+      covered by unit tests, for the same Android-API-safety reasons
 - [x] `SKActionTimingMode` — linear/easeIn/easeOut/easeInEaseOut, plus a custom `timingFunction`
       property
 - [x] Frame-stepped executor (`SKActionState`/`stepAction`, per running action — not
@@ -312,9 +324,10 @@ algorithms (steering, noise, Gaussian sampling).
       `fieldBitMask` (particles respond to matching `SKFieldNode`s — reuses Phase 7d's field-force
       formulas, refactored to work from a world position/velocity pair instead of an
       `SKPhysicsBody` so both can share them), `advanceSimulationTime`/`resetSimulation`.
-      `particleSize` has no Apple equivalent (Apple auto-sizes from the texture's pixel
-      dimensions; this port can't without reading `Bitmap` dimensions outside the GL-only code
-      paths, the same reason `SKSpriteNode.size` isn't auto-derived either). `targetNode` and the
+      `particleSize` defaults to `(0, 0)`, meaning "use the texture's size", like Apple's
+      (originally shipped as a fixed `32x32` default with no texture-derived sizing; revised
+      post-`v0.1.0` once `SKTexture.size()` existed, after checking Apple's real defaults on an iOS
+      Simulator — see `docs/API_COMPATIBILITY.md`). `targetNode` and the
       scale/rotation/alpha sibling `SKKeyframeSequence` properties aren't implemented — see
       `docs/API_COMPATIBILITY.md`. Stepped once per frame by `SKView` (`stepEmitters`, after
       constraints, before rendering), independent of `SKPhysicsWorld`
@@ -374,13 +387,14 @@ algorithms (steering, noise, Gaussian sampling).
 
 - [x] Full `SKNode` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
       `touchesCancelled`) wired through Phase 1's UI→GL bridge (`SKView.onTouchEvent` →
-      `runOnGLThread` → `dispatchTouch`, alongside — not replacing — the raw `SKView.onTouch`
+      `runOnGLThread` → `dispatchTouches`, alongside — not replacing — the raw `SKView.onTouch`
       escape hatch). `SKNode.isUserInteractionEnabled` (defaults `false`, except `SKScene`, which
-      defaults it `true`, matching Apple) gates which nodes are even candidates. Delivered one
-      `SKTouch` (`pointerId` + `location`, already converted into the *receiving* node's own local
-      space) at a time per callback, rather than Apple's batched `Set<UITouch>` — idiomatic Kotlin
-      given this library's per-pointer `SKTouchEvent` model from Phase 1, and a natural fit for
-      Android's per-pointer `MotionEvent` API; see `docs/API_COMPATIBILITY.md`. A touch is
+      defaults it `true`, matching Apple) gates which nodes are even candidates. Delivered in
+      Apple's shape — `touchesBegan(touches: Set<SKTouch>, event: SKEvent?)` and siblings, one call
+      per phase and target node, with each `SKTouch` a persistent `UITouch`-like object queried via
+      `location(node)`/`previousLocation(node)`. (Originally shipped delivering one immutable
+      `SKTouch` with a pre-converted `location` per call; revised post-`v0.1.0` so iOS touch code
+      ports unchanged — see `docs/API_COMPATIBILITY.md`.) A touch is
       hit-tested once, on `touchesBegan`; the same node keeps receiving `touchesMoved`/`Ended`/
       `Cancelled` for that pointer regardless of where it travels afterward (tracked per pointer ID
       in `SKScene.activeTouchTargets`), matching Apple's tracking behavior — not re-hit-tested
@@ -428,12 +442,14 @@ algorithms (steering, noise, Gaussian sampling).
 ## Phase 12 — Audio
 
 - [x] `SKAudioNode` — a single persistent audio clip per node (mirrors Apple's own 1:1
-      node-to-player model), backed by `android.media.MediaPlayer` rather than `SoundPool`:
-      `MediaPlayer.setDataSource(String)` needs no `Context`, unlike `SoundPool`/
-      `MediaPlayer.create()`, so clips are addressed by a plain path/URL string
-      (`SKAudioNode.path`) with no Apple-style app-bundle `fileNamed:` lookup — an absolute file
-      path, an `http(s)://` URL, or a bundled asset via `"file:///android_asset/..."`; see
-      `docs/API_COMPATIBILITY.md`. `autoplayLooped` (Apple's combined "plays automatically AND
+      node-to-player model), backed by `android.media.MediaPlayer` rather than `SoundPool`.
+      Clips are addressed like Apple's `SKAudioNode(fileNamed:)`: a plain file name resolves
+      against the host app's `assets/` folder (Android's equivalent of Apple's main bundle;
+      `SKView` hands its application `Context` to the playback backend for this), while an
+      absolute path or URL is used as-is. (Originally shipped with no bundle lookup at all —
+      callers passed `"file:///android_asset/..."`, which `MediaPlayer` turned out not to play
+      on-device, silently; revised post-`v0.1.0` after `bitzgroup/tic-tac-toe` had to copy its
+      sounds into `cacheDir` to work around it.) See `docs/API_COMPATIBILITY.md`. `autoplayLooped` (Apple's combined "plays automatically AND
       loops" flag) is driven by a new per-frame `stepAudioNodes(scene)` (mirroring
       `stepEmitters`/`stepTileMaps`), triggering exactly once per node's lifetime. Positional/
       spatial audio is **out of scope**, same as originally scoped
@@ -514,9 +530,6 @@ full parity; see `docs/ARCHITECTURE.md`.
 
 ## Explicitly Out of Scope
 
-- `SKAction.follow(_:asOffset:orientToPath:duration:)` — path-following actions; would need
-  path-length parameterization on top of `SKShapeNode`'s existing path-flattening machinery,
-  deferred for scope
 - `SKAction.run(_:onChildWithName:)` — a niche convenience over `childNode`/`enumerateChildNodes`
   plus a plain `run`
 - `SKEffectNode.filter` — Core Image, no Android equivalent

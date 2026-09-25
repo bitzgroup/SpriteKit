@@ -1,6 +1,8 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.PathMeasure
 import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.time.Duration
 
 /**
@@ -213,6 +215,7 @@ private fun applyLeafEffect(
         }
         is SKActionKind.ResizeTo -> applyResize(state, node, progress) { from -> kind.size - from }
         is SKActionKind.ResizeBy -> applyResize(state, node, progress) { kind.delta }
+        is SKActionKind.Follow -> applyFollow(state, kind, node, progress)
         is SKActionKind.FadeAlphaTo -> {
             val from = state.captureOnce { node.alpha }
             node.alpha = from + (kind.alpha - from) * progress
@@ -276,6 +279,45 @@ private fun applyResize(
     sprite.size = Vector2(from.x + d.x * progress, from.y + d.y * progress)
 }
 
+/** Per-run state captured once for [SKActionKind.Follow]: the path measured, its length, and where the node started. */
+private class FollowSetup(
+    val measure: PathMeasure,
+    val length: Float,
+    val startPosition: Vector2,
+)
+
+/**
+ * Touches real `Path`/`PathMeasure` APIs, so — like [flattenPath] — it isn't covered by unit
+ * tests; see `docs/ROADMAP.md`'s testing notes.
+ */
+private fun applyFollow(
+    state: SKActionState,
+    kind: SKActionKind.Follow,
+    node: SKNode,
+    progress: Float,
+) {
+    val setup =
+        state.captureOnce {
+            val measure = PathMeasure(kind.path, false)
+            FollowSetup(measure, measure.length, node.position)
+        }
+    if (setup.length <= 0f) return
+
+    val t = if (kind.reversedDirection) 1f - progress else progress
+    val position = FloatArray(2)
+    val tangent = FloatArray(2)
+    setup.measure.getPosTan(t * setup.length, position, tangent)
+
+    val point = Vector2(position[0], position[1])
+    node.position = if (kind.asOffset) setup.startPosition + point else point
+
+    if (kind.orientToPath) {
+        val dx = if (kind.reversedDirection) -tangent[0] else tangent[0]
+        val dy = if (kind.reversedDirection) -tangent[1] else tangent[1]
+        if (dx != 0f || dy != 0f) node.zRotation = atan2(dy, dx)
+    }
+}
+
 private fun applyColorize(
     state: SKActionState,
     kind: SKActionKind.Colorize,
@@ -290,7 +332,6 @@ private fun applyColorize(
     sprite.colorBlendFactor = fromBlend + (targetBlend - fromBlend) * progress
 }
 
-@Suppress("ReturnCount") // three independent guard clauses read more clearly here than nesting them
 private fun applyAnimate(
     state: SKActionState,
     kind: SKActionKind.Animate,
@@ -300,12 +341,14 @@ private fun applyAnimate(
     val sprite = node as? SKSpriteNode ?: return
     if (kind.textures.isEmpty()) return
     val originalTexture = state.captureOnce { sprite.texture }
-    if (kind.restore && elapsed >= kind.timePerFrame * kind.textures.size) {
-        sprite.texture = originalTexture
-        return
-    }
-    val frameIndex = animationFrameIndex(elapsed, kind.timePerFrame, kind.textures.size)
-    sprite.texture = kind.textures[frameIndex]
+    val texture =
+        if (kind.restore && elapsed >= kind.timePerFrame * kind.textures.size) {
+            originalTexture
+        } else {
+            kind.textures[animationFrameIndex(elapsed, kind.timePerFrame, kind.textures.size)]
+        }
+    sprite.texture = texture
+    if (kind.resize && texture != null) sprite.size = texture.size()
 }
 
 /**

@@ -1,8 +1,11 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.Path
+import android.graphics.PathMeasure
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A single, reusable "recipe" for animating a node over time — mirrors Apple's `SKAction`.
@@ -98,6 +101,43 @@ public class SKAction internal constructor(
             delta: Vector2,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.ResizeBy(delta))
+
+        /**
+         * Moves this node along [path] over [duration]. Only the first contour of [path] is
+         * followed — see `docs/API_COMPATIBILITY.md`.
+         *
+         * If [asOffset] is `true`, [path]'s points are relative to this node's position when the
+         * action starts (so a path built around the origin can be reused at any position); if
+         * `false`, they're absolute coordinates in the node's parent, and the node jumps straight
+         * to the path's start point the moment the action begins.
+         *
+         * If [orientToPath] is `true`, [SKNode.zRotation] is continuously set to face the
+         * direction of travel along the path (`0` pointing along the positive x-axis, matching
+         * how zero rotation is interpreted everywhere else in this library).
+         */
+        public fun follow(
+            path: Path,
+            asOffset: Boolean,
+            orientToPath: Boolean,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.Follow(path, asOffset, orientToPath))
+
+        /**
+         * Like [follow], but [speed] (parent-space units per second) determines the duration
+         * instead of taking one directly — the length of [path]'s first contour divided by
+         * [speed]. A non-positive [speed] (or a path with no measurable length) produces a
+         * zero-duration action that jumps straight to the path's end.
+         */
+        public fun follow(
+            path: Path,
+            asOffset: Boolean,
+            orientToPath: Boolean,
+            speed: Float,
+        ): SKAction {
+            val length = PathMeasure(path, false).length
+            val duration = if (speed > 0f && length > 0f) (length / speed).toDouble().seconds else Duration.ZERO
+            return follow(path, asOffset, orientToPath, duration)
+        }
 
         /** Fades [SKNode.alpha] to `1` (fully opaque) over [duration]. */
         public fun fadeIn(duration: Duration): SKAction = fadeAlphaTo(1f, duration)
@@ -206,20 +246,23 @@ public class SKAction internal constructor(
         ): SKAction = SKAction(duration, SKActionKind.Custom(block))
 
         /**
-         * Steps [SKSpriteNode.texture] through [textures], holding each for [timePerFrame]. If
-         * [restore] is `true`, the sprite's original texture (from before this action started)
-         * is restored once it finishes. No-op on nodes other than [SKSpriteNode].
-         *
-         * Deviation: Apple's `resize` parameter (also resizing the sprite to match each
-         * texture's pixel dimensions) isn't implemented, for the same reason
-         * [SKSpriteNode.size] doesn't auto-size from a texture in the first place — see
-         * `docs/API_COMPATIBILITY.md`.
+         * Steps [SKSpriteNode.texture] through [textures], holding each for [timePerFrame] —
+         * Apple's `animate(with:timePerFrame:resize:restore:)`. If [resize] is `true`, the
+         * sprite's [SKSpriteNode.size] follows each texture's [SKTexture.size]. If [restore] is
+         * `true`, the sprite's original texture (from before this action started) is restored
+         * once it finishes — resized back to that texture's size too, if [resize] is also `true`.
+         * No-op on nodes other than [SKSpriteNode].
          */
         public fun animate(
             textures: List<SKTexture>,
             timePerFrame: Duration,
+            resize: Boolean = false,
             restore: Boolean = false,
-        ): SKAction = SKAction(timePerFrame * textures.size, SKActionKind.Animate(textures, timePerFrame, restore))
+        ): SKAction =
+            SKAction(
+                timePerFrame * textures.size,
+                SKActionKind.Animate(textures, timePerFrame, resize, restore),
+            )
 
         /** Starts (or resumes) playback. No-op on nodes other than [SKAudioNode]. */
         public fun play(): SKAction = SKAction(Duration.ZERO, SKActionKind.Play)
@@ -243,8 +286,10 @@ public class SKAction internal constructor(
         ): SKAction = SKAction(duration, SKActionKind.ChangePlaybackRateTo(to))
 
         /**
-         * Plays the clip at [fileNamed] once, fire-and-forget — independent of any [SKAudioNode]
-         * (runnable on any node). If [waitForCompletion] is `true`, this action doesn't finish
+         * Plays the clip [fileNamed] once, fire-and-forget — independent of any [SKAudioNode]
+         * (runnable on any node). Like Apple's, a plain file name (`"tap.mp3"`) is looked up among
+         * the resources bundled with the app — the host app's `assets/` folder here; an absolute
+         * file path or a URL is used as-is. If [waitForCompletion] is `true`, this action doesn't finish
          * until playback actually completes; its [SKAction.duration] is always reported as `0`
          * regardless, since the clip's real length isn't known ahead of time — see
          * `docs/API_COMPATIBILITY.md`.

@@ -103,8 +103,9 @@ it wraps internally, so the two hosting paths behave identically underneath:
 contract — this works unchanged whether `SKView` is placed via XML or wrapped by `AndroidView` in
 the Compose module, since `AndroidView` forwards touch dispatch to the wrapped `View` transparently.
 It snapshots the parts of the event the scene graph needs (pointer id, position in view space,
-action) into an immutable value, then hands that snapshot to the render thread via
-`runOnGLThread`. `SKNode`/`SKScene`'s `touchesBegan`/`touchesMoved`/`touchesEnded`/
+action) into one immutable value per reported pointer, then hands that batch to the render thread
+via `runOnGLThread`, where it's delivered as Apple does — one `Set<SKTouch>` per phase and target
+node. `SKNode`/`SKScene`'s `touchesBegan`/`touchesMoved`/`touchesEnded`/
 `touchesCancelled` (Phase 10) always run on the render thread — the same thread as node mutation —
 so hit-testing and touch handling need no synchronization with the render/update loop.
 
@@ -175,9 +176,13 @@ design decisions are:
 
 - **OpenGL ES 2.0** baseline via `GLSurfaceView`, chosen for the broadest device compatibility at
   this library's `minSdk 24`.
-- Each frame, the scene graph is traversed and flattened into a draw list sorted by `zPosition`
-  (ties broken by tree traversal order, per Apple's documented rule), then batched by texture and
-  blend mode into as few draw calls as practical (a dynamic-VBO quad batcher).
+- Each frame, the scene graph is traversed and flattened into a draw list sorted by each node's
+  *effective* z-position — its own `zPosition` plus every ancestor's, accumulated down the tree
+  (ties broken by tree traversal order) — per Apple's documented rule that `zPosition` is relative
+  to the parent node, so setting it once on a container lifts its whole subtree above/below
+  sibling subtrees even when the children themselves are left at the default `0`. The same
+  accumulated-z rule applies to touch hit-testing (`SKTouchDispatch.kt`). Then batched by texture
+  and blend mode into as few draw calls as practical (a dynamic-VBO quad batcher).
 - The renderer always dispatches each node's draw call through a "current shader program" concept
   — a default built-in program when no custom `SKShader` is set — so Phase 13's shader hook doesn't
   require re-architecting the batcher built in Phase 3.

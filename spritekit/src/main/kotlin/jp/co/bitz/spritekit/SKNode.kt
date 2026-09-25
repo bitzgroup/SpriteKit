@@ -9,25 +9,62 @@ import kotlin.time.Duration
  * rotation, scale) relative to its parent, an optional list of children, and participates in
  * [SKView]'s per-frame update/render loop once it's part of a presented [SKScene]'s tree.
  *
- * All node state is confined to [SKView]'s render thread — see `docs/ARCHITECTURE.md`. Touch
- * dispatch ([touchesBegan] and friends) is delivered one [SKTouch] at a time, rather than Apple's
- * batched `Set<UITouch>` — see `docs/API_COMPATIBILITY.md`.
+ * All node state is confined to [SKView]'s render thread — see `docs/ARCHITECTURE.md`. Touches
+ * are delivered like Apple's: [touchesBegan] and friends receive a `Set` of [SKTouch]es plus the
+ * [SKEvent] they arrived in.
  */
 public open class SKNode {
     /** Position relative to the parent's coordinate system. */
     public var position: Vector2 = Vector2.Zero
+        set(value) {
+            if (field != value) transformStamp++
+            field = value
+        }
 
     /** Front-to-back ordering within the parent; higher values draw on top of lower ones. */
     public var zPosition: Float = 0f
 
     /** Rotation around the node's origin, in radians. Positive is counter-clockwise. */
     public var zRotation: Float = 0f
+        set(value) {
+            if (field != value) transformStamp++
+            field = value
+        }
 
     /** Horizontal scale relative to the parent. */
     public var xScale: Float = 1f
+        set(value) {
+            if (field != value) transformStamp++
+            field = value
+        }
 
     /** Vertical scale relative to the parent. */
     public var yScale: Float = 1f
+        set(value) {
+            if (field != value) transformStamp++
+            field = value
+        }
+
+    /** Sets both [xScale] and [yScale] to [scale] — mirrors Apple's `setScale(_:)`. */
+    public fun setScale(scale: Float) {
+        xScale = scale
+        yScale = scale
+    }
+
+    /**
+     * Bumped whenever [position]/[zRotation]/[xScale]/[yScale] actually changes value, or this
+     * node is re-parented ([addChild]/[removeFromParent]) — i.e., whenever this node's *local*
+     * transform, or its place in the tree, changes. Not [zPosition]: that only affects draw
+     * order, not spatial position. See [worldTransformVersion], which combines this with the same
+     * counter on every ancestor.
+     */
+    internal var transformStamp: Int = 0
+        private set
+
+    /** [worldTransformVersion] memoization state for this node — meaningless on its own, see there. */
+    internal var lastLocalTransformStamp: Int = -1
+    internal var lastParentTransformVersion: Long = -1L
+    internal var cachedWorldTransformVersion: Long = 0L
 
     /** Opacity, from `0` (fully transparent) to `1` (fully opaque). Inherited by children. */
     public var alpha: Float = 1f
@@ -80,6 +117,7 @@ public open class SKNode {
     public fun addChild(node: SKNode) {
         check(node.parent == null) { "node is already the child of another node" }
         node.parent = this
+        node.transformStamp++
         mutableChildren.add(node)
     }
 
@@ -87,6 +125,7 @@ public open class SKNode {
     public fun removeFromParent() {
         parent?.mutableChildren?.remove(this)
         parent = null
+        transformStamp++
     }
 
     /** Removes all of this node's children (each child's [parent] becomes `null`). */
@@ -250,25 +289,44 @@ public open class SKNode {
     }
 
     /**
-     * Called when a new touch begins on this node — only ever delivered to a node with
-     * [isUserInteractionEnabled] set. A no-op unless overridden.
+     * Called when one or more new [touches] begin on this node — Apple's
+     * `touchesBegan(_:with:)`. Only ever delivered to a node with [isUserInteractionEnabled] set;
+     * [touches] holds just the touches that began on this node in this delivery, while
+     * [event]'s [SKEvent.allTouches] holds every touch on the screen. A no-op unless overridden.
      */
-    public open fun touchesBegan(touch: SKTouch) {}
+    public open fun touchesBegan(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
 
     /**
-     * Called as an already-began touch moves, delivered to the same node [touchesBegan] was,
-     * regardless of where the touch moves to. A no-op unless overridden.
+     * Called as already-began [touches] move — Apple's `touchesMoved(_:with:)`. Delivered to the
+     * same node [touchesBegan] was, regardless of where the touches move to. A no-op unless
+     * overridden.
      */
-    public open fun touchesMoved(touch: SKTouch) {}
-
-    /** Called when a touch this node received [touchesBegan] for lifts. A no-op unless overridden. */
-    public open fun touchesEnded(touch: SKTouch) {}
+    public open fun touchesMoved(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
 
     /**
-     * Called when a touch this node received [touchesBegan] for is cancelled by the system
-     * instead of lifting normally. A no-op unless overridden.
+     * Called when [touches] this node received [touchesBegan] for lift — Apple's
+     * `touchesEnded(_:with:)`. A no-op unless overridden.
      */
-    public open fun touchesCancelled(touch: SKTouch) {}
+    public open fun touchesEnded(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
+
+    /**
+     * Called when [touches] this node received [touchesBegan] for are cancelled by the system
+     * instead of lifting normally — Apple's `touchesCancelled(_:with:)`. A no-op unless
+     * overridden.
+     */
+    public open fun touchesCancelled(
+        touches: Set<SKTouch>,
+        event: SKEvent?,
+    ) {}
 
     /**
      * Transforms [point] from this node's local space into its parent's space, applying
@@ -317,6 +375,119 @@ public open class SKNode {
     private fun pointFromRootSpace(point: Vector2): Vector2 {
         val ancestors = generateSequence(this) { it.parent }.takeWhile { it.parent != null }.toList()
         return ancestors.foldRight(point) { node, acc -> node.parentToLocal(acc) }
+    }
+}
+
+/**
+ * Batch form of [SKNode.convertTo]: converts every point in [points] (expressed in this node's
+ * local coordinate space) into [node]'s local coordinate space, mathematically identical to
+ * calling `points.map { convertTo(it, node) }` -- but each ancestor's
+ * `cos(zRotation)`/`sin(zRotation)` (the expensive part of the private `localToParent`/
+ * `parentToLocal` [SKNode.convertTo] itself uses) is computed once per ancestor instead of once
+ * per point. A single [SKShapeNode] with a curved [SKShapeNode.path] can easily carry a few
+ * hundred triangulated vertices, and re-deriving the same trig for every one of them, every
+ * frame, is the difference between a static scene of a few dozen such shapes rendering fine and
+ * it saturating the render thread — see `SKRenderCommandList.kt`'s render-command builders, all
+ * of which batch through this instead of mapping [SKNode.convertTo] point-by-point.
+ *
+ * A top-level extension (rather than an [SKNode] member) purely to keep that class's own member
+ * count under this codebase's `TooManyFunctions` budget — it's semantically part of [SKNode]'s
+ * public-facing coordinate-conversion surface, just [internal].
+ */
+internal fun SKNode.convertAllTo(
+    points: List<Vector2>,
+    node: SKNode,
+): List<Vector2> {
+    val toRoot = transformStepsToRoot()
+    val fromRoot = node.transformStepsToRoot()
+    return points.map { point ->
+        var result = point
+        for (step in toRoot) result = step.toParent(result)
+        for (i in fromRoot.indices.reversed()) result = fromRoot[i].toLocal(result)
+        result
+    }
+}
+
+/**
+ * A process-wide source of unique values for [worldTransformVersion] — bumped every time some
+ * node's effective world transform is found to have changed since it was last asked about.
+ * Render-thread-confined, like all [SKNode] state (see `docs/ARCHITECTURE.md`), so plain
+ * unsynchronized mutable state is fine here, matching [SKNode.transformStamp] and friends.
+ */
+internal var nextWorldTransformVersion: Long = 1L
+
+/**
+ * A version number for this node's effective world transform — its own position/zRotation/scale
+ * plus every ancestor's, the same chain [convertAllTo] itself walks — given [parentVersion] (this
+ * same function's result for [SKNode.parent], or `0L` for a root). Two calls return the same
+ * value exactly when nothing in the chain moved in between, so callers can cache expensive
+ * per-vertex work keyed on it instead of redoing that work every single frame regardless — see
+ * [SKShapeNode]'s `worldVerticesCache` in `SKRenderCommandList.kt`, the first consumer.
+ *
+ * Must be called top-down, once per frame per node on the path being rendered — matching how
+ * `SKRenderCommandList.kt`'s `SKRenderCommandCollector` already walks the tree to accumulate
+ * alpha/hidden/zPosition/clip. Calling it more than once per frame for the same node with the
+ * same [parentVersion] (e.g. once to resolve a render command's own reference node, then again
+ * when the main walk reaches that same node) is harmless — it just returns the memoized value
+ * again, since nothing changed in between.
+ */
+internal fun SKNode.worldTransformVersion(parentVersion: Long): Long {
+    if (transformStamp == lastLocalTransformStamp && parentVersion == lastParentTransformVersion) {
+        return cachedWorldTransformVersion
+    }
+    lastLocalTransformStamp = transformStamp
+    lastParentTransformVersion = parentVersion
+    cachedWorldTransformVersion = nextWorldTransformVersion++
+    return cachedWorldTransformVersion
+}
+
+/** This node's own local-to-parent inputs, with the trig already evaluated — see [convertAllTo]. */
+private fun SKNode.transformStep(): SKNodeTransformStep =
+    SKNodeTransformStep(position, cos(zRotation), sin(zRotation), xScale, yScale)
+
+/**
+ * This node's chain of [transformStep]s up to (not including) its topmost ancestor, in the same
+ * order [SKNode.convertTo] (via its private `pointToRootSpace`) walks them — the precomputed form
+ * [convertAllTo] applies to many points instead of recomputing per point.
+ */
+private fun SKNode.transformStepsToRoot(): List<SKNodeTransformStep> {
+    val steps = mutableListOf<SKNodeTransformStep>()
+    var node: SKNode = this
+    while (true) {
+        val nodeParent = node.parent ?: return steps
+        steps += node.transformStep()
+        node = nodeParent
+    }
+}
+
+/**
+ * One ancestor's local-to-parent/parent-to-local inputs, captured with `cos`/`sin(zRotation)`
+ * already evaluated — see [convertAllTo].
+ */
+private class SKNodeTransformStep(
+    val position: Vector2,
+    val cos: Float,
+    val sin: Float,
+    val xScale: Float,
+    val yScale: Float,
+) {
+    /** Equivalent to the owning node's [SKNode.localToParent], reusing the already-evaluated trig. */
+    fun toParent(point: Vector2): Vector2 {
+        val scaledX = point.x * xScale
+        val scaledY = point.y * yScale
+        return Vector2(
+            x = position.x + (scaledX * cos - scaledY * sin),
+            y = position.y + (scaledX * sin + scaledY * cos),
+        )
+    }
+
+    /** Equivalent to the owning node's [SKNode.parentToLocal], reusing the already-evaluated trig. */
+    fun toLocal(point: Vector2): Vector2 {
+        val translated = Vector2(point.x - position.x, point.y - position.y)
+        return Vector2(
+            x = (translated.x * cos + translated.y * sin) / xScale,
+            y = (-translated.x * sin + translated.y * cos) / yScale,
+        )
     }
 }
 

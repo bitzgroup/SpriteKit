@@ -24,11 +24,11 @@ internal data class SKVertexColor(
 /**
  * One draw command ready for [SKSceneRenderer]: a flat triangle list ([vertices].size is always a
  * multiple of 3) to draw with [texture] (`null` renders flat-colored, via the renderer's built-in
- * white fallback texture — used by untextured [SKSpriteNode]s and every [SKShapeNode]
- * fill/stroke), [blendMode], [shader] (`null` draws with the renderer's default program — only
- * [SKSpriteNode] can set one, see `SKShader.kt`), and — if this command's node was under an
- * [SKCropNode] — [clipRect] (in the same space as [vertices], `null` meaning unclipped). Not part
- * of the public API.
+ * white fallback texture — used by untextured [SKSpriteNode]s, every [SKShapeNode] stroke, and
+ * every [SKShapeNode] fill without an [SKShapeNode.fillTexture]), [blendMode], [shader] (`null`
+ * draws with the renderer's default program — only [SKSpriteNode] can set one, see
+ * `SKShader.kt`), and — if this command's node was under an [SKCropNode] — [clipRect] (in the same
+ * space as [vertices], `null` meaning unclipped). Not part of the public API.
  */
 internal data class SKRenderCommand(
     val texture: SKTexture?,
@@ -41,12 +41,16 @@ internal data class SKRenderCommand(
 
 /**
  * Flattens [scene]'s node tree into an ordered list of [SKRenderCommand]s, ready for
- * [SKSceneRenderer] to draw in order: sorted by [SKNode.zPosition] (ties broken by
- * tree-traversal order, matching Apple's documented rule — see `docs/ARCHITECTURE.md`).
+ * [SKSceneRenderer] to draw in order: sorted by each node's *effective* z-position — its own
+ * [SKNode.zPosition] plus every ancestor's, accumulated down the tree (ties broken by
+ * tree-traversal order) — matching Apple's documented rule that "the value \[of zPosition\] is
+ * relative to the parent node" (a container's zPosition lifts its whole subtree above/below
+ * sibling subtrees, even when the children themselves are left at the default `0`). See
+ * `docs/ARCHITECTURE.md`.
  * [SKSpriteNode]/[SKLabelNode] each contribute one command (a textured quad); [SKShapeNode]
- * contributes up to two per contour (an untextured fill, then an untextured stroke, in that
- * order) — they all reduce to the same "flat triangle list, texture, blend mode, vertex color"
- * shape, so one renderer draws all three node types.
+ * contributes up to two per contour (a fill — flat, or sampling [SKShapeNode.fillTexture] — then
+ * an untextured stroke, in that order) — they all reduce to the same "flat triangle list,
+ * texture, blend mode, vertex color" shape, so one renderer draws all three node types.
  *
  * Every position is expressed relative to [SKScene.camera] if one is set, or [scene] itself
  * otherwise — see `docs/ARCHITECTURE.md`. Descendants of an [SKCropNode] carry that node's
@@ -63,13 +67,18 @@ internal fun buildRenderCommands(scene: SKScene): List<SKRenderCommand> =
     SKRenderCommandCollector(scene.camera ?: scene).collect(scene)
 
 /**
- * Everything a leaf node needs to build its [SKRenderCommand]: where it's drawn relative to, and
- * any inherited crop.
+ * Everything a leaf node needs to build its [SKRenderCommand]: where it's drawn relative to,
+ * any inherited crop, and [zPosition] — this node's *effective* z-position (its own
+ * [SKNode.zPosition] plus every ancestor's), used as the sort key instead of the node's own raw
+ * value so a container's zPosition lifts its whole subtree, matching Apple.
  */
 private class RenderContext(
     val referenceNode: SKNode,
     val clipRect: Rect?,
     val add: (SKRenderCommand, Float) -> Unit,
+    val zPosition: Float,
+    val worldVersion: Long,
+    val referenceVersion: Long,
 )
 
 /**
@@ -82,8 +91,21 @@ private class SKRenderCommandCollector(
     private val commands = mutableListOf<Pair<SKRenderCommand, Pair<Float, Int>>>()
     private var order = 0
 
+    // Computed once up front (root to referenceNode), not during the main walk below, since
+    // referenceNode (the scene, or its camera) isn't necessarily visited before the nodes being
+    // converted into its space. Calling `worldTransformVersion` again for the same nodes when the
+    // main walk does reach them is harmless -- see that function's KDoc.
+    private val referenceVersion = referenceWorldVersion(referenceNode)
+
     fun collect(scene: SKScene): List<SKRenderCommand> {
-        visit(scene, inheritedAlpha = 1f, inheritedHidden = false, inheritedClip = null)
+        visit(
+            scene,
+            inheritedAlpha = 1f,
+            inheritedHidden = false,
+            inheritedClip = null,
+            inheritedZPosition = 0f,
+            parentWorldVersion = 0L,
+        )
         return commands.sortedWith(compareBy({ it.second.first }, { it.second.second })).map { it.first }
     }
 
@@ -94,15 +116,20 @@ private class SKRenderCommandCollector(
         commands += command to (zPosition to order)
     }
 
+    @Suppress("LongParameterList")
     private fun visit(
         node: SKNode,
         inheritedAlpha: Float,
         inheritedHidden: Boolean,
         inheritedClip: Rect?,
+        inheritedZPosition: Float,
+        parentWorldVersion: Long,
     ) {
         order++
         val hidden = inheritedHidden || node.isHidden
         val alpha = inheritedAlpha * node.alpha
+        val zPosition = inheritedZPosition + node.zPosition
+        val worldVersion = node.worldTransformVersion(parentWorldVersion)
         val clip =
             if (node is SKCropNode) {
                 cropClip(
@@ -120,10 +147,23 @@ private class SKRenderCommandCollector(
         // rendered a second time as ordinary content.
         val isCropMask = (node.parent as? SKCropNode)?.maskNode === node
         if (!isCropMask && !hidden && alpha > 0f) {
-            addCommand(node, RenderContext(referenceNode, clip.rect, ::add), alpha)
+            val context = RenderContext(referenceNode, clip.rect, ::add, zPosition, worldVersion, referenceVersion)
+            addCommand(node, context, alpha)
         }
-        for (child in node.children) visit(child, alpha, hidden, clip.rect)
+        for (child in node.children) visit(child, alpha, hidden, clip.rect, zPosition, worldVersion)
     }
+}
+
+/**
+ * [referenceNode]'s own [SKNode.worldTransformVersion], walking from the topmost ancestor down to
+ * [referenceNode] itself (the order [SKNode.worldTransformVersion] requires) — see
+ * [SKRenderCommandCollector.referenceVersion].
+ */
+private fun referenceWorldVersion(referenceNode: SKNode): Long {
+    val rootToReference = generateSequence(referenceNode) { it.parent }.toList().asReversed()
+    var version = 0L
+    for (node in rootToReference) version = node.worldTransformVersion(version)
+    return version
 }
 
 private fun addCommand(
@@ -176,7 +216,7 @@ private fun addSpriteCommand(
     context: RenderContext,
     alpha: Float,
 ) {
-    val corners = node.localQuadCorners().map { node.convertTo(it, context.referenceNode) }
+    val corners = node.convertAllTo(node.localQuadCorners(), context.referenceNode)
     val uv = node.texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
     context.add(
         SKRenderCommand(
@@ -187,7 +227,7 @@ private fun addSpriteCommand(
             clipRect = context.clipRect,
             shader = node.shader,
         ),
-        node.zPosition,
+        context.zPosition,
     )
 }
 
@@ -198,9 +238,10 @@ private fun addLabelCommand(
 ) {
     val (texture, metrics) = node.renderedLabel() ?: return
     val corners =
-        labelQuadCorners(metrics, node.horizontalAlignmentMode, node.verticalAlignmentMode).map {
-            node.convertTo(it, context.referenceNode)
-        }
+        node.convertAllTo(
+            labelQuadCorners(metrics, node.horizontalAlignmentMode, node.verticalAlignmentMode),
+            context.referenceNode,
+        )
     context.add(
         SKRenderCommand(
             texture = texture,
@@ -210,7 +251,7 @@ private fun addLabelCommand(
             color = SKVertexColor(1f, 1f, 1f, alpha),
             clipRect = context.clipRect,
         ),
-        node.zPosition,
+        context.zPosition,
     )
 }
 
@@ -224,43 +265,106 @@ private fun addShapeCommands(
     val strokeAlpha = alphaOf(node.strokeColor) * alpha
     if (fillAlpha <= 0f && (strokeAlpha <= 0f || node.lineWidth <= 0f)) return
 
-    for (contour in flattenPath(path)) {
+    // Flattening + triangulating a curved path (an ear-clip over the ~100+ points a typical
+    // circle flattens to) is expensive enough that redoing it unconditionally every frame is the
+    // difference between a static board of a few dozen shapes rendering fine and it pegging the
+    // render thread -- see `triangulatedShape`'s KDoc. The per-vertex world-space transform below
+    // is cached the same way (`worldVertices`): most shapes on a mostly-static scene haven't
+    // actually moved on any given frame, and `SKNode.worldTransformVersion` tells us so without
+    // redoing the conversion to find out.
+    val shape = triangulatedShape(node, path)
+    val worldVertices = worldVertices(node, shape, context)
+    for (index in shape.fillRanges.indices) {
         if (fillAlpha > 0f) {
-            val triangles = triangulateFill(contour.points)
-            if (triangles.isNotEmpty()) {
-                context.add(shapeCommand(node, context, triangles, node.fillColor, alpha = fillAlpha), node.zPosition)
+            val range = shape.fillRanges[index]
+            if (!range.isEmpty()) {
+                val vertices = fillVertices(node, shape, worldVertices.slice(range), range)
+                context.add(
+                    shapeCommand(vertices, node.fillColor, fillAlpha, context.clipRect, node.fillTexture),
+                    context.zPosition,
+                )
             }
         }
         if (strokeAlpha > 0f && node.lineWidth > 0f) {
-            val triangles = triangulateStroke(contour.points, node.lineWidth, contour.closed)
-            if (triangles.isNotEmpty()) {
+            val range = shape.strokeRanges[index]
+            if (!range.isEmpty()) {
                 context.add(
-                    shapeCommand(node, context, triangles, node.strokeColor, alpha = strokeAlpha),
-                    node.zPosition,
+                    shapeCommand(worldVertices.slice(range), node.strokeColor, strokeAlpha, context.clipRect),
+                    context.zPosition,
                 )
             }
         }
     }
 }
 
-private fun shapeCommand(
+/**
+ * [SKShapeNode.worldVerticesCache]'s contents: [vertices] is [triangulationCache]'s
+ * [SKShapeTriangulationCache.allLocalVertices] already converted into [referenceNode]'s space, as
+ * of [worldVersion] (the owning node's [SKNode.worldTransformVersion] at the time) and
+ * [referenceVersion] ([referenceNode]'s own, since it can itself move — e.g. a panning camera).
+ */
+internal class SKShapeWorldVerticesCache(
+    val triangulationCache: SKShapeTriangulationCache,
+    val referenceNode: SKNode,
+    val referenceVersion: Long,
+    val worldVersion: Long,
+    val vertices: List<SKRenderVertex>,
+)
+
+/**
+ * [shape]'s [SKShapeTriangulationCache.allLocalVertices] converted into [RenderContext.referenceNode]'s
+ * space, reusing [SKShapeNode.worldVerticesCache] when neither [node]'s effective world transform
+ * ([SKNode.worldTransformVersion]) nor [RenderContext.referenceNode]'s own has changed since it
+ * was computed, and [shape] itself is still the node's current triangulation. Recomputes (one
+ * batched [SKNode.convertAllTo] call, wrapping each result as an [SKRenderVertex]) otherwise.
+ */
+private fun worldVertices(
     node: SKShapeNode,
+    shape: SKShapeTriangulationCache,
     context: RenderContext,
-    localTriangleVertices: List<Vector2>,
+): List<SKRenderVertex> {
+    val cached = node.worldVerticesCache
+    if (cached != null && cached.isFresh(shape, context)) return cached.vertices
+
+    val fresh = node.convertAllTo(shape.allLocalVertices, context.referenceNode).map { SKRenderVertex(it, 0f, 0f) }
+    node.worldVerticesCache =
+        SKShapeWorldVerticesCache(shape, context.referenceNode, context.referenceVersion, context.worldVersion, fresh)
+    return fresh
+}
+
+/** Whether this cache is still valid for [shape] and [context] -- see [worldVertices]. */
+private fun SKShapeWorldVerticesCache.isFresh(
+    shape: SKShapeTriangulationCache,
+    context: RenderContext,
+): Boolean =
+    triangulationCache === shape &&
+        referenceNode === context.referenceNode &&
+        referenceVersion == context.referenceVersion &&
+        worldVersion == context.worldVersion
+
+/** [range]'s slice of this list — a view ([List.subList]), not a copy. */
+private fun <T> List<T>.slice(range: IntRange): List<T> = subList(range.first, range.last + 1)
+
+private fun shapeCommand(
+    vertices: List<SKRenderVertex>,
     colorInt: Int,
     alpha: Float,
+    clipRect: Rect?,
+    texture: SKTexture? = null,
 ): SKRenderCommand =
     SKRenderCommand(
-        texture = null,
+        texture = texture,
         blendMode = SKBlendMode.Alpha,
-        vertices = localTriangleVertices.map { SKRenderVertex(node.convertTo(it, context.referenceNode), 0f, 0f) },
+        vertices = vertices,
         color = SKVertexColor(redOf(colorInt), greenOf(colorInt), blueOf(colorInt), alpha),
-        clipRect = context.clipRect,
+        clipRect = clipRect,
     )
 
 /**
  * One [SKRenderCommand] per currently-alive particle -- each is its own small textured quad, with
- * its own scale/rotation/alpha/color/z-position sampled from its age, positioned by translating
+ * its own scale/rotation/alpha/color/z-position sampled from its age (that z-position offset is
+ * relative to [node]'s own effective z-position, i.e. [RenderContext.zPosition], the same way
+ * [SKNode.position] is relative to [node]'s own transform), positioned by translating
  * [SKParticle.position] (in [node]'s own local space) before converting to [context]'s reference
  * space, reusing the same [quadVertices] shape [addSpriteCommand] does.
  */
@@ -271,7 +375,7 @@ private fun addEmitterCommands(
 ) {
     val texture = node.particleTexture
     val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
-    val halfSize = node.particleSize * 0.5f
+    val halfSize = node.effectiveParticleSize() * 0.5f
     for (particle in node.particles) {
         val scale = particle.initialScale + particle.scaleSpeed * particle.age
         val rotation = particle.initialRotation + particle.rotationSpeed * particle.age
@@ -284,11 +388,8 @@ private fun addEmitterCommands(
         val lifeFraction = (particle.age / particle.lifetime).coerceIn(0f, 1f)
         val colorInt = node.particleColorSequence?.sample(lifeFraction, ::lerpColor) ?: node.particleColor
 
-        val corners =
-            rotatedQuadCorners(
-                halfSize * scale,
-                rotation,
-            ).map { node.convertTo(it + particle.position, context.referenceNode) }
+        val localCorners = rotatedQuadCorners(halfSize * scale, rotation).map { it + particle.position }
+        val corners = node.convertAllTo(localCorners, context.referenceNode)
         context.add(
             SKRenderCommand(
                 texture = texture,
@@ -297,7 +398,7 @@ private fun addEmitterCommands(
                 color = tintedVertexColor(colorInt, colorBlendFactor, alpha * particleAlpha),
                 clipRect = context.clipRect,
             ),
-            particle.initialZPosition + particle.zPositionSpeed * particle.age,
+            context.zPosition + particle.initialZPosition + particle.zPositionSpeed * particle.age,
         )
     }
 }
@@ -306,8 +407,9 @@ private fun addEmitterCommands(
  * One [SKRenderCommand] per non-empty cell in [node]'s grid -- an axis-aligned quad sized by that
  * cell's [SKTileDefinition.size] (not necessarily [SKTileMapNode.tileSize]) and centered on
  * [SKTileMapNode.centerOfTile], sampling whichever animation frame [SKTileMapNode.elapsedTime]
- * currently lands on. Every tile in a map shares [node]'s own [SKNode.zPosition] -- a tile map
- * renders as one flat layer, unlike per-particle z-position.
+ * currently lands on. Every tile in a map shares [node]'s own effective z-position
+ * ([RenderContext.zPosition]) -- a tile map renders as one flat layer, unlike per-particle
+ * z-position.
  */
 private fun addTileMapCommands(
     node: SKTileMapNode,
@@ -331,13 +433,14 @@ private fun addTileCommand(
     val definition = node.tileDefinition(column, row) ?: return
     val center = node.centerOfTile(column, row)
     val halfSize = definition.size * 0.5f
-    val corners =
+    val localCorners =
         listOf(
             Vector2(center.x - halfSize.x, center.y - halfSize.y),
             Vector2(center.x + halfSize.x, center.y - halfSize.y),
             Vector2(center.x + halfSize.x, center.y + halfSize.y),
             Vector2(center.x - halfSize.x, center.y + halfSize.y),
-        ).map { node.convertTo(it, context.referenceNode) }
+        )
+    val corners = node.convertAllTo(localCorners, context.referenceNode)
     val texture = definition.textureAt(node.elapsedTime)
     val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
     context.add(
@@ -348,7 +451,7 @@ private fun addTileCommand(
             color = SKVertexColor(1f, 1f, 1f, alpha),
             clipRect = context.clipRect,
         ),
-        node.zPosition,
+        context.zPosition,
     )
 }
 

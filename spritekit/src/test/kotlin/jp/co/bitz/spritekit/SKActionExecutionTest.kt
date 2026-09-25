@@ -355,4 +355,8 @@ class SKActionExecutionTest {
         node.stepActions(0.5.seconds)
         assertEquals(1, completions)
     }
+
+    // `follow` touches real android.graphics.Path/PathMeasure APIs, so — like `flattenPath` —
+    // it isn't covered by unit tests here; see applyFollow's KDoc and docs/ROADMAP.md's testing
+    // notes.
 }

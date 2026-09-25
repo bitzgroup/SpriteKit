@@ -60,6 +60,9 @@ public open class SKScene(
      */
     internal val activeTouchTargets: MutableMap<Int, SKNode> = mutableMapOf()
 
+    /** The persistent [SKTouch] for each active pointer ID, updated in place as it moves. */
+    internal val activeTouches: MutableMap<Int, SKTouch> = mutableMapOf()
+
     override val localBounds: Rect
         get() =
             Rect(

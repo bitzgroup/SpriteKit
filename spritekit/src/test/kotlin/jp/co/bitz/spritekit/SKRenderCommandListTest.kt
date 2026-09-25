@@ -131,6 +131,28 @@ class SKRenderCommandListTest {
     }
 
     @Test
+    fun `a container's zPosition lifts its subtree above a sibling even when children default to zero`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val backLayer = SKNode()
+        val frontLayer = SKNode().apply { zPosition = 1f }
+        scene.addChild(backLayer)
+        scene.addChild(frontLayer)
+
+        // Neither child sets its own zPosition -- only the containers do, matching Apple's
+        // documented "zPosition is relative to the parent" rule.
+        val back = SKSpriteNode(size = Vector2(1f, 1f), color = 0xFF0000FF.toInt()).apply { colorBlendFactor = 1f }
+        val front = SKSpriteNode(size = Vector2(1f, 1f), color = 0xFFFF0000.toInt()).apply { colorBlendFactor = 1f }
+        backLayer.addChild(back)
+        frontLayer.addChild(front)
+
+        val commands = buildRenderCommands(scene)
+
+        assertEquals(2, commands.size)
+        assertEquals(1f, commands[0].color.b) // back layer's sprite drawn first
+        assertEquals(1f, commands[1].color.r) // front layer's sprite drawn last
+    }
+
+    @Test
     fun `zPosition ties are broken by tree traversal order`() {
         val scene = SKScene(size = Vector2(100f, 100f))
         val first = SKSpriteNode(size = Vector2(1f, 1f), color = 0xFFFF0000.toInt()).apply { colorBlendFactor = 1f }

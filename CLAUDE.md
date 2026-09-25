@@ -19,13 +19,16 @@ stepped once per frame independent of `SKPhysicsWorld`, rendering through the sa
 pipeline sprites/labels/shapes already use), Phase 9 (tile maps: `SKTileSet`/`SKTileGroup`/
 `SKTileGroupRule`/`SKTileDefinition`/`SKTileMapNode`, grid-only, with adjacency-rule-based
 automapping and its own per-map animation clock), Phase 10 (input: full `SKNode` touch
-dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, one `SKTouch` at a
-time, hit-tested once on `touchesBegan` then tracked per pointer ID through `SKScene`), and Phase
+dispatch — `touchesBegan`/`touchesMoved`/`touchesEnded`/`touchesCancelled`, Apple-shaped: a
+`Set<SKTouch>` plus an `SKEvent` per call, each `SKTouch` a persistent `UITouch`-like object
+queried via `location(node)`, hit-tested once on `touchesBegan` then tracked per pointer ID through
+`SKScene`), and Phase
 11 (transitions: `SKTransition` fade/crossFade/moveIn/push/reveal/doorway/flip,
 `SKView.presentScene(_:transition:)` — no offscreen-framebuffer support, so every effect reduces
 to `glViewport` offset/size, a whole-scene alpha multiplier, and (`doorway` only) a scissor clip),
 Phase 12 (audio: `SKAudioNode` — one persistent `android.media.MediaPlayer` per node, addressed
-by a plain path/URL string rather than an app-bundle `fileNamed:` lookup, driven by
+by Apple-style `fileNamed:` (a plain file name resolves against the host app's `assets/`,
+Android's main-bundle equivalent; absolute paths/URLs pass through), driven by
 `play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate` `SKAction`s reusing the existing
 frame-stepped action machinery; `SKAction.playSoundFileNamed` is a fire-and-forget `MediaPlayer`
 clip special-cased in the action executor since its real duration isn't known ahead of time; real
@@ -132,11 +135,12 @@ branching model.
 
 - Every merge goes through a PR (no direct pushes to `main` or `develop`); CI
   (`ktlintCheck detekt assemble testDebugUnitTest`) must pass first.
-- `release/*`/`hotfix/*` don't exist yet: the first release (`release/0.1.0`, tagged on `main`) is cut
-  once the full `docs/ROADMAP.md` plan is complete. Until then, all work happens on `feature/*`
-  branches merged into `develop` — `main` is not touched again until that first release; PRs #2 and
-  #4 (bootstrapping `main` from an empty initial state early in Phase 0) were a one-time exception,
-  not an ongoing pattern.
+- `release/*`/`hotfix/*` are short-lived: cut, merged into `main` **and** `develop`, then deleted,
+  so neither normally exists between releases. The first release (`release/0.1.0`, tagged on
+  `main`) was cut once the full `docs/ROADMAP.md` plan was complete; PRs #2 and #4 (bootstrapping
+  `main` from an empty initial state early in Phase 0) were a one-time exception to `main` only
+  ever merging from `release/*`/`hotfix/*`, not an ongoing pattern. Later releases repeat the same
+  `release/<version>` pattern as `develop` accumulates enough work to warrant one.
 
 ## Working in this repo
 

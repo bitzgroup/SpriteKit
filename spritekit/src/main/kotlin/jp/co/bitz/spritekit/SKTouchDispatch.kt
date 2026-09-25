@@ -23,91 +23,108 @@ internal fun viewToScenePoint(
 }
 
 /**
- * Routes [event] (already in view space) into [scene]'s node tree: hit-tests on
- * [SKTouchPhase.Began], then delivers to whichever node is tracking that pointer for every
- * subsequent phase, via [SKNode.touchesBegan]/[SKNode.touchesMoved]/[SKNode.touchesEnded]/
- * [SKNode.touchesCancelled]. A no-op if [viewWidth]/[viewHeight] aren't known yet (before the
- * first `onSurfaceChanged`).
+ * Routes [events] — every pointer snapshot taken from one Android `MotionEvent`, already in view
+ * space — into [scene]'s node tree the way Apple's SpriteKit delivers a `UIEvent`: a touch is
+ * hit-tested on [SKTouchPhase.Began], then delivered to that same node for every later phase;
+ * touches sharing a phase and a target node arrive together, in one [SKNode.touchesBegan]/
+ * [SKNode.touchesMoved]/[SKNode.touchesEnded]/[SKNode.touchesCancelled] call per node. A pointer
+ * reported as [SKTouchPhase.Moved] without actually having moved is left out, like Apple's
+ * stationary touches. A no-op if [viewWidth]/[viewHeight] aren't known yet (before the first
+ * `onSurfaceChanged`).
  */
-internal fun dispatchTouch(
+internal fun dispatchTouches(
     scene: SKScene,
-    event: SKTouchEvent,
+    events: List<SKTouchEvent>,
     viewWidth: Int,
     viewHeight: Int,
 ) {
     if (viewWidth <= 0 || viewHeight <= 0) return
     val referenceNode = scene.camera ?: scene
     val projection = computeSceneProjection(scene.size, scene.anchorPoint, scene.scaleMode, viewWidth, viewHeight)
-    val referencePoint = viewToScenePoint(event.x, event.y, projection, viewWidth, viewHeight)
+    val deliveries = linkedMapOf<Pair<SKTouchPhase, SKNode>, MutableSet<SKTouch>>()
+    val released = mutableListOf<Int>()
 
-    when (event.phase) {
-        SKTouchPhase.Began -> dispatchBegan(scene, event, referenceNode, referencePoint)
-        SKTouchPhase.Moved -> dispatchToTrackedTarget(scene, event, referenceNode, referencePoint, SKNode::touchesMoved)
-        SKTouchPhase.Ended ->
-            dispatchToReleasedTarget(
-                scene,
-                event,
-                referenceNode,
-                referencePoint,
-                SKNode::touchesEnded,
-            )
-        SKTouchPhase.Cancelled ->
-            dispatchToReleasedTarget(
-                scene,
-                event,
-                referenceNode,
-                referencePoint,
-                SKNode::touchesCancelled,
-            )
+    for (event in events) {
+        val point = viewToScenePoint(event.x, event.y, projection, viewWidth, viewHeight)
+        val delivery = trackTouch(scene, event, referenceNode, point) ?: continue
+        if (event.phase == SKTouchPhase.Ended || event.phase == SKTouchPhase.Cancelled) released += event.pointerId
+        deliveries.getOrPut(event.phase to delivery.first) { linkedSetOf() } += delivery.second
+    }
+
+    val skEvent = SKEvent(scene.activeTouches.values.toSet())
+    for (pointerId in released) {
+        scene.activeTouchTargets.remove(pointerId)
+        scene.activeTouches.remove(pointerId)
+    }
+    for ((key, touches) in deliveries) deliver(key.second, key.first, touches, skEvent)
+}
+
+private fun deliver(
+    target: SKNode,
+    phase: SKTouchPhase,
+    touches: Set<SKTouch>,
+    event: SKEvent,
+) {
+    when (phase) {
+        SKTouchPhase.Began -> target.touchesBegan(touches, event)
+        SKTouchPhase.Moved -> target.touchesMoved(touches, event)
+        SKTouchPhase.Ended -> target.touchesEnded(touches, event)
+        SKTouchPhase.Cancelled -> target.touchesCancelled(touches, event)
     }
 }
 
-private fun dispatchBegan(
-    scene: SKScene,
-    event: SKTouchEvent,
-    referenceNode: SKNode,
-    referencePoint: Vector2,
-) {
-    val target = hitTestInteractiveNode(scene, referenceNode, referencePoint) ?: return
-    scene.activeTouchTargets[event.pointerId] = target
-    target.touchesBegan(SKTouch(event.pointerId, target.convertFrom(referencePoint, referenceNode)))
-}
-
 /**
- * Delivers to the node already tracking [event]'s pointer, if any, without changing that tracking
- * -- for [SKTouchPhase.Moved].
+ * Updates [scene]'s tracking for [event] and returns the node to deliver it to plus its
+ * persistent [SKTouch] — or `null` if there's nothing to deliver (no node hit, no tracked touch
+ * for this pointer, or a "move" that didn't actually move).
  */
-private fun dispatchToTrackedTarget(
+private fun trackTouch(
     scene: SKScene,
     event: SKTouchEvent,
     referenceNode: SKNode,
-    referencePoint: Vector2,
-    deliver: SKNode.(SKTouch) -> Unit,
-) {
-    val target = scene.activeTouchTargets[event.pointerId] ?: return
-    target.deliver(SKTouch(event.pointerId, target.convertFrom(referencePoint, referenceNode)))
-}
+    point: Vector2,
+): Pair<SKNode, SKTouch>? =
+    if (event.phase == SKTouchPhase.Began) {
+        beginTouch(scene, event.pointerId, referenceNode, point)
+    } else {
+        continueTouch(scene, event, point)
+    }
 
-/**
- * Delivers to the node tracking [event]'s pointer and stops tracking it -- for
- * [SKTouchPhase.Ended]/[SKTouchPhase.Cancelled].
- */
-private fun dispatchToReleasedTarget(
+private fun beginTouch(
+    scene: SKScene,
+    pointerId: Int,
+    referenceNode: SKNode,
+    point: Vector2,
+): Pair<SKNode, SKTouch>? =
+    hitTestInteractiveNode(scene, referenceNode, point)?.let { target ->
+        val touch = SKTouch(pointerId, referenceNode, point)
+        scene.activeTouchTargets[pointerId] = target
+        scene.activeTouches[pointerId] = touch
+        target to touch
+    }
+
+private fun continueTouch(
     scene: SKScene,
     event: SKTouchEvent,
-    referenceNode: SKNode,
-    referencePoint: Vector2,
-    deliver: SKNode.(SKTouch) -> Unit,
-) {
-    val target = scene.activeTouchTargets.remove(event.pointerId) ?: return
-    target.deliver(SKTouch(event.pointerId, target.convertFrom(referencePoint, referenceNode)))
+    point: Vector2,
+): Pair<SKNode, SKTouch>? {
+    val target = scene.activeTouchTargets[event.pointerId]
+    val touch = scene.activeTouches[event.pointerId]
+    val stationary = event.phase == SKTouchPhase.Moved && point == touch?.referencePoint
+    if (target == null || touch == null || stationary) return null
+    touch.moveTo(point)
+    touch.phase = event.phase
+    return target to touch
 }
 
 /**
- * The frontmost (highest [SKNode.zPosition], ties broken by tree-traversal order -- the same rule
- * [SKRenderCommandList.kt] sorts draw order by) [SKNode.isUserInteractionEnabled] node in
- * [scene]'s tree whose [SKNode.containsLocalPoint] contains [referencePoint] (expressed in
- * [referenceNode]'s space). Skips hidden subtrees, like rendering does. `null` if nothing matches.
+ * The frontmost (highest *effective* z-position -- this node's own [SKNode.zPosition] plus every
+ * ancestor's, accumulated down the tree the same way [SKRenderCommandList.kt] does for draw
+ * order, so a container's zPosition also wins it hit-test priority over its siblings even when
+ * its children are left at the default `0`; ties broken by tree-traversal order)
+ * [SKNode.isUserInteractionEnabled] node in [scene]'s tree whose [SKNode.containsLocalPoint]
+ * contains [referencePoint] (expressed in [referenceNode]'s space). Skips hidden subtrees, like
+ * rendering does. `null` if nothing matches.
  */
 private fun hitTestInteractiveNode(
     scene: SKScene,
@@ -120,16 +137,18 @@ private fun hitTestInteractiveNode(
     fun visit(
         node: SKNode,
         inheritedHidden: Boolean,
+        inheritedZPosition: Float,
     ) {
         order++
         val hidden = inheritedHidden || node.isHidden
+        val zPosition = inheritedZPosition + node.zPosition
         if (!hidden && node.isUserInteractionEnabled) {
             val localPoint = node.convertFrom(referencePoint, referenceNode)
-            if (node.containsLocalPoint(localPoint)) candidates += node to (node.zPosition to order)
+            if (node.containsLocalPoint(localPoint)) candidates += node to (zPosition to order)
         }
-        for (child in node.children) visit(child, hidden)
+        for (child in node.children) visit(child, hidden, zPosition)
     }
 
-    visit(scene, false)
+    visit(scene, inheritedHidden = false, inheritedZPosition = 0f)
     return candidates.maxWithOrNull(compareBy({ it.second.first }, { it.second.second }))?.first
 }

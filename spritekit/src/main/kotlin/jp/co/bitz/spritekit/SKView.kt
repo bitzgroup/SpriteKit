@@ -50,7 +50,7 @@ public class SKView
             setEGLContextClientVersion(2)
             setRenderer(SceneRenderer())
             renderMode = RENDERMODE_CONTINUOUSLY
-            audioPlaybackFactory = realAudioPlaybackFactory
+            audioPlaybackFactory = realAudioPlaybackFactory(context.applicationContext)
         }
 
         /**
@@ -122,17 +122,25 @@ public class SKView
         override fun onTouchEvent(event: MotionEvent): Boolean {
             val phase = skTouchPhaseForAction(event.actionMasked)
             if (phase != null) {
-                val index = event.actionIndex
-                val snapshot =
-                    SKTouchEvent(
-                        pointerId = event.getPointerId(index),
-                        x = event.getX(index),
-                        y = event.getY(index),
-                        phase = phase,
-                    )
+                // A move or cancel reports every pointer on screen; a down/up only the one that changed.
+                val indices =
+                    if (phase == SKTouchPhase.Moved || phase == SKTouchPhase.Cancelled) {
+                        0 until event.pointerCount
+                    } else {
+                        listOf(event.actionIndex)
+                    }
+                val snapshots =
+                    indices.map { index ->
+                        SKTouchEvent(
+                            pointerId = event.getPointerId(index),
+                            x = event.getX(index),
+                            y = event.getY(index),
+                            phase = phase,
+                        )
+                    }
                 runOnGLThread {
-                    currentScene?.let { dispatchTouch(it, snapshot, viewWidth, viewHeight) }
-                    onTouch?.invoke(snapshot)
+                    currentScene?.let { dispatchTouches(it, snapshots, viewWidth, viewHeight) }
+                    snapshots.forEach { onTouch?.invoke(it) }
                 }
             }
             return true
