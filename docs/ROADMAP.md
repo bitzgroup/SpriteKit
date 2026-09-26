@@ -182,8 +182,8 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`. **Deferred**
       (see "Explicitly Out of Scope" below): `run(_:onChildWithName:)`
 - [x] `SKAction.follow(_:asOffset:orientToPath:duration:)` / `follow(_:asOffset:orientToPath:speed:)`
-      — path-following, added after a host app (Backgammon) needed arc motion along a quadratic
-      curve and found it missing. Follows only a path's first contour, via
+      — path-following, added after a host app needed arc motion along a quadratic curve and found
+      it missing. Follows only a path's first contour, via
       `android.graphics.PathMeasure.getPosTan` (arc-length parameterized, so it works for curves,
       not just straight segments); `reversed()` flips a `reversedDirection` flag rather than
       reversing the `Path` itself, since `android.graphics.Path` has no public reversal API.
