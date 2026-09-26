@@ -148,6 +148,11 @@ branching model.
   — this is an OSS project.
 - **Documentation location:** project docs beyond the root `README.md` (roadmap, architecture
   notes, API compatibility notes, etc.) live under `docs/`.
+- **Never name a private/unreleased consumer app.** This repo is public; some fixes here are
+  discovered while building other apps against it, and those apps may be private or unreleased.
+  Never reference such an app by name anywhere in this repo — commit messages, PR titles/
+  descriptions, code comments, or docs (e.g. `docs/ROADMAP.md`'s changelog-style notes). Use
+  generic phrasing instead ("a host app", "a consumer app").
 - **No app/demo module, ever.** This repo is meant to be embedded into host apps as a **git
   submodule** — `settings.gradle.kts` must only ever include the `:spritekit` library module.
   Adding a sample/demo Android app module (even for internal testing) would confuse a host app's
