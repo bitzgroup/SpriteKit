@@ -94,7 +94,15 @@ internal class SKSceneRenderer {
         clearFirst: Boolean = true,
         outerClip: Rect? = null,
     ) {
-        val projection = computeSceneProjection(scene.size, scene.anchorPoint, scene.scaleMode, viewWidth, viewHeight)
+        val projection =
+            computeSceneProjection(
+                scene.size,
+                scene.anchorPoint,
+                scene.scaleMode,
+                viewWidth,
+                viewHeight,
+                hasCamera = scene.camera != null,
+            )
         Matrix.orthoM(mvpMatrix, 0, projection.left, projection.right, projection.bottom, projection.top, -1f, 1f)
 
         val size = viewportSize ?: Vector2(viewWidth.toFloat(), viewHeight.toFloat())

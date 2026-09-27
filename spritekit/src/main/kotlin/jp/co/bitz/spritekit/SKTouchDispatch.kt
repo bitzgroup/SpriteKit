@@ -40,7 +40,15 @@ internal fun dispatchTouches(
 ) {
     if (viewWidth <= 0 || viewHeight <= 0) return
     val referenceNode = scene.camera ?: scene
-    val projection = computeSceneProjection(scene.size, scene.anchorPoint, scene.scaleMode, viewWidth, viewHeight)
+    val projection =
+        computeSceneProjection(
+            scene.size,
+            scene.anchorPoint,
+            scene.scaleMode,
+            viewWidth,
+            viewHeight,
+            hasCamera = scene.camera != null,
+        )
     val deliveries = linkedMapOf<Pair<SKTouchPhase, SKNode>, MutableSet<SKTouch>>()
     val released = mutableListOf<Int>()
 

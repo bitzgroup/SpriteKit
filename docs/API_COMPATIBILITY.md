@@ -85,6 +85,17 @@ categories recur throughout and are called out once here rather than per item:
   which put *all* of it on the max-coordinate side for the default `anchorPoint (0, 0)`.
   `bitzgroup/tic-tac-toe`'s Android build visibly sat lower on screen than its iOS twin because of
   this — found comparing screenshots of the two apps, not from a written spec.)
+- **`anchorPoint` is a no-op whenever `SKScene.camera` is set** — every render command and touch
+  coordinate is already expressed relative to the camera (camera-relative `(0, 0)` *is* the
+  camera's own position), so the projection is always centered on that reference point instead,
+  regardless of `anchorPoint`. Verified against Apple's real `SKScene`/`SKCameraNode` on an iOS
+  Simulator: a camera's position renders at the center of the view no matter what `anchorPoint` is
+  set to (swept `(0, 0)`/`(0.5, 0.5)`/`(1, 1)`, pixel-identical each time) — unlike the no-camera
+  case just above, where `anchorPoint` only relabels the still-centered rect's own coordinates,
+  this makes it disappear from the equation entirely once a camera is active. `SKCameraNode
+  .containsNode`'s viewport approximation follows the same rule. (Found building a downstream hex-
+  grid wargame: with the default `anchorPoint (0, 0)` and a camera panned to frame the board, the
+  board rendered pushed into one corner of the view instead of centered on the camera.)
 - **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
   action evaluation/physics simulation isn't implemented yet — there's no action or physics system
   to propagate to until later phases. Only `SKScene.isPaused` (inherited from here) is currently

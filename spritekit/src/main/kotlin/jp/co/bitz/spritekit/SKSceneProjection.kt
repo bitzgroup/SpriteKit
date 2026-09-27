@@ -14,7 +14,8 @@ internal data class SKSceneProjection(
 
 /**
  * Computes the [SKSceneProjection] for a scene of [sceneSize] with [scaleMode] and [anchorPoint],
- * presented in a viewport of [viewWidth] by [viewHeight] pixels.
+ * presented in a viewport of [viewWidth] by [viewHeight] pixels. [hasCamera] must be `true` when
+ * the scene has an [SKCameraNode] assigned (`scene.camera != null`) — see below.
  *
  * For [SKSceneScaleMode.AspectFit]/[SKSceneScaleMode.AspectFill], the declared [sceneSize] rect
  * is always centered within the viewport — [anchorPoint] never shifts *where* it renders, only
@@ -30,16 +31,28 @@ internal data class SKSceneProjection(
  * else in the scene the other way. `bitzgroup/tic-tac-toe`'s Android build visibly sat lower on
  * screen than its iOS twin because of this. See `docs/API_COMPATIBILITY.md`.)
  *
+ * **[hasCamera] makes [anchorPoint] a no-op, always centering on scene-local `(0, 0)` instead.**
+ * Every render command and touch coordinate is already expressed relative to the camera (see
+ * `SKRenderCommandList.kt`/`SKTouchDispatch.kt` — "camera-relative `(0, 0)`" *is* the camera's own
+ * position), so this rect must be centered on that same reference point for the camera's position
+ * to land in the middle of the viewport. Verified against Apple's real `SKScene`/`SKCameraNode` on
+ * an iOS Simulator: an `SKCameraNode`'s position renders at the center of the view regardless of
+ * `anchorPoint` (swept `(0, 0)`/`(0.5, 0.5)`/`(1, 1)`, pixel-identical each time) — unlike the
+ * no-camera case just above, where `anchorPoint` only relabels the (still-centered) rect's
+ * coordinates. See `docs/API_COMPATIBILITY.md`.
+ *
  * Pure Kotlin — no OpenGL/Android dependency — so the letterbox/crop math for each [scaleMode] is
  * unit-testable independent of a live GL context; only building the actual orthographic matrix
  * from this result (in the sprite renderer) touches `android.opengl.Matrix`.
  */
+@Suppress("LongParameterList")
 internal fun computeSceneProjection(
     sceneSize: Vector2,
     anchorPoint: Vector2,
     scaleMode: SKSceneScaleMode,
     viewWidth: Int,
     viewHeight: Int,
+    hasCamera: Boolean = false,
 ): SKSceneProjection {
     val (projectedWidth, projectedHeight) =
         when (scaleMode) {
@@ -50,8 +63,10 @@ internal fun computeSceneProjection(
     // Where the declared sceneSize rect's own center sits, in the local coordinates anchorPoint
     // puts it in: (0.5, 0.5) always means "at scene-local (0, 0)" — halfway between the anchorPoint
     // (0, 0)) and (1, 1) corners this rect spans, in whichever direction anchorPoint offsets them.
-    val centerX = sceneSize.x * (0.5f - anchorPoint.x)
-    val centerY = sceneSize.y * (0.5f - anchorPoint.y)
+    // With a camera, anchorPoint plays no role at all -- see this function's KDoc.
+    val effectiveAnchorPoint = if (hasCamera) Vector2(0.5f, 0.5f) else anchorPoint
+    val centerX = sceneSize.x * (0.5f - effectiveAnchorPoint.x)
+    val centerY = sceneSize.y * (0.5f - effectiveAnchorPoint.y)
     return SKSceneProjection(
         left = centerX - projectedWidth / 2f,
         right = centerX + projectedWidth / 2f,
