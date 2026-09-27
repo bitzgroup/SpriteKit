@@ -5,11 +5,13 @@ package jp.co.bitz.spritekit
  * `SKTileSet`. Configured programmatically (no `.sks` tile-set archive format to parse, and no
  * bundled/built-in tile sets — see `docs/API_COMPATIBILITY.md`).
  *
- * Only grid-shaped maps are supported — Apple's `SKTileSetType`/isometric/hexagonal variants
- * aren't, so there's no corresponding property here; see `docs/API_COMPATIBILITY.md`.
+ * [type] selects grid, pointy-top-hexagonal, or flat-top-hexagonal layout for any
+ * [SKTileMapNode] built from this set; see [SKTileSetType]. Apple's `.isometric` case isn't
+ * implemented — see `docs/API_COMPATIBILITY.md`.
  */
 public class SKTileSet(
     public val tileGroups: List<SKTileGroup>,
+    public val type: SKTileSetType = SKTileSetType.GRID,
 ) {
     /** An identifying name, purely for the caller's own bookkeeping. */
     public var name: String? = null

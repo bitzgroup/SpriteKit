@@ -3,8 +3,8 @@ package jp.co.bitz.spritekit
 import kotlin.math.floor
 import kotlin.time.Duration
 
-/** Each of a tile's 8 neighbor directions paired with its [SKTileAdjacencyMask] bit and `(column, row)` offset. */
-private val NEIGHBOR_OFFSETS =
+/** Each of a grid tile's 8 neighbor directions paired with its [SKTileAdjacencyMask] bit and `(column, row)` offset. */
+private val GRID_NEIGHBOR_OFFSETS =
     listOf(
         SKTileAdjacencyMask.UP to (0 to 1),
         SKTileAdjacencyMask.UPPER_RIGHT to (1 to 1),
@@ -17,13 +17,85 @@ private val NEIGHBOR_OFFSETS =
     )
 
 /**
+ * A pointy-top hex cell's 6 neighbor directions (no `UP`/`DOWN` -- see [SKTileSetType.HEXAGONAL_POINTY]),
+ * for a cell on an even-numbered row (`row % 2 == 0`) in the "odd-r offset" layout.
+ */
+private val HEXAGONAL_POINTY_EVEN_ROW_OFFSETS =
+    listOf(
+        SKTileAdjacencyMask.RIGHT to (1 to 0),
+        SKTileAdjacencyMask.UPPER_RIGHT to (0 to 1),
+        SKTileAdjacencyMask.UPPER_LEFT to (-1 to 1),
+        SKTileAdjacencyMask.LEFT to (-1 to 0),
+        SKTileAdjacencyMask.LOWER_LEFT to (-1 to -1),
+        SKTileAdjacencyMask.LOWER_RIGHT to (0 to -1),
+    )
+
+/** Same as [HEXAGONAL_POINTY_EVEN_ROW_OFFSETS], for a cell on an odd-numbered row (`row % 2 != 0`). */
+private val HEXAGONAL_POINTY_ODD_ROW_OFFSETS =
+    listOf(
+        SKTileAdjacencyMask.RIGHT to (1 to 0),
+        SKTileAdjacencyMask.UPPER_RIGHT to (1 to 1),
+        SKTileAdjacencyMask.UPPER_LEFT to (0 to 1),
+        SKTileAdjacencyMask.LEFT to (-1 to 0),
+        SKTileAdjacencyMask.LOWER_LEFT to (0 to -1),
+        SKTileAdjacencyMask.LOWER_RIGHT to (1 to -1),
+    )
+
+/**
+ * A flat-top hex cell's 6 neighbor directions (no `LEFT`/`RIGHT` -- see [SKTileSetType.HEXAGONAL_FLAT]),
+ * for a cell on an even-numbered column (`column % 2 == 0`) in the "odd-q offset" layout.
+ */
+private val HEXAGONAL_FLAT_EVEN_COLUMN_OFFSETS =
+    listOf(
+        SKTileAdjacencyMask.UP to (0 to 1),
+        SKTileAdjacencyMask.DOWN to (0 to -1),
+        SKTileAdjacencyMask.UPPER_RIGHT to (1 to 0),
+        SKTileAdjacencyMask.LOWER_RIGHT to (1 to -1),
+        SKTileAdjacencyMask.LOWER_LEFT to (-1 to -1),
+        SKTileAdjacencyMask.UPPER_LEFT to (-1 to 0),
+    )
+
+/** Same as [HEXAGONAL_FLAT_EVEN_COLUMN_OFFSETS], for a cell on an odd-numbered column (`column % 2 != 0`). */
+private val HEXAGONAL_FLAT_ODD_COLUMN_OFFSETS =
+    listOf(
+        SKTileAdjacencyMask.UP to (0 to 1),
+        SKTileAdjacencyMask.DOWN to (0 to -1),
+        SKTileAdjacencyMask.UPPER_RIGHT to (1 to 1),
+        SKTileAdjacencyMask.LOWER_RIGHT to (1 to 0),
+        SKTileAdjacencyMask.LOWER_LEFT to (-1 to 0),
+        SKTileAdjacencyMask.UPPER_LEFT to (-1 to 1),
+    )
+
+/**
+ * [type]'s neighbor-direction table for a cell at ([column], [row]) -- for the two hexagonal
+ * types this depends on the cell's own row/column parity (adjacent rows/columns are offset from
+ * each other by half a tile), unlike [SKTileSetType.GRID] where it's fixed.
+ */
+private fun neighborOffsets(
+    type: SKTileSetType,
+    column: Int,
+    row: Int,
+): List<Pair<Int, Pair<Int, Int>>> =
+    when (type) {
+        SKTileSetType.GRID -> GRID_NEIGHBOR_OFFSETS
+        SKTileSetType.HEXAGONAL_POINTY ->
+            if (row % 2 == 0) HEXAGONAL_POINTY_EVEN_ROW_OFFSETS else HEXAGONAL_POINTY_ODD_ROW_OFFSETS
+        SKTileSetType.HEXAGONAL_FLAT ->
+            if (column % 2 == 0) HEXAGONAL_FLAT_EVEN_COLUMN_OFFSETS else HEXAGONAL_FLAT_ODD_COLUMN_OFFSETS
+    }
+
+/** How much closer together adjacent hex rows (pointy-top) or columns (flat-top) sit than a full tile. */
+private const val HEX_LINE_SPACING_FACTOR = 0.75f
+
+/**
  * A grid of tiles drawn from [tileSet] — mirrors Apple's `SKTileMapNode`. Column `0`/row `0` is
  * the bottom-left cell (matching this library's y-up convention); [anchorPoint] (like
  * [SKSpriteNode.anchorPoint]) is the normalized point within the whole grid that this node's own
  * [SKNode.position] refers to, defaulting to `(0.5, 0.5)` (centered).
  *
- * Only grid-shaped maps are supported (see `docs/API_COMPATIBILITY.md`); [numberOfColumns]/
- * [numberOfRows] are fixed at construction — Apple allows resizing a live map, this port doesn't.
+ * Laid out per [tileSet]'s [SKTileSet.type] — a plain grid, or pointy-/flat-top hexagons (see
+ * [SKTileSetType]); [numberOfColumns]/[numberOfRows] are fixed at construction — Apple allows
+ * resizing a live map, this port doesn't.
  *
  * Rendered by contributing one quad [SKRenderCommand] per non-empty cell — the same triangle-list
  * shape [SKSpriteNode]/[SKEmitterNode] particles already produce, so [SKSceneRenderer] needed no
@@ -133,8 +205,27 @@ public class SKTileMapNode(
         definitions[index(column, row)] = tileDefinition
     }
 
-    /** This map's full grid size, in this node's own local space. */
-    private val mapSize: Vector2 get() = Vector2(numberOfColumns * tileSize.x, numberOfRows * tileSize.y)
+    /**
+     * This map's full layout size, in this node's own local space. For the hexagonal types this
+     * is the tightest box containing every cell, which — because alternating rows/columns
+     * overlap by [HEX_LINE_SPACING_FACTOR] of a tile and are offset by half a tile from their
+     * neighbors — is *not* simply `numberOfColumns * numberOfRows` tiles' worth of space.
+     */
+    private val mapSize: Vector2
+        get() =
+            when (tileSet.type) {
+                SKTileSetType.GRID -> Vector2(numberOfColumns * tileSize.x, numberOfRows * tileSize.y)
+                SKTileSetType.HEXAGONAL_POINTY ->
+                    Vector2(
+                        (numberOfColumns + 0.5f) * tileSize.x,
+                        tileSize.y + (numberOfRows - 1) * HEX_LINE_SPACING_FACTOR * tileSize.y,
+                    )
+                SKTileSetType.HEXAGONAL_FLAT ->
+                    Vector2(
+                        tileSize.x + (numberOfColumns - 1) * HEX_LINE_SPACING_FACTOR * tileSize.x,
+                        (numberOfRows + 0.5f) * tileSize.y,
+                    )
+            }
 
     /** The center of tile ([column], [row]), in this node's own local space -- not bounds-checked, matching Apple. */
     public fun centerOfTile(
@@ -142,28 +233,99 @@ public class SKTileMapNode(
         row: Int,
     ): Vector2 {
         val size = mapSize
-        return Vector2(
-            (column + 0.5f) * tileSize.x - anchorPoint.x * size.x,
-            (row + 0.5f) * tileSize.y - anchorPoint.y * size.y,
-        )
+        val beforeAnchor =
+            when (tileSet.type) {
+                SKTileSetType.GRID -> Vector2((column + 0.5f) * tileSize.x, (row + 0.5f) * tileSize.y)
+                SKTileSetType.HEXAGONAL_POINTY -> {
+                    val rowShift = if (row % 2 == 0) 0f else 0.5f * tileSize.x
+                    Vector2(
+                        (column + 0.5f) * tileSize.x + rowShift,
+                        (row * HEX_LINE_SPACING_FACTOR + 0.5f) * tileSize.y,
+                    )
+                }
+                SKTileSetType.HEXAGONAL_FLAT -> {
+                    val columnShift = if (column % 2 == 0) 0f else 0.5f * tileSize.y
+                    Vector2(
+                        (column * HEX_LINE_SPACING_FACTOR + 0.5f) * tileSize.x,
+                        (row + 0.5f) * tileSize.y + columnShift,
+                    )
+                }
+            }
+        return Vector2(beforeAnchor.x - anchorPoint.x * size.x, beforeAnchor.y - anchorPoint.y * size.y)
     }
 
     /**
      * The column index [fromPosition] (in this node's own local space) falls within -- not
-     * bounds-checked, matching Apple.
+     * bounds-checked, matching Apple. For the hexagonal types, this is the column of whichever
+     * cell's [centerOfTile] is nearest [fromPosition] (equivalent to the grid case's simple
+     * division, since a regular hexagonal tiling's cells are exactly their centers' Voronoi
+     * regions).
      */
-    public fun tileColumnIndex(fromPosition: Vector2): Int {
-        val size = mapSize
-        return floor((fromPosition.x + anchorPoint.x * size.x) / tileSize.x).toInt()
-    }
+    public fun tileColumnIndex(fromPosition: Vector2): Int =
+        if (tileSet.type == SKTileSetType.GRID) {
+            val size = mapSize
+            floor((fromPosition.x + anchorPoint.x * size.x) / tileSize.x).toInt()
+        } else {
+            nearestTile(fromPosition).first
+        }
 
     /**
      * The row index [fromPosition] (in this node's own local space) falls within -- not
-     * bounds-checked, matching Apple.
+     * bounds-checked, matching Apple. See [tileColumnIndex] for the hexagonal-type approach.
      */
-    public fun tileRowIndex(fromPosition: Vector2): Int {
+    public fun tileRowIndex(fromPosition: Vector2): Int =
+        if (tileSet.type == SKTileSetType.GRID) {
+            val size = mapSize
+            floor((fromPosition.y + anchorPoint.y * size.y) / tileSize.y).toInt()
+        } else {
+            nearestTile(fromPosition).second
+        }
+
+    /**
+     * A rough (column, row) guess for whichever hexagonal cell [localPosition] falls within,
+     * cheap to compute but not always exact right at a cell boundary -- see [nearestTile].
+     */
+    private fun roughHexGuess(localPosition: Vector2): Pair<Int, Int> {
         val size = mapSize
-        return floor((fromPosition.y + anchorPoint.y * size.y) / tileSize.y).toInt()
+        val beforeAnchor = Vector2(localPosition.x + anchorPoint.x * size.x, localPosition.y + anchorPoint.y * size.y)
+        return when (tileSet.type) {
+            SKTileSetType.HEXAGONAL_POINTY -> {
+                val rowSpacing = HEX_LINE_SPACING_FACTOR * tileSize.y
+                floor(beforeAnchor.x / tileSize.x).toInt() to floor(beforeAnchor.y / rowSpacing).toInt()
+            }
+            SKTileSetType.HEXAGONAL_FLAT -> {
+                val columnSpacing = HEX_LINE_SPACING_FACTOR * tileSize.x
+                floor(beforeAnchor.x / columnSpacing).toInt() to floor(beforeAnchor.y / tileSize.y).toInt()
+            }
+            SKTileSetType.GRID -> error("nearestTile is only used for the hexagonal types")
+        }
+    }
+
+    /**
+     * The hexagonal cell whose [centerOfTile] is closest to [localPosition] -- a small local
+     * search around [roughHexGuess] rather than a closed-form formula, since a placed hex tile is
+     * exactly the Voronoi region of its own center. The search window is generous enough that
+     * [roughHexGuess]'s occasional imprecision near a cell boundary never misses the true nearest
+     * cell.
+     */
+    private fun nearestTile(localPosition: Vector2): Pair<Int, Int> {
+        val (roughColumn, roughRow) = roughHexGuess(localPosition)
+        var best = roughColumn to roughRow
+        var bestDistanceSquared = Float.MAX_VALUE
+        for (deltaRow in -2..2) {
+            for (deltaColumn in -2..2) {
+                val candidate = (roughColumn + deltaColumn) to (roughRow + deltaRow)
+                val center = centerOfTile(candidate.first, candidate.second)
+                val dx = center.x - localPosition.x
+                val dy = center.y - localPosition.y
+                val distanceSquared = dx * dx + dy * dy
+                if (distanceSquared < bestDistanceSquared) {
+                    bestDistanceSquared = distanceSquared
+                    best = candidate
+                }
+            }
+        }
+        return best
     }
 
     override val localBounds: Rect
@@ -178,15 +340,16 @@ public class SKTileMapNode(
         }
 
     /**
-     * Re-evaluates ([column], [row])'s own definition, then each of its 8 neighbors' -- placing
-     * or clearing a tile can change what best fits any of them.
+     * Re-evaluates ([column], [row])'s own definition, then each of its neighbors' (8 for
+     * [SKTileSetType.GRID], 6 for the hexagonal types) -- placing or clearing a tile can change
+     * what best fits any of them.
      */
     private fun remapCellAndNeighbors(
         column: Int,
         row: Int,
     ) {
         remapCell(column, row)
-        for ((_, offset) in NEIGHBOR_OFFSETS) {
+        for ((_, offset) in neighborOffsets(tileSet.type, column, row)) {
             val (dx, dy) = offset
             remapCell(column + dx, row + dy)
         }
@@ -206,7 +369,7 @@ public class SKTileMapNode(
     }
 
     /**
-     * Which of ([column], [row])'s 8 neighbors currently belong to [group] too, as an
+     * Which of ([column], [row])'s neighbors currently belong to [group] too, as an
      * [SKTileAdjacencyMask] combination.
      */
     private fun neighborMask(
@@ -215,7 +378,7 @@ public class SKTileMapNode(
         group: SKTileGroup,
     ): Int {
         var mask = 0
-        for ((bit, offset) in NEIGHBOR_OFFSETS) {
+        for ((bit, offset) in neighborOffsets(tileSet.type, column, row)) {
             val (dx, dy) = offset
             if (tileGroup(column + dx, row + dy) === group) mask = mask or bit
         }

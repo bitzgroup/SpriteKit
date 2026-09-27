@@ -302,8 +302,17 @@ categories recur throughout and are called out once here rather than per item:
 
 - **Configured programmatically only** — no `.sks` tile-set archive format to parse, and no
   bundled/built-in tile sets (Apple ships several) to draw from.
-- **Only grid-shaped maps are supported.** Apple's `SKTileSetType` (and the isometric/hexagonal
-  variants it selects) isn't implemented, so `SKTileSet` has no corresponding property at all.
+- **`SKTileSetType` covers `GRID`/`HEXAGONAL_POINTY`/`HEXAGONAL_FLAT` — Apple's `.isometric` case
+  isn't implemented.** No isometric layout math exists in this port; `SKTileSet.type` can't be set
+  to it because the enum has no such case. `SKTileSet.type` defaults to `GRID`, matching this
+  port's original (and, before this, only) behavior.
+- **The two hexagonal layouts use fixed "offset coordinate" conventions**, not Apple's (largely
+  undocumented) internal scheme: `HEXAGONAL_POINTY` is "odd-r" (odd-numbered rows shifted right by
+  half a tile width; rows spaced 3/4 of a tile height apart), `HEXAGONAL_FLAT` is "odd-q" (odd-
+  numbered columns shifted down by half a tile height; columns spaced 3/4 of a tile width apart).
+  `centerOfTile`/`tileColumnIndex`/`tileRowIndex` and the map's overall layout size (which feeds
+  `calculateAccumulatedFrame`) all follow this same convention consistently, but Apple's own exact
+  formulas for these aren't public, so this is *contract-conformant, not bit-identical*.
 - **`SKTileDefinition.textures` may be empty**, unlike Apple (which always requires at least one)
   — an empty-textures definition renders flat-colored, this port's usual "no texture" convention
   (matching untextured `SKSpriteNode`/`SKEmitterNode` particles). Chosen deliberately so
@@ -312,14 +321,20 @@ categories recur throughout and are called out once here rather than per item:
   test).
 - **`SKTileAdjacencyMask` is a plain `Int`-bitmask `object`** (`SKTileAdjacencyMask.UP`, `.ALL`,
   etc.), matching this library's existing `categoryBitMask`-style bitmask convention, rather than
-  a dedicated option-set type.
+  a dedicated option-set type. It's shared across all three `SKTileSetType`s rather than each
+  getting its own narrower mask type: a hexagonal tile group's rules simply never see 2 of the 8
+  bits set (`UP`/`DOWN` for `HEXAGONAL_POINTY`, `LEFT`/`RIGHT` for `HEXAGONAL_FLAT`), since a hex
+  cell only has 6 neighbors.
 - **`SKTileMapNode.numberOfColumns`/`numberOfRows` are fixed at construction** — Apple allows
   resizing a live map (preserving existing tiles); this port doesn't.
 - **Automapping's rule-matching algorithm is *contract-conformant, not bit-identical*** with
   Apple's own (undocumented) version: it scores each candidate `SKTileGroupRule` by how many
-  adjacency bits it shares with the tile's actual same-group 8-neighbor configuration (an exact
-  match always wins outright; otherwise the closest by Hamming distance), rather than Apple's
-  unpublished matching/tie-breaking behavior.
+  adjacency bits it shares with the tile's actual same-group neighbor configuration (8 neighbors
+  for `GRID`, 6 for the hexagonal types — an exact match always wins outright; otherwise the
+  closest by Hamming distance), rather than Apple's unpublished matching/tie-breaking behavior.
+  For the hexagonal types, which of the 8 `SKTileAdjacencyMask` bits corresponds to which actual
+  neighbor cell depends on the tile's own row (`HEXAGONAL_POINTY`) or column (`HEXAGONAL_FLAT`)
+  parity, since adjacent rows/columns are offset from each other by half a tile.
 - **Placement/rotation/flip variants of `SKTileDefinition`** aren't implemented — every tile
   renders axis-aligned, unrotated.
 - **Tile map rendering reuses the existing `SKRenderCommandList.kt` pipeline** — each non-empty

@@ -383,6 +383,9 @@ algorithms (steering, noise, Gaussian sampling).
       (placement, clearing, non-automapped fallback), and coordinate conversions (14), plus 2 new
       tile-map render tests in `SKRenderCommandListTest.kt`
 
+> Hexagonal layouts (`SKTileSetType.HEXAGONAL_POINTY`/`HEXAGONAL_FLAT`) were added later, in
+> Phase 15.
+
 ## Phase 10 — Input
 
 - [x] Full `SKNode` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
@@ -527,6 +530,50 @@ full parity; see `docs/ARCHITECTURE.md`.
       tile maps, camera/crop, constraints, input, transitions, audio, shaders)
 - **Not in this repo**: no sample/demo app — this repo is consumed as a git submodule by host
       apps, so it stays library code + docs only, same policy as GameplayKit
+
+## Phase 15 — Hexagonal Tile Maps
+
+- [x] `SKTileSetType` — `GRID` (Phase 9's original, unchanged, behavior), `HEXAGONAL_POINTY`,
+      `HEXAGONAL_FLAT`. Apple's `.isometric` case isn't implemented — no isometric layout math
+      exists in this port; see `docs/API_COMPATIBILITY.md`
+- [x] `SKTileSet.type` — new constructor parameter/property, defaulting to `GRID` (fully
+      backward-compatible with every existing `SKTileSet` call site)
+- [x] `SKTileMapNode.centerOfTile`/`tileColumnIndex`/`tileRowIndex`/`calculateAccumulatedFrame`
+      (via the map's internal layout size) now branch on `tileSet.type`:
+    - `HEXAGONAL_POINTY` — regular hexagons with a vertex pointing up, arranged in horizontal
+      rows; odd rows (`row % 2 != 0`) are shifted right by half a tile width relative to even
+      rows (the "odd-r offset" convention), and rows are spaced 3/4 of a tile height apart
+      (adjacent rows overlap by the other 1/4, matching a regular hexagon's geometry)
+    - `HEXAGONAL_FLAT` — the same idea rotated 90°: regular hexagons with a flat edge pointing
+      up, arranged in vertical columns, odd columns shifted down by half a tile height (the
+      "odd-q offset" convention), columns spaced 3/4 of a tile width apart
+    - `tileColumnIndex`/`tileRowIndex` for the hexagonal types pick whichever cell's
+      `centerOfTile` is nearest the queried position (a small fixed-radius local search around a
+      cheap rough guess, not a closed-form formula) — equivalent to the grid case's simple
+      division, since a regular hexagonal tiling's cells are exactly the Voronoi regions of their
+      own centers
+- [x] Automapping's neighbor-adjacency table is now per-`SKTileSetType`, and — for the two
+      hexagonal types only — depends on the cell's own row/column parity (adjacent rows/columns
+      are offset from each other by half a tile, so which grid-relative direction a given
+      `SKTileAdjacencyMask` bit points to alternates):
+    - `HEXAGONAL_POINTY` cells have no `UP`/`DOWN` neighbor (adjacent same-row cells touch along
+      a vertical edge) — only `LEFT`/`RIGHT` and the four corner bits are meaningful
+    - `HEXAGONAL_FLAT` cells have no `LEFT`/`RIGHT` neighbor (adjacent same-column cells touch
+      along a horizontal edge) — only `UP`/`DOWN` and the four corner bits are meaningful
+    - `SKTileAdjacencyMask` itself is unchanged (still all 8 directions) — hexagonal tile groups
+      simply never see 2 of the 8 bits set, rather than needing a smaller dedicated mask type
+    - placing or clearing a tile still re-evaluates that tile and each of its neighbors (6 for
+      the hexagonal types, matching their neighbor count), same as Phase 9's grid behavior
+- [x] Rendering needed no changes — hexagonal cells render through the exact same
+      per-cell-quad `SKRenderCommand` path Phase 9 built for grid maps; only the *position* each
+      quad is placed at differs
+- [x] 11 new tests: `SKTileSet.type` defaulting/construction (2, in `SKTileSetTest.kt`), and in
+      the new `SKTileMapNodeHexagonalTest.kt` — `centerOfTile`'s exact odd-row/odd-column pixel
+      shift for both hexagonal types (2), `tileColumnIndex`/`tileRowIndex` round-tripping
+      `centerOfTile` across a 6×6 grid for both types (2, one assertion per cell), layout-size/
+      `calculateAccumulatedFrame` sizing (2), automapping correctly identifying each type's true
+      6 geometric neighbors by row/column parity rather than the grid's 8 (2), and an isolated
+      hex tile matching a no-adjacency rule (1)
 
 ## Explicitly Out of Scope
 

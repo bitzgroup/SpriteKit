@@ -168,6 +168,11 @@ map.setTileGroup(tileSet.tileGroups.first(), column = 0, row = 0)
 scene.addChild(map)
 ```
 
+`SKTileSet(tileGroups = ..., type = SKTileSetType.HEXAGONAL_POINTY)` (or `.HEXAGONAL_FLAT`) lays
+out that same map as regular hexagons instead of a grid — `centerOfTile`/`tileColumnIndex`/
+`tileRowIndex` and automapping all follow suit; see `docs/API_COMPATIBILITY.md` for the exact
+offset-coordinate convention.
+
 ### Camera and crop
 
 ```kotlin
