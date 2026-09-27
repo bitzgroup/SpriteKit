@@ -15,11 +15,25 @@ class SKCameraNodeTest {
 
     @Test
     fun `containsNode is true for a node within the scene's default viewport`() {
-        val scene = SKScene(size = Vector2(100f, 100f)) // anchorPoint (0,0): visible area is (0,0)-(100,100)
+        val scene = SKScene(size = Vector2(100f, 100f)) // with a camera, visible area is (-50,-50)-(50,50)
         val camera = SKCameraNode()
         scene.addChild(camera)
         scene.camera = camera
-        val node = SKSpriteNode(size = Vector2(10f, 10f)).apply { position = Vector2(50f, 50f) }
+        val node = SKSpriteNode(size = Vector2(10f, 10f)).apply { position = Vector2(20f, 20f) }
+        scene.addChild(node)
+
+        assertTrue(camera.containsNode(node))
+    }
+
+    @Test
+    fun `containsNode ignores the scene's anchorPoint once a camera is active`() {
+        val scene = SKScene(size = Vector2(100f, 100f)).apply { anchorPoint = Vector2(1f, 1f) }
+        val camera = SKCameraNode()
+        scene.addChild(camera)
+        scene.camera = camera
+        // Well within (-50,-50)-(50,50) (the camera-centered viewport), but outside (-100,-100)-
+        // (0,0) (what the buggy anchorPoint-offset formula would have used instead).
+        val node = SKSpriteNode(size = Vector2(10f, 10f)).apply { position = Vector2(20f, 20f) }
         scene.addChild(node)
 
         assertTrue(camera.containsNode(node))

@@ -213,6 +213,7 @@ public class SKView
                     fromScene.scaleMode,
                     viewWidth,
                     viewHeight,
+                    hasCamera = fromScene.camera != null,
                 )
             val midX = (projection.left + projection.right) / 2f
             return when (split) {

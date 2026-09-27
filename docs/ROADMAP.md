@@ -227,6 +227,13 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       math, `SKCameraNode.containsNode`, `Rect.intersection`, and crop-node clip-rect
       propagation/nesting)
 
+> **Bug found later (a downstream hex-grid wargame)**: `SKScene.anchorPoint` was still being
+> applied even when a camera was active, so a non-default `anchorPoint` pushed the camera's
+> framing off-center instead of leaving it centered on the camera's own position (Apple's real,
+> verified behavior). Fixed by making `anchorPoint` a no-op whenever `scene.camera != null` —
+> `computeSceneProjection` (`SKSceneProjection.kt`) takes a `hasCamera` flag now, and
+> `SKCameraNode.containsNode` follows the same rule. See `docs/API_COMPATIBILITY.md`.
+
 ## Phase 7 — Physics
 
 Custom sequential-impulse 2D rigid-body engine, zero external dependencies (matches GameplayKit's

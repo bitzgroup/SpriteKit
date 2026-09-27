@@ -94,4 +94,45 @@ class SKSceneProjectionTest {
         // middle half of the 100-tall scene is visible (cropped symmetrically top and bottom).
         assertEquals(SKSceneProjection(left = 0f, right = 100f, bottom = 25f, top = 75f), projection)
     }
+
+    @Test
+    fun `hasCamera makes anchorPoint a no-op, always centering on scene-local (0, 0)`() {
+        val withDefaultAnchor =
+            computeSceneProjection(
+                sceneSize = Vector2(100f, 100f),
+                anchorPoint = Vector2.Zero,
+                scaleMode = SKSceneScaleMode.Fill,
+                viewWidth = 100,
+                viewHeight = 100,
+                hasCamera = true,
+            )
+        val withOffCenterAnchor =
+            computeSceneProjection(
+                sceneSize = Vector2(100f, 100f),
+                anchorPoint = Vector2(1f, 1f),
+                scaleMode = SKSceneScaleMode.Fill,
+                viewWidth = 100,
+                viewHeight = 100,
+                hasCamera = true,
+            )
+
+        val expected = SKSceneProjection(left = -50f, right = 50f, bottom = -50f, top = 50f)
+        assertEquals(expected, withDefaultAnchor)
+        assertEquals(expected, withOffCenterAnchor)
+    }
+
+    @Test
+    fun `hasCamera still respects scaleMode's letterbox-crop math`() {
+        val projection =
+            computeSceneProjection(
+                sceneSize = Vector2(100f, 100f),
+                anchorPoint = Vector2.Zero,
+                scaleMode = SKSceneScaleMode.AspectFit,
+                viewWidth = 200,
+                viewHeight = 100,
+                hasCamera = true,
+            )
+
+        assertEquals(SKSceneProjection(left = -100f, right = 100f, bottom = -50f, top = 50f), projection)
+    }
 }
