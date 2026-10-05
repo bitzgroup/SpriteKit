@@ -135,4 +135,14 @@ class SKSceneProjectionTest {
 
         assertEquals(SKSceneProjection(left = -100f, right = 100f, bottom = -50f, top = 50f), projection)
     }
+
+    @Test
+    fun `resizeFillSceneSize converts the viewport's pixels to density-independent pixels`() {
+        assertEquals(Vector2(360f, 780f), resizeFillSceneSize(viewWidth = 1080, viewHeight = 2340, density = 3f))
+    }
+
+    @Test
+    fun `resizeFillSceneSize is null until the viewport has a size`() {
+        assertEquals(null, resizeFillSceneSize(viewWidth = 0, viewHeight = 0, density = 2f))
+    }
 }

@@ -42,6 +42,9 @@ public class SKView
         private var viewWidth = 0
         private var viewHeight = 0
 
+        /** Pixels per density-independent pixel; refreshed with the surface size. */
+        private var density = context.resources.displayMetrics.density
+
         private var transitionFromScene: SKScene? = null
         private var transitionSpec: SKTransition? = null
         private var transitionElapsed: Duration = Duration.ZERO
@@ -87,9 +90,26 @@ public class SKView
          * `nil` once another scene replaces it. Must only be called on the render thread.
          */
         private fun setCurrentScene(scene: SKScene) {
-            currentScene?.view = null
+            currentScene?.let { outgoing ->
+                outgoing.willMove(this)
+                outgoing.view = null
+            }
             currentScene = scene
             scene.view = this
+            scene.didMove(this)
+            // Apple resizes a `.resizeFill` scene after `didMove(to:)`, on the next layout pass.
+            syncResizeFillSize(scene)
+        }
+
+        /**
+         * Keeps a [SKSceneScaleMode.ResizeFill] scene's [SKScene.size] equal to this view's size
+         * (see [resizeFillSceneSize]). A no-op for other scale modes, before the surface has a size,
+         * or when the size already matches (so [SKScene.didChangeSize] only fires on real changes).
+         * Must only be called on the render thread.
+         */
+        private fun syncResizeFillSize(scene: SKScene) {
+            if (scene.scaleMode != SKSceneScaleMode.ResizeFill) return
+            resizeFillSceneSize(viewWidth, viewHeight, density)?.let { scene.size = it }
         }
 
         /**
@@ -242,12 +262,16 @@ public class SKView
             ) {
                 viewWidth = width
                 viewHeight = height
+                density = resources.displayMetrics.density
                 GLES20.glViewport(0, 0, width, height)
+                currentScene?.let { syncResizeFillSize(it) }
             }
 
             override fun onDrawFrame(gl: GL10) {
                 val deltaTime = clock.tick(System.nanoTime())
                 val scene = currentScene
+                // Also covers a scene whose scaleMode was switched to `.resizeFill` after presenting.
+                scene?.let { syncResizeFillSize(it) }
                 if (scene != null && !scene.isPaused) {
                     scene.update(deltaTime)
                     scene.stepActions(deltaTime)

@@ -14,8 +14,21 @@ import kotlin.time.Duration
  * [SKView]'s render thread — see `docs/ARCHITECTURE.md`.
  */
 public open class SKScene(
-    public var size: Vector2,
+    size: Vector2,
 ) : SKNode() {
+    /**
+     * The scene's size, in points. Assigning a different value calls [didChangeSize] with the
+     * previous size, matching Apple. With [SKSceneScaleMode.ResizeFill], the presenting [SKView]
+     * keeps this in sync with its own size (in density-independent pixels, this library's stand-in
+     * for Apple's points) — see [SKSceneScaleMode.ResizeFill].
+     */
+    public var size: Vector2 = size
+        set(value) {
+            val oldSize = field
+            field = value
+            if (oldSize != value) didChangeSize(oldSize)
+        }
+
     init {
         // Apple's documented default -- every other SKNode defaults to false.
         isUserInteractionEnabled = true
@@ -71,6 +84,27 @@ public open class SKScene(
                 right = size.x * (1f - anchorPoint.x),
                 bottom = size.y * (1f - anchorPoint.y),
             )
+
+    /**
+     * Called on the render thread right after an [SKView] starts presenting this scene (via
+     * [SKView.presentScene]), with [view] already set. Mirrors Apple's `didMove(to:)` — the usual
+     * place to build the scene's content. Like Apple's, it runs *before* an
+     * [SKSceneScaleMode.ResizeFill] scene is resized to the view, so [size] may still be the size
+     * the scene was created with here; override [didChangeSize] to react to the resize.
+     */
+    public open fun didMove(view: SKView) {}
+
+    /**
+     * Called on the render thread right before an [SKView] stops presenting this scene, because
+     * another scene replaced it. Mirrors Apple's `willMove(from:)`; [view] is still set here.
+     */
+    public open fun willMove(view: SKView) {}
+
+    /**
+     * Called whenever [size] changes — whether assigned directly or by the presenting [SKView]
+     * resizing an [SKSceneScaleMode.ResizeFill] scene. Mirrors Apple's `didChangeSize(_:)`.
+     */
+    public open fun didChangeSize(oldSize: Vector2) {}
 
     /**
      * Called once per frame with the time elapsed since the previous frame, before actions,

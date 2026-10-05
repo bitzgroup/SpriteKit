@@ -21,6 +21,51 @@ import android.graphics.RectF
 public open class SKShapeNode(
     public var path: Path? = null,
 ) : SKNode() {
+    public companion object {
+        /**
+         * A circle of [radius] centered on the node's origin. Mirrors Apple's
+         * `SKShapeNode(circleOfRadius:)`.
+         */
+        public fun circle(radius: Float): SKShapeNode =
+            SKShapeNode(Path().apply { addCircle(0f, 0f, radius, Path.Direction.CW) })
+
+        /**
+         * A rectangle of [size] centered on the node's origin, with corners rounded by
+         * [cornerRadius] (`0` for square corners). Mirrors Apple's
+         * `SKShapeNode(rectOf:cornerRadius:)`.
+         */
+        public fun rect(
+            size: Vector2,
+            cornerRadius: Float = 0f,
+        ): SKShapeNode {
+            val half = Vector2(size.x / 2f, size.y / 2f)
+            val bounds = RectF(-half.x, -half.y, half.x, half.y)
+            return SKShapeNode(
+                Path().apply {
+                    if (cornerRadius > 0f) {
+                        addRoundRect(bounds, cornerRadius, cornerRadius, Path.Direction.CW)
+                    } else {
+                        addRect(bounds, Path.Direction.CW)
+                    }
+                },
+            )
+        }
+
+        /**
+         * An ellipse inscribed in a rectangle of [size] centered on the node's origin. Mirrors
+         * Apple's `SKShapeNode(ellipseOf:)`.
+         */
+        public fun ellipse(size: Vector2): SKShapeNode =
+            SKShapeNode(
+                Path().apply {
+                    addOval(
+                        RectF(-size.x / 2f, -size.y / 2f, size.x / 2f, size.y / 2f),
+                        Path.Direction.CW,
+                    )
+                },
+            )
+    }
+
     /** The shape's outline color. Defaults to opaque white, matching Apple. */
     public var strokeColor: Int = Color.WHITE
 
@@ -41,6 +86,18 @@ public open class SKShapeNode(
 
     /** The outline's width, in points. `0` (the default) draws no outline regardless of [strokeColor]. */
     public var lineWidth: Float = 0f
+
+    /** How the ends of an open stroke are drawn. Defaults to [LineCap.Butt], matching Apple. */
+    public var lineCap: LineCap = LineCap.Butt
+
+    /** How the stroke's segments meet at corners. Defaults to [LineJoin.Miter], matching Apple. */
+    public var lineJoin: LineJoin = LineJoin.Miter
+
+    /**
+     * The longest a [LineJoin.Miter] corner may be, in multiples of the line width, before it's
+     * drawn as [LineJoin.Bevel] instead. Defaults to `10`, matching Apple.
+     */
+    public var miterLimit: Float = DEFAULT_MITER_LIMIT
 
     /** Stored for API parity; not implemented — see this class's KDoc. */
     public var glowWidth: Float = 0f

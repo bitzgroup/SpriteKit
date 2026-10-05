@@ -208,6 +208,17 @@ public class SKAction internal constructor(
         /** Runs [block] once, taking no time. */
         public fun run(block: () -> Unit): SKAction = SKAction(Duration.ZERO, SKActionKind.RunBlock(block))
 
+        /**
+         * Starts [action] on the running node's direct child named [onChildWithName] (the first
+         * match, as [SKNode.childNode] finds it), taking no time itself — the child's action keeps
+         * running on its own afterwards. Does nothing if there's no such child. Mirrors Apple's
+         * `run(_:onChildWithName:)`.
+         */
+        public fun run(
+            action: SKAction,
+            onChildWithName: String,
+        ): SKAction = SKAction(Duration.ZERO, SKActionKind.RunOnChild(action, onChildWithName))
+
         /** Removes this node from its parent, instantly — see [SKNode.removeFromParent]. */
         public fun removeFromParent(): SKAction = SKAction(Duration.ZERO, SKActionKind.RemoveFromParent)
 

@@ -11,6 +11,11 @@ public enum class SKSceneScaleMode {
     /** Uniformly scales to fit entirely within the view, letterboxing if needed; preserves aspect ratio. */
     AspectFit,
 
-    /** Doesn't scale; [SKScene.size] instead tracks the view's size directly. */
+    /**
+     * Doesn't scale; [SKScene.size] instead tracks the presenting [SKView]'s size directly, in
+     * density-independent pixels (this library's stand-in for Apple's points), so one scene point
+     * covers the same physical size as on Apple. The view resizes the scene whenever its own size
+     * changes, calling [SKScene.didChangeSize].
+     */
     ResizeFill,
 }

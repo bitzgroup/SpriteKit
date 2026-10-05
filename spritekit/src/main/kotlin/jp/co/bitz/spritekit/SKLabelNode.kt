@@ -15,8 +15,11 @@ public open class SKLabelNode(
     public var text: String = "",
 ) : SKNode() {
     /**
-     * The font family name, resolved via `Typeface.create`. `null` (the default) uses the
-     * platform default font.
+     * The font, named the way Apple names fonts: a family plus an optional PostScript-style
+     * `-Style` suffix (`"Helvetica-Bold"`, `"HelveticaNeue-LightItalic"`, `"Menlo"`) — the suffix's
+     * weight and italic are applied to the family Android resolves via `Typeface.create`. Android
+     * family names (`"sans-serif"`, `"monospace"`, `"sans-serif-medium"`) work too. `null` (the
+     * default) uses the platform default font. See `docs/API_COMPATIBILITY.md`.
      */
     public var fontName: String? = null
 

@@ -91,3 +91,18 @@ private fun aspectScaledSize(
     val scale = if (useMinScale) minOf(widthScale, heightScale) else maxOf(widthScale, heightScale)
     return (viewWidth / scale) to (viewHeight / scale)
 }
+
+/**
+ * The [SKScene.size] a [SKSceneScaleMode.ResizeFill] scene takes in a viewport of [viewWidth] by
+ * [viewHeight] pixels: the viewport's size in density-independent pixels ([density] pixels each),
+ * this library's stand-in for Apple's points. `null` while the viewport has no size yet. Pure
+ * Kotlin so it's unit-testable without a live view.
+ */
+internal fun resizeFillSceneSize(
+    viewWidth: Int,
+    viewHeight: Int,
+    density: Float,
+): Vector2? {
+    if (viewWidth <= 0 || viewHeight <= 0 || density <= 0f) return null
+    return Vector2(viewWidth / density, viewHeight / density)
+}
