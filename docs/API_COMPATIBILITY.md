@@ -402,6 +402,12 @@ categories recur throughout and are called out once here rather than per item:
   bounding-box containment in that node's local space) rather than Apple's (undocumented, possibly
   per-node-type/shape-aware) precise hit-testing — e.g. `SKShapeNode`'s actual path isn't tested,
   just its bounds.
+- **The scene receives every touch no descendant takes, anywhere in its view** — it isn't
+  bounds-tested, matching Apple, where the scene is the last responder for its whole `SKView`.
+  (It used to be bounds-tested like any other node, so touches on the parts of the view showing
+  content outside the scene's `(0, 0)..size` rect — routine once an `SKCameraNode` pans or the
+  content is centered on the origin — were silently dropped, and a scene-level tap handler simply
+  never fired there.)
 - **`SKCropNode` clipping isn't considered during hit-testing** — a touch can still reach a node
   positioned somewhere an ancestor crop node would actually clip it from view.
 - **A touch is hit-tested once, on `touchesBegan`**, then delivered to that same node for

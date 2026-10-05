@@ -132,7 +132,12 @@ private fun continueTouch(
  * its children are left at the default `0`; ties broken by tree-traversal order)
  * [SKNode.isUserInteractionEnabled] node in [scene]'s tree whose [SKNode.containsLocalPoint]
  * contains [referencePoint] (expressed in [referenceNode]'s space). Skips hidden subtrees, like
- * rendering does. `null` if nothing matches.
+ * rendering does.
+ *
+ * The scene itself isn't bounds-tested: like Apple's, it's the last responder for its whole view,
+ * so it receives every touch no descendant takes (if [SKScene.isUserInteractionEnabled]) — even
+ * where the view shows content outside the scene's own `(0, 0)..size` rect, as it routinely does
+ * once an [SKCameraNode] pans away from that rect. `null` only if nothing at all takes it.
  */
 private fun hitTestInteractiveNode(
     scene: SKScene,
@@ -150,7 +155,7 @@ private fun hitTestInteractiveNode(
         order++
         val hidden = inheritedHidden || node.isHidden
         val zPosition = inheritedZPosition + node.zPosition
-        if (!hidden && node.isUserInteractionEnabled) {
+        if (!hidden && node.isUserInteractionEnabled && node !== scene) {
             val localPoint = node.convertFrom(referencePoint, referenceNode)
             if (node.containsLocalPoint(localPoint)) candidates += node to (zPosition to order)
         }
@@ -158,5 +163,6 @@ private fun hitTestInteractiveNode(
     }
 
     visit(scene, inheritedHidden = false, inheritedZPosition = 0f)
-    return candidates.maxWithOrNull(compareBy({ it.second.first }, { it.second.second }))?.first
+    val hit = candidates.maxWithOrNull(compareBy({ it.second.first }, { it.second.second }))?.first
+    return hit ?: scene.takeIf { !it.isHidden && it.isUserInteractionEnabled }
 }
