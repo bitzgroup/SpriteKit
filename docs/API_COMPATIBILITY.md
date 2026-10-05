@@ -96,6 +96,16 @@ categories recur throughout and are called out once here rather than per item:
   .containsNode`'s viewport approximation follows the same rule. (Found building a downstream hex-
   grid wargame: with the default `anchorPoint (0, 0)` and a camera panned to frame the board, the
   board rendered pushed into one corner of the view instead of centered on the camera.)
+- **`SKSceneScaleMode.ResizeFill` sizes the scene in density-independent pixels.** The presenting
+  `SKView` keeps `SKScene.size` equal to its own size in dp — this library's stand-in for Apple's
+  points, so one scene point covers about the same physical size on both platforms — and calls
+  `didChangeSize(_:)` whenever it changes. As on Apple, the resize happens *after* `didMove(view)`,
+  so `size` may still be the scene's initial size inside `didMove`. (Previously `.resizeFill` was
+  rendered exactly like `.fill` — the declared size stretched to the view — and the scene was never
+  resized.)
+- **`didMove(view)`/`willMove(view)` instead of `didMove(to:)`/`willMove(from:)`** — Kotlin can't
+  overload on argument labels alone, so each callback keeps its own name and a plain `view`
+  parameter. Both run on the render thread, from `SKView.presentScene`.
 - **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
   action evaluation/physics simulation isn't implemented yet — there's no action or physics system
   to propagate to until later phases. Only `SKScene.isPaused` (inherited from here) is currently
@@ -141,10 +151,22 @@ categories recur throughout and are called out once here rather than per item:
   this library never renders it via `Canvas`.
 - **Fill triangulation** (`triangulateFill`) is classic ear-clipping: doesn't support holes, and
   stops early (returning whatever was triangulated so far) on self-intersecting input rather than
-  producing garbage geometry. **Stroke triangulation** (`triangulateStroke`) doesn't generate
-  miter/bevel/round joins between segments — adjacent quads simply meet (or gap slightly, at sharp
-  angles) without extra join geometry. Both are *contract-conformant, not bit-identical* with
-  Apple's own (undocumented) shape rendering.
+  producing garbage geometry. **Stroke triangulation** (`triangulateStroke`) builds a quad per
+  segment plus join geometry at every corner (`lineJoin`: miter — falling back to bevel past
+  `miterLimit`, as Core Graphics does — round, or bevel) and cap geometry at an open contour's ends
+  (`lineCap`: butt, round, or square). Round caps/joins are polygonal (8 segments per half circle).
+  Both are *contract-conformant, not bit-identical* with Apple's own (undocumented) shape
+  rendering. (Joins were originally omitted, so polylines showed notches or gaps at their corners
+  that Apple's default miter join doesn't have.)
+- **`LineCap`/`LineJoin` stand in for `CGLineCap`/`CGLineJoin`** on `SKShapeNode.lineCap`/
+  `lineJoin` — plain Kotlin enums rather than `android.graphics.Paint.Cap`/`Join`, for the same
+  reason `Rect` stands in for `CGRect`: stroke geometry is built and unit-tested in pure Kotlin.
+  Defaults match Apple's (`.butt`, `.miter`, `miterLimit` 10).
+- **`SKShapeNode.circle(radius)`/`rect(size, cornerRadius)`/`ellipse(size)` instead of
+  `SKShapeNode(circleOfRadius:)`/`SKShapeNode(rectOf:cornerRadius:)`/`SKShapeNode(ellipseOf:)`.**
+  Companion factory functions rather than secondary constructors, since several Apple
+  initializers differ only in argument label (`rectOf:` vs `ellipseOf:` both take one size), which
+  Kotlin overload resolution can't tell apart. Each is centered on the node's origin, as on Apple.
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
   blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13).
 - **`SKShapeNode.fillTexture`** is stretched across the bounding box of the shape's (flattened,
@@ -155,6 +177,14 @@ categories recur throughout and are called out once here rather than per item:
   implemented** — the stroke is still a flat `strokeColor` ribbon.
 - **`SKLabelNode`** renders glyphs via `android.graphics.Paint`/`Typeface` into a cached texture —
   there is no CoreText equivalent on Android.
+- **`SKLabelNode.fontName` takes Apple-style names and maps them onto Android families.** A
+  PostScript-style `-Style` suffix (`"Helvetica-Bold"`, `"HelveticaNeue-LightItalic"`,
+  `"AvenirNext-SemiBold"`) is read as a weight and italic flag and applied to the family Android
+  resolves via `Typeface.create`; Apple's monospaced families (`Menlo`, `Courier`, ...) map to
+  `monospace`, and other Apple families Android doesn't ship fall back to the default sans-serif
+  (Android's closest match for Helvetica). Android family names (`"sans-serif-medium"`) also work.
+  Exact weights need API 28; below that, weights of 600 and up render bold. (Previously the whole
+  name went to `Typeface.create(name, NORMAL)`, so `"Helvetica-Bold"` silently rendered regular.)
 - **`SKLabelNode` is single-line only** — Apple's `numberOfLines`/`preferredMaxLayoutWidth`
   multi-line wrapping isn't implemented.
 
@@ -163,6 +193,8 @@ categories recur throughout and are called out once here rather than per item:
 - **`fadeAlphaTo`/`fadeAlphaBy` instead of an overloaded `fadeAlpha(to:duration:)`/
   `fadeAlpha(by:duration:)`.** Same Kotlin-overload-resolution collision (and the same rename
   pattern) as `SKNode.convertTo`/`convertFrom`.
+- **`run(_:onChildWithName:)` only looks among direct children**, like `SKNode.childNode` (see
+  "Scene graph" above) — no path syntax.
 - **`wait(duration:withRange:)` picks its random duration once, when the action is created.**
   Apple re-randomizes on every run of a reused action instance (e.g. inside a `repeatForever`);
   this library doesn't, for simplicity.
