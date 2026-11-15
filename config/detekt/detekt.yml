@@ -10,8 +10,9 @@ complexity:
     # SKNode (and later SKScene/SKSpriteNode/...) mirror SpriteKit's own large per-node APIs
     # (transform properties, child management, coordinate conversion, actions, physics, touch
     # handling, ...) — a wide surface by design, not poor organization. Raised generously since
-    # these classes grow across roadmap phases.
-    thresholdInClasses: 30
+    # these classes grow across roadmap phases. SKNode carries both UIResponder callback families
+    # Apple's SKNode inherits (touches* and presses*), which must stay overridable members.
+    thresholdInClasses: 34
     # SKAction's companion mirrors SpriteKit's own 37-factory-method SKAction API 1:1 (including
     # the Phase 12 audio actions: play/pause/stop/changeVolume/changePlaybackRate/
     # playSoundFileNamed, the two `follow` overloads added for path-following, and

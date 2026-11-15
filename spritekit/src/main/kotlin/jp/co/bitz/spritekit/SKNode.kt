@@ -352,6 +352,48 @@ public open class SKNode {
     ) {}
 
     /**
+     * Called when one or more physical buttons ([presses]) go down — Apple's
+     * `pressesBegan(_:with:)`. Like Apple's SpriteKit (verified on a tvOS simulator), nothing is
+     * delivered automatically: the host forwards key events with [SKView.forwardKeyEvent], which
+     * calls this on the presented scene, the way a tvOS view controller forwards its own `presses*`
+     * to its scene. A held button produces one call here and one [pressesEnded], no repeats. A
+     * no-op unless overridden.
+     */
+    public open fun pressesBegan(
+        presses: Set<SKPress>,
+        event: SKPressesEvent?,
+    ) {}
+
+    /**
+     * Called when a held press changes — Apple's `pressesChanged(_:with:)`. Kept for shape parity:
+     * the buttons [SKPressType] covers are digital, so [SKView.forwardKeyEvent] never calls it. A
+     * no-op unless overridden.
+     */
+    public open fun pressesChanged(
+        presses: Set<SKPress>,
+        event: SKPressesEvent?,
+    ) {}
+
+    /**
+     * Called when [presses] delivered to [pressesBegan] are released — Apple's
+     * `pressesEnded(_:with:)`. A no-op unless overridden.
+     */
+    public open fun pressesEnded(
+        presses: Set<SKPress>,
+        event: SKPressesEvent?,
+    ) {}
+
+    /**
+     * Called when [presses] delivered to [pressesBegan] are cancelled by the system instead of
+     * being released (Android's `KeyEvent.isCanceled`) — Apple's `pressesCancelled(_:with:)`. A
+     * no-op unless overridden.
+     */
+    public open fun pressesCancelled(
+        presses: Set<SKPress>,
+        event: SKPressesEvent?,
+    ) {}
+
+    /**
      * Transforms [point] from this node's local space into its parent's space, applying
      * position/rotation/scale.
      */

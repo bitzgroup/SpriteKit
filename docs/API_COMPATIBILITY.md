@@ -451,6 +451,33 @@ categories recur throughout and are called out once here rather than per item:
 - **No responder-chain bubbling**: a node with `isUserInteractionEnabled == false` is never a hit
   candidate and never receives touches at all — no walking up to find an enabled ancestor.
 
+## Input (`presses*` — remote and game-controller buttons)
+
+- **`SKPress`/`SKPressesEvent` stand in for `UIPress`/`UIPressesEvent`.** `pressesBegan(presses:
+  Set<SKPress>, event: SKPressesEvent?)` and its siblings match Apple's `pressesBegan(_:with:)`
+  shape; each `SKPress` persists from key-down to key-up and carries Apple's `type`
+  (`SKPressType`: `UpArrow`/`DownArrow`/`LeftArrow`/`RightArrow`/`Select`/`Menu`/`PlayPause`) and
+  `phase`. Only `SKPressesEvent.allPresses` is mirrored; `UIPress`'s `force`/`key`/`timestamp`
+  aren't, and `SKPress.keyCode` (the Android key code) is an addition.
+- **Delivery is forwarded by the host, matching Apple.** Apple's SpriteKit never delivers presses to
+  a scene by itself — not even with the `SKView` as first responder (verified on a tvOS simulator,
+  recorded in the sample app's `SpriteKitParity` probes); a tvOS game overrides `presses*` on its
+  view controller and forwards them. Here the host `Activity` calls
+  `SKView.forwardKeyEvent(event)` from `onKeyDown`/`onKeyUp`, which delivers to the presented
+  scene on the render thread. Nodes below the scene only see presses the scene passes on itself —
+  there is no focus engine or responder chain.
+- **Key mapping** (`skPressTypeForKeyCode`): D-pad arrows → arrows; D-pad center, Enter, numpad
+  Enter and gamepad A → `Select`; Back and Escape → `Menu`; media play/pause → `PlayPause`. Other
+  keys aren't forwarded (`forwardKeyEvent` returns `false`).
+- **A held button is one `began` and one `ended`**, as on tvOS: Android's auto-repeat key-downs are
+  consumed but not delivered. A key-up the system cancels (`KeyEvent.isCanceled`) is delivered as
+  `pressesCancelled`. `pressesChanged` exists for shape parity but is never called — every mapped
+  button is digital.
+- **Back (`Menu`) is the host's call.** Forwarding it consumes it, so the system won't leave the
+  screen — like a tvOS app whose view controller handles Menu instead of calling `super`. Because
+  delivery is asynchronous (render thread), `forwardKeyEvent` can't report whether the scene
+  handled it; the host decides up front whether to forward Back.
+
 ## Transitions (`SKTransition`)
 
 - **No offscreen-framebuffer (FBO) support** — this renderer never draws a scene to a texture, so
