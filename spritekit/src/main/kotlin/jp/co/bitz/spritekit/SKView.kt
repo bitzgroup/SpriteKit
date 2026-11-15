@@ -60,6 +60,7 @@ public class SKView
          * [SKNode.isPaused] to the same value, and a view paused this way stays paused across
          * [onPause]/[onResume] — unlike a scene paused only through its own `isPaused`, which
          * [onResume] un-pauses, again as Apple does when an app returns to the foreground.
+         * [presentScene] without a transition sets it back to `false`, as Apple's does.
          * Safe to set from any thread; the scene side takes effect on the render thread.
          */
         @Volatile
@@ -128,6 +129,8 @@ public class SKView
          * the render thread before the next frame — see [runOnGLThread].
          */
         public fun presentScene(scene: SKScene) {
+            // Apple's presentScene(_:) also un-pauses a paused view (verified on an iOS simulator).
+            isPaused = false
             runOnGLThread { setCurrentScene(scene) }
         }
 
@@ -162,8 +165,8 @@ public class SKView
                 outgoing.view = null
             }
             currentScene = scene
-            // Apple un-pauses a scene when it's presented (unless the view itself is paused).
-            scene.isPaused = isPaused
+            // Apple un-pauses a scene when it's presented, even into a paused view.
+            scene.isPaused = false
             scene.view = this
             scene.didMove(this)
             // Apple resizes a `.resizeFill` scene after `didMove(to:)`, on the next layout pass.

@@ -125,7 +125,10 @@ categories recur throughout and are called out once here rather than per item:
 - **`SKView.isPaused` and `SKView.scene`** match Apple's (behavior verified on an iOS simulator):
   setting `view.isPaused` sets the presented scene's `isPaused` to the same value, and while the
   view is paused nothing in the scene runs whatever the scene's own `isPaused` says.
-  `presentScene` un-pauses the incoming scene (unless the view is paused), as Apple does.
+  `presentScene(scene)` un-pauses both the incoming scene and the view itself, as Apple's does;
+  `presentScene(scene, transition)` un-pauses the incoming scene but leaves a paused view paused
+  (Apple's `SKTransition.pausesIncomingScene`/`pausesOutgoingScene` aren't implemented — see
+  `PARITY_GAP_PLAN.md` X1).
   `SKView.onResume()` (the Android counterpart of returning to the foreground) un-pauses the scene
   even if the app had paused it through `scene.isPaused` — Apple's `SKView` does the same — but
   leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
