@@ -269,7 +269,9 @@ internal class SKSceneRenderer {
         state: SKTextureGpuState,
         resourceRegistry: SKResourceRegistry,
     ) {
-        if (state.glTextureId == 0) {
+        // A name from an older context (any generation mismatch) is meaningless in this one, and
+        // reusing it could alias a texture this context has since generated under the same name.
+        if (state.glTextureId == 0 || state.uploadedGeneration != resourceRegistry.generation) {
             val ids = IntArray(1)
             GLES20.glGenTextures(1, ids, 0)
             state.glTextureId = ids[0]

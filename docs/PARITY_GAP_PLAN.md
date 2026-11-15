@@ -41,10 +41,10 @@ Priorities:
 
 | # | Item | Detail | Pri |
 | --- | --- | --- | --- |
-| B1 | Textures lost after GL context recreation | Reported by a host app: after a configuration change (per-app locale switched in system settings) checkers render as black rectangles until a cold start. Cause not investigated; `SKView.onSurfaceCreated` → `resourceRegistry.reloadAll()` and the label/shape-fill texture caches are the suspects. | P0 |
-| B2 | `SKView.onResume()` force-unpauses the scene | `onPause`/`onResume` write `currentScene.isPaused = true/false` directly, so a scene the app had paused itself comes back running. Needs a view-level pause that is independent of `SKScene.isPaused` (see V1). | P0 |
-| B3 | `API_COMPATIBILITY.md` is stale on `SKNode.isPaused` | It says per-node pause propagation "isn't implemented yet"; `SKNode.stepActions`/constraint stepping and the emitter/physics/tile/audio simulations now do honor it. Rewrite the entry to what is actually true. | P1 |
-| B4 | `SKScene.update` shape is undocumented and contradicts the docs | The code has `update(deltaTime: Duration)`; Apple has `update(_ currentTime: TimeInterval)` (an absolute timestamp), and `API_COMPATIBILITY.md`'s "Durations" bullet claims this port exposes the raw absolute value. Decide which one is intended, then document it (and, if `deltaTime` stays, say so as a deviation). | P1 |
+| ~~B1~~ | ~~Textures lost after GL context recreation~~ | **Fixed.** Cause: each `SKView`'s `SKResourceRegistry.generation` counted from 0, so a view recreated with its `Activity` reused the old view's generation numbers and textures kept from the old view (a retained scene, cached `SKTexture`s) looked already uploaded, drawing with texture names from a dead context. Generations are now unique process-wide, and a texture re-generates its GL name on any generation change. | P0 |
+| ~~B2~~ | ~~`SKView.onResume()` force-unpauses the scene~~ | **Not a bug — matches Apple.** Verified on an iOS simulator: Apple's `SKView` also un-pauses a scene paused via `scene.isPaused` when the app returns to the foreground; only a paused *view* stays paused. `onResume` now leaves a paused view (V1) paused, and the behavior is documented. | P0 |
+| ~~B3~~ | ~~`API_COMPATIBILITY.md` is stale on `SKNode.isPaused`~~ | **Done** — entry rewritten. | P1 |
+| ~~B4~~ | ~~`SKScene.update` shape is undocumented and contradicts the docs~~ | **Done** — `update(deltaTime: Duration)` stays and is documented as a deviation; the contradicting "Durations" bullet is fixed. | P1 |
 
 ## 2. Missing API, by subsystem
 
@@ -64,7 +64,7 @@ Priorities:
 | --- | --- | --- | --- |
 | S1 | `SKScene.sceneDidLoad()` | `didMove`/`willMove`/`didChangeSize` exist; this is the one lifecycle callback still absent. On Apple it runs once after the scene is initialized or decoded — with no archive loading here, define it as "once, before the first `didMove`". | P2 |
 | S2 | `SKSceneDelegate` (`SKScene.delegate`) | `update(_:for:)`, `didEvaluateActions(for:)`, `didSimulatePhysics(for:)`, `didApplyConstraints(for:)`, `didFinishUpdate(for:)`. The subclass hooks exist; the delegate forwarding does not. | P2 |
-| V1 | `SKView.isPaused`, `SKView.scene` (public getter) | `currentScene` is private. `isPaused` also fixes B2. | P0 |
+| ~~V1~~ | ~~`SKView.isPaused`, `SKView.scene` (public getter)~~ | **Done**, with Apple's semantics verified on an iOS simulator: setting the view's `isPaused` sets the scene's too; a paused view runs nothing whatever the scene says; `presentScene` un-pauses the incoming scene. | P0 |
 | V2 | `SKView.ignoresSiblingOrder` | Check what order equal-`zPosition` siblings currently draw in and which Apple mode that corresponds to; then expose the switch. | P1 |
 | V3 | `SKView.preferredFramesPerSecond` | Frame-rate cap (battery; TV). | P2 |
 | V4 | `SKView.showsFPS`, `showsNodeCount`, `showsDrawCount`, `showsQuadCount`, `showsPhysics`, `showsFields` | Debug overlays. `showsFPS`/`showsNodeCount`/`showsPhysics` are the useful three. | P2 |
