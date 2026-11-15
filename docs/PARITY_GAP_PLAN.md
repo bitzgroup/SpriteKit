@@ -1,0 +1,193 @@
+# Apple Parity Gap Audit & Remediation Plan
+
+Audit date: 2026-11-15, against `develop` at `3a6db0b` (0.2.0 plus the parity fixes merged since).
+
+`docs/ROADMAP.md` (Phases 0–15) is complete, and `docs/API_COMPATIBILITY.md` records the
+deviations that were decided on purpose while each phase landed. This document records what
+neither of them covers: **Apple SpriteKit API that is simply absent from this port without ever
+having been written down as a deviation.** These are the gaps a host app only discovers when a
+line of its Apple code has nothing to be ported to.
+
+The trigger was exactly such a discovery: while planning Android TV support for a host app,
+`SKNode` turned out to have `touches*` but no `presses*`
+(`pressesBegan(_:with:)` and siblings), which Apple's SpriteKit has on iOS/tvOS. Rather than
+recording that one item, the whole public surface was audited.
+
+## How the audit was done, and its limits
+
+- Every public declaration under `spritekit/src/main` and `spritekit-compose/src/main` was listed
+  and compared, class by class, with Apple's documented SpriteKit API.
+- The comparison is **from the source and from Apple's documentation only**. Nothing here was
+  re-verified against the real framework on a simulator, and no build or test was run as part of
+  the audit. Before implementing an item, confirm the Apple behavior it mirrors on a real
+  simulator/device first — the practice that already caught the `aspectFit` anchoring and
+  `GKMonteCarloStrategist` assumptions.
+- Items already listed in `docs/API_COMPATIBILITY.md` or ROADMAP's "Explicitly Out of Scope" are
+  not repeated, except in section 5 where this audit recommends changing their status.
+- Member-level completeness is high for the classes that exist; it is lower for rarely used
+  corners (e.g. every `SKEmitterNode` property). Treat a missing mention as "not checked", not as
+  "confirmed present".
+
+Priorities:
+
+| | Meaning |
+| --- | --- |
+| **P0** | Bug, or a gap that blocks a straightforward port of ordinary Apple code |
+| **P1** | Commonly used API; small, pure-Kotlin, unit-testable to add |
+| **P2** | Less commonly used API, or needs moderate design work |
+| **P3** | Needs renderer infrastructure that does not exist yet (FBO, stencil, per-pixel passes) |
+
+## 1. Bugs and stale documentation
+
+| # | Item | Detail | Pri |
+| --- | --- | --- | --- |
+| B1 | Textures lost after GL context recreation | Reported by a host app: after a configuration change (per-app locale switched in system settings) checkers render as black rectangles until a cold start. Cause not investigated; `SKView.onSurfaceCreated` → `resourceRegistry.reloadAll()` and the label/shape-fill texture caches are the suspects. | P0 |
+| B2 | `SKView.onResume()` force-unpauses the scene | `onPause`/`onResume` write `currentScene.isPaused = true/false` directly, so a scene the app had paused itself comes back running. Needs a view-level pause that is independent of `SKScene.isPaused` (see V1). | P0 |
+| B3 | `API_COMPATIBILITY.md` is stale on `SKNode.isPaused` | It says per-node pause propagation "isn't implemented yet"; `SKNode.stepActions`/constraint stepping and the emitter/physics/tile/audio simulations now do honor it. Rewrite the entry to what is actually true. | P1 |
+| B4 | `SKScene.update` shape is undocumented and contradicts the docs | The code has `update(deltaTime: Duration)`; Apple has `update(_ currentTime: TimeInterval)` (an absolute timestamp), and `API_COMPATIBILITY.md`'s "Durations" bullet claims this port exposes the raw absolute value. Decide which one is intended, then document it (and, if `deltaTime` stays, say so as a deviation). | P1 |
+
+## 2. Missing API, by subsystem
+
+### 2.1 Input
+
+| # | Missing | Notes | Pri |
+| --- | --- | --- | --- |
+| I1 | `SKNode.pressesBegan/Changed/Ended/Cancelled(_:with:)` and `UIPress`/`UIPressesEvent` stand-ins | The gap that started this audit. Needed for remotes, D-pads, game controllers and hardware keyboards (Android TV, ChromeOS). Design to mirror the existing `SKTouch`/`SKEvent` pair: an `SKPress` carrying an Apple-shaped `type` (`upArrow`/`downArrow`/`leftArrow`/`rightArrow`/`select`/`menu`/`playPause`) mapped from `KeyEvent` codes, plus `phase`; delivered to the scene (Apple delivers presses down the responder chain, not by hit-testing). `SKView` must become focusable and override `onKeyDown`/`onKeyUp`. | P0 |
+| I2 | `SKNode.focusBehavior` (`SKNodeFocusBehavior`) | tvOS focus-engine participation. Android's focus system is `View`-based, so node-level focus needs its own design; do only if a host app needs in-scene focus. | P3 |
+| I3 | `SKNode.atPoint(_:)`, `nodes(at:)`, `contains(_:)`, `frame` | Point queries. `localBounds` and the hit-testing in `SKTouchDispatch.kt` already hold the logic; this is mostly exposing it with Apple's semantics (deepest/highest-z node, falls back to `self`). | P0 |
+| I4 | `SKScene.convertPoint(fromView:)` / `convertPoint(toView:)`, `SKView.convert(_:to:)` / `convert(_:from:)` | View ↔ scene coordinates; `SKSceneProjection.kt` already computes the mapping. Required by any host UI (Compose overlays, accessibility) that must line up with scene content. | P1 |
+| I5 | `SKTouch.tapCount`, `timestamp`, `force` | Already noted as absent in `API_COMPATIBILITY.md`; `tapCount` is the one ports commonly need (double-tap). | P2 |
+
+### 2.2 Scene and view lifecycle
+
+| # | Missing | Notes | Pri |
+| --- | --- | --- | --- |
+| S1 | `SKScene.sceneDidLoad()` | `didMove`/`willMove`/`didChangeSize` exist; this is the one lifecycle callback still absent. On Apple it runs once after the scene is initialized or decoded — with no archive loading here, define it as "once, before the first `didMove`". | P2 |
+| S2 | `SKSceneDelegate` (`SKScene.delegate`) | `update(_:for:)`, `didEvaluateActions(for:)`, `didSimulatePhysics(for:)`, `didApplyConstraints(for:)`, `didFinishUpdate(for:)`. The subclass hooks exist; the delegate forwarding does not. | P2 |
+| V1 | `SKView.isPaused`, `SKView.scene` (public getter) | `currentScene` is private. `isPaused` also fixes B2. | P0 |
+| V2 | `SKView.ignoresSiblingOrder` | Check what order equal-`zPosition` siblings currently draw in and which Apple mode that corresponds to; then expose the switch. | P1 |
+| V3 | `SKView.preferredFramesPerSecond` | Frame-rate cap (battery; TV). | P2 |
+| V4 | `SKView.showsFPS`, `showsNodeCount`, `showsDrawCount`, `showsQuadCount`, `showsPhysics`, `showsFields` | Debug overlays. `showsFPS`/`showsNodeCount`/`showsPhysics` are the useful three. | P2 |
+| V5 | `SKView.allowsTransparency`, `shouldCullNonVisibleNodes`, `isAsynchronous`, `SKViewDelegate.view(_:shouldRenderAtTime:)` | `allowsTransparency` needs an EGL config with alpha + `setZOrderOnTop`/`TextureView` decision. | P2 |
+| V6 | `SKView.texture(from:)`, `texture(from:crop:)` | Render-to-texture; needs FBO support (R1). | P3 |
+
+### 2.3 Scene graph (`SKNode`)
+
+| # | Missing | Notes | Pri |
+| --- | --- | --- | --- |
+| N1 | `insertChild(_:at:)`, `removeChildren(in:)`, `move(toParent:)`, `inParentHierarchy(_:)` | `move(toParent:)` must preserve the node's scene-space transform. | P1 |
+| N2 | `SKNode.speed` | Per-node action speed multiplier, inherited by descendants. Only `SKAction.speed` and `SKPhysicsWorld.speed` exist. | P1 |
+| N3 | `childNode(withName:)` search syntax (`//`, `/`, `..`, `*`, `[a-z]`), `subscript(_:)` | Already recorded as a deviation; listed here because ported code using `"//name"` fails silently (returns `null`). | P1 |
+| N4 | `copy()` | Deliberately excluded with `NSCopying`, but node copying (stamping out configured prototypes) is common SpriteKit usage. Reconsider as an explicit `open fun copy(): SKNode` per node class. | P2 |
+| N5 | `SKReachConstraints`, `SKNode.reachConstraints`, `SKAction.reach(to:…)` | Inverse kinematics. | P3 |
+
+### 2.4 Sprites, textures, shapes, labels
+
+| # | Missing | Notes | Pri |
+| --- | --- | --- | --- |
+| T1 | `SKTexture(imageNamed:)`, `SKSpriteNode(imageNamed:)` | The only public constructor takes a `Bitmap`, so every host app writes its own loader. Resolve names against `assets/` the same way `SKAudioNode(fileNamed:)` already does (and consider drawable resources). Needs a `Context`, like the audio path. | P1 |
+| T2 | `SKTextureAtlas(named:)`, `SKTextureAtlas(dictionary:)`, `preload` / `SKTexture.preload` | `named:` can map to an `assets/<name>.atlas/` folder packed by the existing runtime packer. | P2 |
+| T3 | `SKTexture.usesMipmaps`, `SKTexture(data:size:)`, `SKMutableTexture`, `SKTexture.generatingNormalMap`, noise-texture initializers | Normal maps only matter once lighting exists. | P3 |
+| T4 | `SKSpriteNode.centerRect` | 9-slice stretching — common for UI panels and buttons. | P1 |
+| T5 | `SKSpriteNode.scale(to:)` | Trivial. | P1 |
+| H1 | Remaining `SKShapeNode` convenience initializers: `init(rect:)` / `init(rect:cornerRadius:)` (an arbitrary, non-centered rect), `init(ellipseIn:)`, `init(path:centered:)`, `init(points:count:)`, `init(splinePoints:count:)` | The centered `circle`/`rect`/`ellipse` factories exist; these are the rest of Apple's set. Add as further companion factories. | P1 |
+| H2 | `SKShapeNode.isAntialiased`, `blendMode`, `lineLength` | `lineCap`/`lineJoin`/`miterLimit` exist. No antialiasing switch or MSAA configuration exists in the renderer; Apple's default is `isAntialiased = true`, so check how shape edges compare. | P2 |
+| L1 | `SKLabelNode.color`/`colorBlendFactor`, `blendMode` | | P2 |
+| L2 | `SKLabelNode.numberOfLines`, `preferredMaxLayoutWidth`, `lineBreakMode` | Recorded as a deviation; `android.text.StaticLayout` can do the layout. Needed for localized text. | P1 |
+| L3 | `SKLabelNode.attributedText` | Map to `android.text.Spanned`. | P2 |
+
+### 2.5 Actions
+
+Missing `SKAction` factories (everything else in Apple's list is present):
+
+| # | Missing | Pri |
+| --- | --- | --- |
+| A1 | `moveTo(x:duration:)`, `moveTo(y:duration:)`, `scaleX(to:duration:)`, `scaleY(to:duration:)`, `scale(to: CGSize, duration:)`, `resize(toWidth:duration:)`, `resize(toHeight:duration:)`, `resize(toWidth:height:duration:)` | P1 |
+| A2 | `rotate(toAngle:duration:shortestUnitArc:)` | P1 |
+| A3 | `setTexture(_:)`, `setTexture(_:resize:)` | P1 |
+| A4 | `speed(to:duration:)`, `speed(by:duration:)` (depends on N2) | P1 |
+| A5 | `run(_:onChildWithName:)` with the full name-search syntax — exists for direct children only; follows N3 | P2 |
+| A6 | `applyForce`/`applyTorque`/`applyImpulse`/`applyAngularImpulse` actions, `changeCharge`, `changeMass`, `strength(to:/by:)`, `falloff(to:/by:)` | P2 |
+| A7 | `wait(forDuration:withRange:)` re-randomizing per run, `group` leftover time (both recorded deviations) | P2 |
+| A8 | `SKAction.duration` as a public, settable property (verify current visibility) | P1 |
+| A9 | `stereoPan`, `changeObstruction`, `changeOcclusion`, `changeReverb`, `warp(to:)`, `animate(withNormalTextures:)`, `setNormalTexture`, `SKAction(named:)` | Out of scope with their subsystems |
+
+### 2.6 Physics
+
+| # | Missing | Notes | Pri |
+| --- | --- | --- | --- |
+| P1 | `SKPhysicsWorld.body(at:)`, `body(in:)`, `body(alongRayStart:end:)`, `enumerateBodies(at:/in:/alongRayStart:end:)` | Spatial queries and ray casts — very common in gameplay code. | P1 |
+| P2 | `SKPhysicsBody.node`, `isResting`, `area`, `joints`, `allContactedBodies()` | `node` back-reference also unblocks eager joint anchors (a recorded deviation). | P1 |
+| P3 | `applyForce(_:at:)`, `applyImpulse(_:at:)`, torque from off-centre contacts | The solver is linear-only (recorded); these need the angular half. | P2 |
+| P4 | `SKPhysicsBody(bodies:)`, `init(edgeChainFrom:)`, `init(edgeLoopFrom: path)`, `init(polygonFrom: path)` | Compound and path-based bodies. | P2 |
+| P5 | `SKPhysicsBody.charge`, `SKPhysicsWorld.sampleFields(at:)`, `SKRegion`, remaining field kinds, `SKPhysicsContact.collisionImpulse`, joint limits/reaction forces | Already recorded; grouped here as one physics-completeness work item. | P3 |
+
+### 2.7 Camera, constraints, particles, tile maps, transitions, audio
+
+| # | Missing | Pri |
+| --- | --- | --- |
+| C1 | `SKCameraNode.containedNodeSet()` | P1 |
+| C2 | `SKConstraint.referenceNode`; the point-based overloads `distance(_:to: CGPoint)`, `distance(_:to:in:)`, `orient(to: CGPoint, …)`, `orient(to:in:offset:)` | P2 |
+| E1 | `SKEmitterNode.particleAction`, `particleRenderOrder`, `shader`; `targetNode` and the scale/alpha/rotation sequences (recorded) | P2 |
+| E2 | `SKKeyframeSequence.interpolationMode`, `repeatMode`, mutation (`addKeyframeValue`, `setKeyframeValue`, …) | P2 |
+| M1 | `SKTileMapNode.fill(with:)`, `mapSize`, `color`/`colorBlendFactor`/`blendMode`; `SKTileGroup.empty()`, `SKTileGroup(tileDefinition:)`; `SKTileDefinition.placementWeight` | P2 |
+| X1 | `SKTransition.doorsOpenHorizontal/Vertical`, `doorsCloseHorizontal/Vertical`, `doorway` true geometry; `pausesIncomingScene`, `pausesOutgoingScene` | P2 |
+| U1 | `SKAudioNode.isPositional`, `SKScene.listener` (recorded as "no positional audio") | P3 |
+
+### 2.8 Whole classes that are absent and unrecorded
+
+| Class | Recommendation |
+| --- | --- |
+| `SKSceneDelegate`, `SKViewDelegate` | Add (S2, V5) |
+| `SKReachConstraints` | P3 (N5) |
+| `SKMutableTexture` | P3 (T3) |
+| `SKTransformNode`, `SK3DNode`, `SKRenderer` | Record as out of scope (3D transform / SceneKit / Metal) |
+| `SKRegion`, `SKAttribute`/`SKAttributeValue`, `SKWarpGeometry`, `SKLightNode`, `SKVideoNode`, `SKReferenceNode` | Already recorded as out of scope |
+
+## 3. Renderer infrastructure that gates the P3 items
+
+Several recorded deviations share two missing renderer capabilities. Building them once unblocks
+the whole group, so they are tracked as infrastructure rather than per-API work.
+
+| # | Capability | Unblocks |
+| --- | --- | --- |
+| R1 | Offscreen framebuffer (render a subtree to a texture) | `SKView.texture(from:)`, true transition compositing (cross-fade of two live scenes, real flips/doors), `SKEffectNode.shouldRasterize`, a filter/shader pass on `SKEffectNode`/`SKScene`, `SKShapeNode.glowWidth` |
+| R2 | Stencil or alpha-mask clipping | `SKCropNode` per-pixel masking (currently bounding-box `glScissor`) |
+| R3 | Per-pixel colorize in the default fragment shader | Exact `colorBlendFactor` on partially transparent textures, `SKBlendMode.multiplyX2`/`multiplyAlpha` |
+| R4 | Shader on more node types + Apple's built-in symbols (`u_time`, `v_tex_coord`, `u_texture`, `SKDefaultShading()`) | `SKShapeNode.fillShader`/`strokeShader`, `SKEmitterNode.shader`, `SKScene.shader`, ported shader source working unchanged |
+
+## 4. Proposed work order
+
+Each step is one `feature/*` branch and PR against `develop`, with the matching
+`API_COMPATIBILITY.md` update in the same PR.
+
+1. **Docs and bugs first** — B3, B4 (documentation), then B1 (investigate and fix), B2 + V1.
+2. **Input parity** — I1 (`presses*`), I3 (point queries), I4 (coordinate conversion).
+3. **Lifecycle** — S1 (`sceneDidLoad`), S2.
+4. **Everyday API, batch 1** — H1 (shape initializers), N1, N2, A1–A4, A8, T5, C1.
+5. **Everyday API, batch 2** — T1 (named textures), T4 (`centerRect`), L2, N3 + A5, V2.
+6. **Physics queries** — P1, P2.
+7. **Second tier** — the P2 rows above, driven by what host apps actually hit.
+8. **Renderer infrastructure** — R1–R4, then the P3 rows they unblock.
+
+Steps 1–2 are what a host app adding Android TV support touches; steps 3–6 are what any
+ordinary SpriteKit port will reach for next.
+
+## 5. Suggested changes to recorded scope decisions
+
+- `SKAction.run(_:onChildWithName:)` is implemented but still listed under ROADMAP's "Explicitly
+  Out of Scope"; remove it from that list.
+- `SKNode.copy()`: revisit the blanket "no `NSCopying`" rule for nodes specifically (N4).
+- Add `SKTransformNode`, `SK3DNode`, `SKRenderer`, `SKMutableTexture`, `SKReachConstraints` to
+  `API_COMPATIBILITY.md`'s "Not implemented" list so that their absence is at least recorded.
+
+## 6. Keeping this from recurring
+
+The gaps above accumulated because phases were scoped by *class* ("`SKShapeNode` done") while
+parity was only ever checked for the members a host app happened to use.
+
+- When a phase or PR declares a class done, diff its public members against Apple's documentation
+  page for that class and record every omission in `API_COMPATIBILITY.md`, even trivial ones.
+- When a host app finds a gap, check the sibling members of the same class in the same PR.
+- Update this file as items land (strike the row, link the PR); delete it once sections 1–2 are
+  empty and everything left lives in `API_COMPATIBILITY.md`.
