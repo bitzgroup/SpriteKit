@@ -603,3 +603,10 @@ full parity; see `docs/ARCHITECTURE.md`.
 - Any `GKScene`-style binding to [GameplayKit for Android](https://github.com/bitzgroup/GameplayKit)
   — a separate integration concern, not part of this library
 - Anything Metal-specific (obviously N/A)
+
+## Post-roadmap: Apple parity gaps
+
+The phases above are complete, but a 2026-11-15 audit of the whole public surface against Apple's
+documentation found API that is absent without having been recorded as a deviation. The gap list
+and the plan for closing it live in [`PARITY_GAP_PLAN.md`](PARITY_GAP_PLAN.md) — read it before
+starting any parity work, and update it as items land.
