@@ -1,6 +1,7 @@
 package jp.co.bitz.spritekit
 
 import android.content.Context
+import android.graphics.PixelFormat
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Handler
@@ -45,12 +46,48 @@ public class SKView
         /** Pixels per density-independent pixel; refreshed with the surface size. */
         private var density = context.resources.displayMetrics.density
 
+        /**
+         * Whether the view renders transparently where the scene doesn't cover it, so whatever is
+         * behind the view shows through — Apple's `SKView.allowsTransparency`. `false` (the default,
+         * as on Apple) renders opaquely: the scene's [SKScene.backgroundColor] is drawn at full
+         * opacity whatever its alpha. With `true`, give the scene a transparent `backgroundColor`
+         * (e.g. `Color.TRANSPARENT`) for the content behind to show.
+         *
+         * **Android limitation — read before using.** A `GLSurfaceView` renders into its own surface,
+         * which the system composites either entirely below its window (where nothing behind the view
+         * can show through) or entirely above it. Transparency therefore puts the surface **above its
+         * window** (`setZOrderOnTop`), and then it is drawn over everything else the app shows there.
+         * Tested on a phone emulator: a Material `AlertDialog` showed the scene through it and a
+         * `DropdownMenu` didn't appear. Only use this for a view nothing is ever shown on top of; to
+         * put a background behind the scene's content, drawing it inside the scene (a full-scene
+         * sprite below everything) is usually the better choice. Lifting this needs a `TextureView`
+         * core instead of `GLSurfaceView` — see `docs/PARITY_GAP_PLAN.md` section 2.9.
+         *
+         * Set this before the view is attached to a window; Android doesn't reliably reorder a surface
+         * that's already attached. UI-thread only, like any other `View` property.
+         */
+        public var allowsTransparency: Boolean = false
+            set(value) {
+                if (field == value) return
+                field = value
+                holder.setFormat(if (value) PixelFormat.TRANSLUCENT else PixelFormat.OPAQUE)
+                setZOrderOnTop(value)
+                runOnGLThread { renderTransparently = value }
+            }
+
+        /** Render-thread copy of [allowsTransparency]. */
+        private var renderTransparently = false
+
         private var transitionFromScene: SKScene? = null
         private var transitionSpec: SKTransition? = null
         private var transitionElapsed: Duration = Duration.ZERO
 
         init {
             setEGLContextClientVersion(2)
+            // Always ask for an alpha channel, so [allowsTransparency] can be switched on without
+            // recreating the EGL context (the config is fixed once the renderer is set). An opaque
+            // surface simply ignores the alpha.
+            setEGLConfigChooser(8, 8, 8, 8, DEPTH_BITS, 0)
             setRenderer(SceneRenderer())
             renderMode = RENDERMODE_CONTINUOUSLY
             audioPlaybackFactory = realAudioPlaybackFactory(context.applicationContext)
@@ -174,9 +211,15 @@ public class SKView
         private fun renderFrame() {
             val scene = currentScene
             if (scene != null) {
-                sceneRenderer.draw(scene, viewWidth, viewHeight, resourceRegistry)
+                sceneRenderer.draw(
+                    scene,
+                    viewWidth,
+                    viewHeight,
+                    resourceRegistry,
+                    allowsTransparency = renderTransparently,
+                )
             } else {
-                GLES20.glClearColor(0f, 0f, 0f, 1f)
+                GLES20.glClearColor(0f, 0f, 0f, if (renderTransparently) 0f else 1f)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             }
         }
@@ -213,6 +256,7 @@ public class SKView
                     globalAlpha = layer.alpha,
                     clearFirst = layer.clearFirst,
                     outerClip = splitClip(layer.split, fromScene),
+                    allowsTransparency = renderTransparently,
                 )
             }
         }
@@ -289,5 +333,10 @@ public class SKView
                     renderTransitionFrame(deltaTime)
                 }
             }
+        }
+
+        private companion object {
+            /** Matches `GLSurfaceView`'s default config chooser (the renderer itself uses no depth test). */
+            const val DEPTH_BITS = 16
         }
     }

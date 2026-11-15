@@ -13,6 +13,21 @@ internal fun blueOf(argb: Int): Float = (argb and 0xFF) / 255f
 
 internal fun alphaOf(argb: Int): Float = ((argb ushr 24) and 0xFF) / 255f
 
+/**
+ * The `glClearColor` arguments (`r, g, b, a`) for a frame whose background is [argb]. Without
+ * [allowsTransparency] the frame is opaque, so [argb]'s alpha is ignored — as on Apple, where a
+ * non-transparent `SKView` renders the scene's `backgroundColor` opaquely. With it, the alpha is kept
+ * and the color premultiplied by it, since Android composites a translucent surface as premultiplied
+ * alpha (a fully transparent background must clear to `0, 0, 0, 0`, not to its RGB with zero alpha).
+ */
+internal fun backgroundClearColor(
+    argb: Int,
+    allowsTransparency: Boolean,
+): FloatArray {
+    val alpha = if (allowsTransparency) alphaOf(argb) else 1f
+    return floatArrayOf(redOf(argb) * alpha, greenOf(argb) * alpha, blueOf(argb) * alpha, alpha)
+}
+
 /** Linearly interpolates each ARGB channel between [from] and [to] by [t] (`0..1`), for [SKAction.colorize]. */
 internal fun lerpColor(
     from: Int,

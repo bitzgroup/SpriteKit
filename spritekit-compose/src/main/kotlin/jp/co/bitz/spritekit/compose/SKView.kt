@@ -18,15 +18,25 @@ import jp.co.bitz.spritekit.SKView as SKViewClassic
  * Automatically pauses/resumes the render thread (and the presented scene) with
  * [LocalLifecycleOwner], which classic-View/XML consumers of [SKViewClassic] have to wire up by
  * hand from their own `Activity`/`Fragment` callbacks.
+ *
+ * [allowsTransparency] is [SKViewClassic.allowsTransparency], applied when the view is created. Read
+ * that property's Android limitation first: a transparent view is drawn over everything else in its
+ * window, dialogs and popup menus included.
  */
 @Composable
 public fun SKView(
     scene: SKScene?,
     modifier: Modifier = Modifier,
     state: SKViewState = rememberSKViewState(),
+    allowsTransparency: Boolean = false,
 ) {
     AndroidView(
-        factory = { context -> SKViewClassic(context).also { state.view = it } },
+        factory = { context ->
+            SKViewClassic(context).also {
+                it.allowsTransparency = allowsTransparency
+                state.view = it
+            }
+        },
         modifier = modifier,
         update = { view -> scene?.let(view::presentScene) },
         onRelease = { view ->
