@@ -53,6 +53,15 @@ categories recur throughout and are called out once here rather than per item:
   interoperable (`AndroidView`/`ComposeView`), so this is additive, not a fork of the API surface.
   See `docs/ARCHITECTURE.md`'s "Hosting: a View core, a Compose wrapper" section.
 
+- **`SKView.allowsTransparency` puts the view above everything else in its window.** It's
+  implemented (default `false`, as on Apple; also an `allowsTransparency` parameter on the Compose
+  `SKView`), but a `GLSurfaceView`'s surface can only be composited entirely below its window (where
+  nothing behind the view can show through) or entirely above it. Transparency needs the latter
+  (`setZOrderOnTop`), so a transparent `SKView` is drawn over dialogs, popup menus and any other UI
+  the app shows over it — on Apple, `SKView` is an ordinary layer and none of this applies. Use it only
+  for a view nothing is shown on top of; to put a background behind a scene, draw it inside the scene.
+  It must be set before the view is attached to a window. See `docs/PARITY_GAP_PLAN.md` section 2.9.
+
 ## Scene graph (`SKNode`, `SKScene`)
 
 - **`convertTo`/`convertFrom` instead of `convert(_:to:)`/`convert(_:from:)`.** Swift argument
@@ -486,9 +495,6 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Not implemented
 
-- **`SKView.allowsTransparency`** — a `GLSurfaceView` can't be both transparent to what's behind it
-  and below what's drawn over it in the same window; see `docs/PARITY_GAP_PLAN.md` section 2.9. Draw
-  a background inside the scene instead.
 - **`SKEffectNode.filter`** — Core Image, no Android equivalent.
 - **`SKVideoNode`** — no video-texture bridge in this library yet.
 - **`SKLightNode`** / normal-map lighting and shadows — deferred with the rest of the shader system.

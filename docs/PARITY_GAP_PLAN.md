@@ -68,7 +68,7 @@ Priorities:
 | V2 | `SKView.ignoresSiblingOrder` | Check what order equal-`zPosition` siblings currently draw in and which Apple mode that corresponds to; then expose the switch. | P1 |
 | V3 | `SKView.preferredFramesPerSecond` | Frame-rate cap (battery; TV). | P2 |
 | V4 | `SKView.showsFPS`, `showsNodeCount`, `showsDrawCount`, `showsQuadCount`, `showsPhysics`, `showsFields` | Debug overlays. `showsFPS`/`showsNodeCount`/`showsPhysics` are the useful three. | P2 |
-| V5 | `SKView.allowsTransparency`, `shouldCullNonVisibleNodes`, `isAsynchronous`, `SKViewDelegate.view(_:shouldRenderAtTime:)` | `allowsTransparency` is **not achievable on the current `GLSurfaceView` core without breaking overlays** — see section 2.9. | P3 (decided: not now) |
+| V5 | `shouldCullNonVisibleNodes`, `isAsynchronous`, `SKViewDelegate.view(_:shouldRenderAtTime:)` | `allowsTransparency` is implemented, with an Android limitation — see section 2.9. | P2 |
 | V6 | `SKView.texture(from:)`, `texture(from:crop:)` | Render-to-texture; needs FBO support (R1). | P3 |
 
 ### 2.3 Scene graph (`SKNode`)
@@ -165,11 +165,17 @@ config, a premultiplied clear color, `PixelFormat.TRANSLUCENT`). It was **not me
   EGL lifecycle instead of relying on `GLSurfaceView`'s.
 
 **Decision (the maintainers, 2026-11-15): keep `GLSurfaceView`.** Its render-thread/EGL lifecycle
-and its fit with the rest of the Android stack are worth more than this one API. Hosts that need a
-background behind the board should draw it **inside the scene** (e.g. a full-scene sprite below the
-content) — no transparency needed. Revisit only if a `TextureView` core is wanted for other reasons
-(e.g. drawing app UI over the scene in the same window), and record `allowsTransparency` in
-`API_COMPATIBILITY.md`'s "Not implemented" list meanwhile.
+and its fit with the rest of the Android stack are worth more than lifting this limitation. Hosts
+that need a background behind the board should draw it **inside the scene** (e.g. a full-scene
+sprite below the content) — no transparency needed. Revisit only if a `TextureView` core is wanted
+for other reasons (e.g. drawing app UI over the scene in the same window).
+
+**Follow-up (same day):** API parity stays a goal, so `SKView.allowsTransparency` (and the matching
+`allowsTransparency` parameter of the Compose `SKView`) was implemented anyway, default `false` as on
+Apple, with the limitation above stated in its KDoc and in `API_COMPATIBILITY.md`. It works for a
+view nothing is ever shown on top of. The `SKBlendMode.Alpha` blend now also accumulates the frame's
+alpha in premultiplied form (`glBlendFuncSeparate`), which is required for correct translucency and
+changes nothing visible on an opaque view.
 
 ## 3. Renderer infrastructure that gates the P3 items
 
