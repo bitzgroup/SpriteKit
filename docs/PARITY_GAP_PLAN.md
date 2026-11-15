@@ -68,7 +68,7 @@ Priorities:
 | V2 | `SKView.ignoresSiblingOrder` | Check what order equal-`zPosition` siblings currently draw in and which Apple mode that corresponds to; then expose the switch. | P1 |
 | V3 | `SKView.preferredFramesPerSecond` | Frame-rate cap (battery; TV). | P2 |
 | V4 | `SKView.showsFPS`, `showsNodeCount`, `showsDrawCount`, `showsQuadCount`, `showsPhysics`, `showsFields` | Debug overlays. `showsFPS`/`showsNodeCount`/`showsPhysics` are the useful three. | P2 |
-| V5 | `SKView.allowsTransparency`, `shouldCullNonVisibleNodes`, `isAsynchronous`, `SKViewDelegate.view(_:shouldRenderAtTime:)` | `allowsTransparency` needs an EGL config with alpha + `setZOrderOnTop`/`TextureView` decision. | P2 |
+| V5 | `SKView.allowsTransparency`, `shouldCullNonVisibleNodes`, `isAsynchronous`, `SKViewDelegate.view(_:shouldRenderAtTime:)` | `allowsTransparency` is **not achievable on the current `GLSurfaceView` core without breaking overlays** — see section 2.9. | P3 (decided: not now) |
 | V6 | `SKView.texture(from:)`, `texture(from:crop:)` | Render-to-texture; needs FBO support (R1). | P3 |
 
 ### 2.3 Scene graph (`SKNode`)
@@ -143,6 +143,33 @@ Missing `SKAction` factories (everything else in Apple's list is present):
 | `SKMutableTexture` | P3 (T3) |
 | `SKTransformNode`, `SK3DNode`, `SKRenderer` | Record as out of scope (3D transform / SceneKit / Metal) |
 | `SKRegion`, `SKAttribute`/`SKAttributeValue`, `SKWarpGeometry`, `SKLightNode`, `SKVideoNode`, `SKReferenceNode` | Already recorded as out of scope |
+
+### 2.9 Finding: `allowsTransparency` vs. the `GLSurfaceView` core (2026-11-15)
+
+A host app tried to show a background drawn by its own UI (a Compose composable behind the
+`SKView`) through a transparent scene, the way Apple's `SpriteView(scene:options: [.allowsTransparency])`
+lets SwiftUI content show through. A prototype added `SKView.allowsTransparency` (an RGBA EGL
+config, a premultiplied clear color, `PixelFormat.TRANSLUCENT`). It was **not merged**, because:
+
+- A `GLSurfaceView` renders into its own surface, which the system composites either entirely
+  **below** its window (the default: the window punches a hole where the view is, so anything the
+  app draws behind the view is erased, and a transparent frame shows black) or entirely **above**
+  it (`setZOrderOnTop(true)`, needed for the content behind to show through).
+- Above the window, it covers everything else the app draws over it: on a phone emulator, a
+  Material `AlertDialog` showed the board through it and a `DropdownMenu` didn't appear at all.
+  Returning from the home screen also left textures black (compare B1). There is no z-order that
+  is both "above what's behind the view" and "below what's in front of it".
+- On Apple, `SKView` is an ordinary layer in Core Animation's tree, so the OS composites it in
+  order with the views around it, transparency included. Android's equivalent path is a
+  `TextureView` (rendered as part of the window), which would mean owning the render thread and
+  EGL lifecycle instead of relying on `GLSurfaceView`'s.
+
+**Decision (the maintainers, 2026-11-15): keep `GLSurfaceView`.** Its render-thread/EGL lifecycle
+and its fit with the rest of the Android stack are worth more than this one API. Hosts that need a
+background behind the board should draw it **inside the scene** (e.g. a full-scene sprite below the
+content) — no transparency needed. Revisit only if a `TextureView` core is wanted for other reasons
+(e.g. drawing app UI over the scene in the same window), and record `allowsTransparency` in
+`API_COMPATIBILITY.md`'s "Not implemented" list meanwhile.
 
 ## 3. Renderer infrastructure that gates the P3 items
 

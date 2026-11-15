@@ -486,6 +486,9 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Not implemented
 
+- **`SKView.allowsTransparency`** — a `GLSurfaceView` can't be both transparent to what's behind it
+  and below what's drawn over it in the same window; see `docs/PARITY_GAP_PLAN.md` section 2.9. Draw
+  a background inside the scene instead.
 - **`SKEffectNode.filter`** — Core Image, no Android equivalent.
 - **`SKVideoNode`** — no video-texture bridge in this library yet.
 - **`SKLightNode`** / normal-map lighting and shadows — deferred with the rest of the shader system.
