@@ -25,10 +25,8 @@ categories recur throughout and are called out once here rather than per item:
 - **Nullability** uses Kotlin's `?` type system throughout, not Optional-as-comment.
 - **Durations.** Where SpriteKit's API takes an elapsed/relative time interval (e.g.
   `SKAction.wait(forDuration:)`), this library uses `kotlin.time.Duration` rather than a raw
-  `Double` of seconds, to prevent unit-confusion bugs — SpriteKit's `update(_ currentTime:
-  TimeInterval)` callback (an *absolute* timestamp, not a duration) is the one place this library
-  still exposes a raw value, since wrapping an absolute clock reading in `Duration` would be
-  misleading; see the "Scene lifecycle" section once Phase 2 lands.
+  `Double` of seconds, to prevent unit-confusion bugs. This includes `SKScene.update`, which is
+  shaped differently from Apple's — see "Scene graph" below.
 - **No SIMD/Core Graphics vector or path types.** `CGPoint`/`CGVector`/`CGSize` map to plain
   Kotlin data classes or existing Android types where one already fits (e.g. `android.graphics.Path`
   for `SKShapeNode`'s `path`, rather than introducing a parallel path type).
@@ -115,10 +113,23 @@ categories recur throughout and are called out once here rather than per item:
 - **`didMove(view)`/`willMove(view)` instead of `didMove(to:)`/`willMove(from:)`** — Kotlin can't
   overload on argument labels alone, so each callback keeps its own name and a plain `view`
   parameter. Both run on the render thread, from `SKView.presentScene`.
-- **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
-  action evaluation/physics simulation isn't implemented yet — there's no action or physics system
-  to propagate to until later phases. Only `SKScene.isPaused` (inherited from here) is currently
-  honored, by `SKView`'s render loop.
+- **`SKScene.update(deltaTime: Duration)` instead of `update(_ currentTime: TimeInterval)`.**
+  Apple passes an *absolute* timestamp and leaves every scene to subtract the previous frame's
+  value itself; this library passes the time elapsed since the previous frame directly, as a
+  `Duration`. Ported code that computes `currentTime - lastUpdateTime` drops that bookkeeping and
+  uses `deltaTime` as is. The first frame after the GL surface is (re)created gets a zero
+  `deltaTime`; deltas are not otherwise clamped.
+- **`SKNode.isPaused`** behaves like Apple's: a paused node's whole subtree is skipped by action
+  evaluation, constraint application, physics, particle emission, tile-map animation and audio
+  stepping, and still renders. A paused `SKScene` additionally gets no `update`/`did…` callbacks.
+- **`SKView.isPaused` and `SKView.scene`** match Apple's (behavior verified on an iOS simulator):
+  setting `view.isPaused` sets the presented scene's `isPaused` to the same value, and while the
+  view is paused nothing in the scene runs whatever the scene's own `isPaused` says.
+  `presentScene` un-pauses the incoming scene (unless the view is paused), as Apple does.
+  `SKView.onResume()` (the Android counterpart of returning to the foreground) un-pauses the scene
+  even if the app had paused it through `scene.isPaused` — Apple's `SKView` does the same — but
+  leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
+  on the render thread.
 
 ## Textures & sprites (`SKTexture`, `SKTextureAtlas`, `SKSpriteNode`)
 

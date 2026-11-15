@@ -38,7 +38,37 @@ public class SKView
          */
         public var onTouch: ((SKTouchEvent) -> Unit)? = null
 
+        @Volatile
         private var currentScene: SKScene? = null
+
+        /**
+         * The scene this view currently presents — Apple's `SKView.scene`. `null` until the first
+         * [presentScene] has taken effect on the render thread (it's set there, before the next
+         * frame, not synchronously by [presentScene]). Readable from any thread; the scene itself is
+         * still render-thread-confined, so cross with [runOnGLThread] before touching its state.
+         */
+        public val scene: SKScene?
+            get() = currentScene
+
+        /**
+         * Whether this view's scene is paused — Apple's `SKView.isPaused`. While `true`, the frame
+         * loop runs no `update`, actions, physics, constraints, particles, tile-map animation or
+         * audio stepping, whatever the scene's own [SKNode.isPaused] says; the scene keeps being
+         * drawn as it last was.
+         *
+         * Like Apple's (verified on an iOS simulator), setting it also sets the presented scene's
+         * [SKNode.isPaused] to the same value, and a view paused this way stays paused across
+         * [onPause]/[onResume] — unlike a scene paused only through its own `isPaused`, which
+         * [onResume] un-pauses, again as Apple does when an app returns to the foreground.
+         * Safe to set from any thread; the scene side takes effect on the render thread.
+         */
+        @Volatile
+        public var isPaused: Boolean = false
+            set(value) {
+                if (field == value) return
+                field = value
+                runOnGLThread { currentScene?.isPaused = value }
+            }
         private val sceneRenderer = SKSceneRenderer()
         private var viewWidth = 0
         private var viewHeight = 0
@@ -132,6 +162,8 @@ public class SKView
                 outgoing.view = null
             }
             currentScene = scene
+            // Apple un-pauses a scene when it's presented (unless the view itself is paused).
+            scene.isPaused = isPaused
             scene.view = this
             scene.didMove(this)
             // Apple resizes a `.resizeFill` scene after `didMove(to:)`, on the next layout pass.
@@ -166,14 +198,25 @@ public class SKView
             mainHandler.post { block() }
         }
 
+        /**
+         * Suspends the render thread (`GLSurfaceView.onPause`) and pauses the presented scene. Call
+         * from the host's `Activity`/`Fragment` `onPause` (the Compose wrapper does this itself).
+         */
         override fun onPause() {
             runOnGLThread { currentScene?.isPaused = true }
             super.onPause()
         }
 
+        /**
+         * Resumes the render thread and un-pauses the presented scene — even one the app had paused
+         * through [SKNode.isPaused] itself, matching Apple, whose `SKView` un-pauses its scene when the
+         * app returns to the foreground (verified on an iOS simulator). To keep a scene paused across
+         * backgrounding, pause the view ([isPaused]) instead, or pause a child node holding the
+         * gameplay content rather than the scene.
+         */
         override fun onResume() {
             super.onResume()
-            runOnGLThread { currentScene?.isPaused = false }
+            runOnGLThread { currentScene?.isPaused = isPaused }
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -316,7 +359,7 @@ public class SKView
                 val scene = currentScene
                 // Also covers a scene whose scaleMode was switched to `.resizeFill` after presenting.
                 scene?.let { syncResizeFillSize(it) }
-                if (scene != null && !scene.isPaused) {
+                if (scene != null && !isPaused && !scene.isPaused) {
                     scene.update(deltaTime)
                     scene.stepActions(deltaTime)
                     scene.didEvaluateActions()
