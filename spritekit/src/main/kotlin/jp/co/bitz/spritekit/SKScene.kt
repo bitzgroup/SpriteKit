@@ -43,6 +43,27 @@ public open class SKScene(
     public var view: SKView? = null
         internal set
 
+    /**
+     * Converts [point] from the presenting [view]'s coordinate system into this scene's — Apple's
+     * `convertPoint(fromView:)`. View coordinates are Android view pixels (origin top-left, y-down),
+     * where Apple's are UIKit points; everything else — [scaleMode], [anchorPoint], [camera] — is
+     * accounted for as Apple does. Returns [point] unchanged while the scene isn't presented (or the
+     * view has no size yet). See [SKView.convertTo] for threading.
+     */
+    public fun convertPointFromView(point: Vector2): Vector2 {
+        val view = view ?: return point
+        return viewPointToScene(this, point, view.width, view.height)
+    }
+
+    /**
+     * Converts [point] from this scene's coordinate system into the presenting [view]'s, in view
+     * pixels — Apple's `convertPoint(toView:)`, the inverse of [convertPointFromView].
+     */
+    public fun convertPointToView(point: Vector2): Vector2 {
+        val view = view ?: return point
+        return scenePointToView(this, point, view.width, view.height)
+    }
+
     /** How this scene scales to fit the [SKView] presenting it. Defaults to [SKSceneScaleMode.Fill]. */
     public var scaleMode: SKSceneScaleMode = SKSceneScaleMode.Fill
 

@@ -182,6 +182,31 @@ public class SKView
         }
 
         /**
+         * Converts [point] from this view's coordinate system (view pixels, origin top-left, y-down)
+         * into [scene]'s — Apple's `convert(_:to:)`. Renamed like [SKNode.convertTo], since Swift
+         * argument labels don't distinguish Kotlin overloads. Accounts for the scene's
+         * [SKScene.scaleMode], [SKScene.anchorPoint] and [SKScene.camera], with the same math that
+         * places touches and rendered content. Returns [point] unchanged before the view is laid out.
+         *
+         * Reads the scene's camera transform, which is render-thread state: call it on the render
+         * thread (e.g. inside [runOnGLThread]) for a result that matches the frame being drawn; from
+         * the UI thread it can lag a moving camera by a frame.
+         */
+        public fun convertTo(
+            point: Vector2,
+            scene: SKScene,
+        ): Vector2 = viewPointToScene(scene, point, width, height)
+
+        /**
+         * Converts [point] from [scene]'s coordinate system into this view's, in view pixels — Apple's
+         * `convert(_:from:)`, the inverse of [convertTo]. The same threading note applies.
+         */
+        public fun convertFrom(
+            point: Vector2,
+            scene: SKScene,
+        ): Vector2 = scenePointToView(scene, point, width, height)
+
+        /**
          * Queues [block] to run on the render thread before the next frame. Fire-and-forget,
          * FIFO-ordered relative to other queued blocks. Safe to call from any thread, including
          * before the render thread has started.
