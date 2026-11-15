@@ -209,6 +209,28 @@ class Ship : SKSpriteNode(texture = shipTexture, size = Vector2(64f, 64f)) {
 }
 ```
 
+Remote and game-controller buttons (Android TV, a D-pad, a gamepad) arrive as Apple-shaped
+`presses*` callbacks on the scene — forwarded by the host, as a tvOS view controller forwards its
+own `presses*` to its scene:
+
+```kotlin
+class GameScene : SKScene(size = Vector2(1920f, 1080f)) {
+    override fun pressesBegan(
+        presses: Set<SKPress>,
+        event: SKPressesEvent?,
+    ) {
+        if (presses.any { it.type == SKPressType.Select }) fire()
+    }
+}
+
+// In the host Activity:
+override fun onKeyDown(keyCode: Int, event: KeyEvent) =
+    skView.forwardKeyEvent(event) || super.onKeyDown(keyCode, event)
+
+override fun onKeyUp(keyCode: Int, event: KeyEvent) =
+    skView.forwardKeyEvent(event) || super.onKeyUp(keyCode, event)
+```
+
 ### Transitions
 
 ```kotlin

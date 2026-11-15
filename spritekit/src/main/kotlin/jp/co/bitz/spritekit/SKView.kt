@@ -7,6 +7,7 @@ import android.opengl.GLSurfaceView
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
+import android.view.KeyEvent
 import android.view.MotionEvent
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -37,6 +38,9 @@ public class SKView
          * view-space touch access. `null` (the default) means nothing extra happens.
          */
         public var onTouch: ((SKTouchEvent) -> Unit)? = null
+
+        /** Render-thread-confined; tracks the presses [forwardKeyEvent] has delivered. */
+        private val pressDispatcher = SKPressDispatcher()
 
         @Volatile
         private var currentScene: SKScene? = null
@@ -245,6 +249,43 @@ public class SKView
         override fun onResume() {
             super.onResume()
             runOnGLThread { currentScene?.isPaused = isPaused }
+        }
+
+        /**
+         * Forwards a key event to the presented scene as an Apple-shaped press — the counterpart of
+         * a tvOS view controller overriding `pressesBegan`/`pressesEnded` and passing them to its
+         * scene. Like Apple's SpriteKit, this view never delivers presses on its own; call this from
+         * the host `Activity`'s `onKeyDown`/`onKeyUp` (or `dispatchKeyEvent`) and return its result:
+         *
+         * ```
+         * override fun onKeyDown(keyCode: Int, event: KeyEvent) =
+         *     skView.forwardKeyEvent(event) || super.onKeyDown(keyCode, event)
+         * ```
+         *
+         * Keys with an [SKPressType] ([skPressTypeForKeyCode]) are delivered on the render thread:
+         * the first key-down as [SKNode.pressesBegan], the key-up as [SKNode.pressesEnded] (or
+         * [SKNode.pressesCancelled] for a cancelled key-up). Auto-repeat key-downs are consumed but
+         * not delivered, so a held button is one `began` and one `ended`, as on tvOS.
+         *
+         * Returns `true` when [event] was consumed, `false` for keys with no press type. Back maps to
+         * [SKPressType.Menu], and consuming it keeps the system from handling Back — as on tvOS,
+         * where a Menu press the game handles doesn't leave the app. Whether the game handles Back
+         * is the host's decision: don't forward it when the system should handle it.
+         */
+        public fun forwardKeyEvent(event: KeyEvent): Boolean {
+            val type = skPressTypeForKeyCode(event.keyCode)
+            val isPressAction = event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP
+            if (type != null && isPressAction && event.repeatCount == 0) {
+                val transition =
+                    SKKeyTransition(
+                        keyCode = event.keyCode,
+                        type = type,
+                        isDown = event.action == KeyEvent.ACTION_DOWN,
+                        isCanceled = event.isCanceled,
+                    )
+                runOnGLThread { pressDispatcher.dispatch(currentScene, transition) }
+            }
+            return type != null && isPressAction
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
