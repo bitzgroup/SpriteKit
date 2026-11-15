@@ -184,6 +184,29 @@ public open class SKNode {
         return boundingRectOf(corners(bounds).map(::localToParent))
     }
 
+    /**
+     * The bounding box of this node's own content (not its children's), in [parent]'s coordinate
+     * system — Apple's `frame`. Accounts for this node's position, scale and rotation (a rotated
+     * node's frame is the axis-aligned box around it). A plain [SKNode] has a zero-size frame at its
+     * [position]. Without a parent, it's expressed in the node's own local space, like
+     * [calculateAccumulatedFrame].
+     */
+    public val frame: Rect
+        get() {
+            parent ?: return localBounds
+            return boundingRectOf(corners(localBounds).map(::localToParent))
+        }
+
+    /**
+     * Whether [point], in [parent]'s coordinate system, lies inside this node's
+     * [calculateAccumulatedFrame] — Apple's `contains(_:)`. Like `CGRect.contains`, the left/bottom
+     * edges are inside and the right/top edges aren't, so a zero-size frame contains nothing.
+     */
+    public fun contains(point: Vector2): Boolean {
+        val bounds = calculateAccumulatedFrame()
+        return point.x >= bounds.left && point.x < bounds.right && point.y >= bounds.top && point.y < bounds.bottom
+    }
+
     /** Whether this node's and [other]'s [calculateAccumulatedFrame]s overlap. */
     public fun intersects(other: SKNode): Boolean {
         val otherReferenceSpace = other.parent ?: other

@@ -131,6 +131,17 @@ categories recur throughout and are called out once here rather than per item:
   leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
   on the render thread.
 
+- **`SKNode.nodes(point)`/`atPoint(point)`** are Apple's `nodes(at:)`/`atPoint(_:)` with the
+  argument label dropped, and are top-level extension functions rather than members (call sites
+  read the same). `frame` and `contains(_:)` are members. Semantics match Apple's, probed on
+  macOS: `contains` tests the accumulated frame with `CGRect`'s half-open edges, while
+  `nodes`/`atPoint` test it with all four edges inclusive; hidden and `alpha == 0` subtrees are
+  skipped; results are frontmost first; `atPoint` falls back to the receiver.
+- **View ↔ scene conversion** — Apple's `SKScene.convertPoint(fromView:)`/`convertPoint(toView:)`
+  and `SKView.convert(_:to:)`/`convert(_:from:)` — are `convertPointFromView`/`convertPointToView`
+  and `SKView.convertTo`/`convertFrom` (Kotlin can't overload on argument labels). View
+  coordinates are Android view **pixels**, origin top-left, y-down, where Apple's are UIKit points.
+
 ## Textures & sprites (`SKTexture`, `SKTextureAtlas`, `SKSpriteNode`)
 
 - **`SKTextureAtlas.pack`** is a runtime atlas packer rather than Apple's build-time
