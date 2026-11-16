@@ -79,7 +79,7 @@ public open class SKNode {
      */
     public var isPaused: Boolean = false
 
-    /** An optional name used to find this node via [SKNode.childNode]/[SKNode.enumerateChildNodes]. */
+    /** An optional name used to find this node via [SKNode.childNode]/[SKNode.enumerateChildNodes]/[get]. */
     public var name: String? = null
 
     /** Arbitrary user data, `null` until the caller sets it — this library's `NSMutableDictionary` stand-in. */
@@ -155,20 +155,35 @@ public open class SKNode {
     }
 
     /**
-     * Returns the first direct child whose [name] equals [name], or `null` if none matches.
+     * The first node [name] finds, or `null` — Apple's `childNode(withName:)`, including its
+     * search syntax (verified on iOS/tvOS simulators):
      *
-     * Only searches direct children with an exact name match — Apple's `childNode(withName:)`
-     * additionally supports a `/`/`//`/`*` search-pattern mini-language for recursive/wildcard
-     * search, which isn't implemented; see `docs/API_COMPATIBILITY.md`.
+     * - `"enemy"` — a direct child named `enemy`.
+     * - `"//enemy"` — any node named `enemy` in this node's whole tree, searched from its root.
+     * - `"/hud"` — a direct child of the tree's root.
+     * - `"hud/score"`, `"hud//icon"` — step through children (`/`) or whole subtrees (`//`).
+     * - `"enemy*"`, `"[ab]"`, `"*"` — wildcards and character sets; `*` also matches unnamed nodes.
+     * - `"."`, `".."` — this node and its parent.
+     *
+     * Where several nodes match, the order is Apple's: each node's matching children come before
+     * matches deeper down.
+     *
+     * @throws IllegalArgumentException if [name] is empty, as Apple raises for it.
      */
-    public fun childNode(name: String): SKNode? = mutableChildren.firstOrNull { it.name == name }
+    public fun childNode(name: String): SKNode? = searchNodes(name).firstOrNull()
 
-    /** Calls [action] for every direct child whose [name] equals [name]. See [childNode]'s docs on search scope. */
+    /**
+     * Calls [action] for every node [name] finds, in the order [childNode] describes — Apple's
+     * `enumerateChildNodes(withName:using:)`.
+     *
+     * Deviation: there's no `stop` flag. To stop early, loop over [get] (`node["//enemy"]`)
+     * and `break`.
+     */
     public fun enumerateChildNodes(
         name: String,
         action: (SKNode) -> Unit,
     ) {
-        mutableChildren.filter { it.name == name }.forEach(action)
+        searchNodes(name).forEach(action)
     }
 
     /**

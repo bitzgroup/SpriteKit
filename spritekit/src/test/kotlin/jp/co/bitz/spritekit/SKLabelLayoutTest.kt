@@ -36,4 +36,27 @@ class SKLabelLayoutTest {
 
         assertEquals(listOf(Vector2(0f, 0f), Vector2(20f, 0f), Vector2(20f, 10f), Vector2(0f, 10f)), corners)
     }
+
+    // Apple, verified on iOS/tvOS simulators (tic-tac-toe's SKLabelMultilineParityTests): a
+    // multi-line block aligns its bottom edge to the origin in baseline mode, as in bottom mode.
+    @Test
+    fun `a multi-line block aligns baseline like bottom and centers on its whole height`() {
+        val metrics = multiLineMetrics(width = 40f, height = 50f)
+
+        fun corners(mode: SKLabelVerticalAlignmentMode) =
+            labelQuadCorners(metrics, SKLabelHorizontalAlignmentMode.Center, mode)
+
+        assertEquals(0f, corners(SKLabelVerticalAlignmentMode.Baseline)[0].y)
+        assertEquals(0f, corners(SKLabelVerticalAlignmentMode.Bottom)[0].y)
+        assertEquals(-25f, corners(SKLabelVerticalAlignmentMode.Center)[0].y)
+        assertEquals(0f, corners(SKLabelVerticalAlignmentMode.Top)[2].y)
+        assertEquals(-20f, corners(SKLabelVerticalAlignmentMode.Top)[0].x)
+    }
+
+    @Test
+    fun `a one-line label leaves the multi-line settings out of its cache key`() {
+        val label = SKLabelNode(text = "").apply { preferredMaxLayoutWidth = 80f }
+        assertEquals(1, label.numberOfLines)
+        assertEquals(SKLineBreakMode.ByTruncatingTail, label.lineBreakMode)
+    }
 }

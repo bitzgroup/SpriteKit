@@ -65,7 +65,7 @@ Priorities:
 | S1 | `SKScene.sceneDidLoad()` | `didMove`/`willMove`/`didChangeSize` exist; this is the one lifecycle callback still absent. On Apple it runs once after the scene is initialized or decoded — with no archive loading here, define it as "once, before the first `didMove`". | P2 |
 | S2 | `SKSceneDelegate` (`SKScene.delegate`) | `update(_:for:)`, `didEvaluateActions(for:)`, `didSimulatePhysics(for:)`, `didApplyConstraints(for:)`, `didFinishUpdate(for:)`. The subclass hooks exist; the delegate forwarding does not. | P2 |
 | ~~V1~~ | ~~`SKView.isPaused`, `SKView.scene` (public getter)~~ | **Done**, with Apple's semantics verified on an iOS simulator: setting the view's `isPaused` sets the scene's too; a paused view runs nothing whatever the scene says; `presentScene` un-pauses the incoming scene, and (without a transition) the view too. These Apple behaviors are recorded as tests in the sample app's `SpriteKitParityTests` target. | P0 |
-| V2 | `SKView.ignoresSiblingOrder` | Check what order equal-`zPosition` siblings currently draw in and which Apple mode that corresponds to; then expose the switch. | P1 |
+| ~~V2~~ | ~~`SKView.ignoresSiblingOrder`~~ | **Done.** The renderer already drew Apple's default (`false`) order — effective `zPosition`, then tree order — verified by pixel probes on iOS/tvOS simulators. `true` only allows any order for equal-`zPosition` nodes, so the flag is accepted and tree order kept. | P1 |
 | V3 | `SKView.preferredFramesPerSecond` | Frame-rate cap (battery; TV). | P2 |
 | V4 | `SKView.showsFPS`, `showsNodeCount`, `showsDrawCount`, `showsQuadCount`, `showsPhysics`, `showsFields` | Debug overlays. `showsFPS`/`showsNodeCount`/`showsPhysics` are the useful three. | P2 |
 | V5 | `shouldCullNonVisibleNodes`, `isAsynchronous`, `SKViewDelegate.view(_:shouldRenderAtTime:)` | `allowsTransparency` is implemented, with an Android limitation — see section 2.9. | P2 |
@@ -77,7 +77,7 @@ Priorities:
 | --- | --- | --- | --- |
 | ~~N1~~ | ~~`insertChild(_:at:)`, `removeChildren(in:)`, `move(toParent:)`, `inParentHierarchy(_:)`~~ | **Done**, verified on iOS/tvOS simulators. Apple's `move(toParent:)` keeps only the *position* in place — rotation and scale keep their local values — so that is what `moveToParent` does. | P1 |
 | ~~N2~~ | ~~`SKNode.speed`~~ | **Done**, verified on iOS/tvOS simulators (inherited multiplicatively; `0` stops actions without removing them). | P1 |
-| N3 | `childNode(withName:)` search syntax (`//`, `/`, `..`, `*`, `[a-z]`), `subscript(_:)` | Already recorded as a deviation; listed here because ported code using `"//name"` fails silently (returns `null`). | P1 |
+| ~~N3~~ | ~~`childNode(withName:)` search syntax (`//`, `/`, `..`, `*`, `[a-z]`), `subscript(_:)`~~ | **Done**, including Apple's result order (`//` lists a node's children before searching deeper), verified on iOS/tvOS simulators. `subscript` is the `get` operator. | P1 |
 | N4 | `copy()` | Deliberately excluded with `NSCopying`, but node copying (stamping out configured prototypes) is common SpriteKit usage. Reconsider as an explicit `open fun copy(): SKNode` per node class. | P2 |
 | N5 | `SKReachConstraints`, `SKNode.reachConstraints`, `SKAction.reach(to:…)` | Inverse kinematics. | P3 |
 
@@ -85,15 +85,15 @@ Priorities:
 
 | # | Missing | Notes | Pri |
 | --- | --- | --- | --- |
-| T1 | `SKTexture(imageNamed:)`, `SKSpriteNode(imageNamed:)` | The only public constructor takes a `Bitmap`, so every host app writes its own loader. Resolve names against `assets/` the same way `SKAudioNode(fileNamed:)` already does (and consider drawable resources). Needs a `Context`, like the audio path. | P1 |
+| ~~T1~~ | ~~`SKTexture(imageNamed:)`, `SKSpriteNode(imageNamed:)`~~ | **Done**, from `assets/`; a missing image gives Apple's 128×128 placeholder. The `Context` is captured at start-up by a manifest-merged `ContentProvider`, so textures load before any view exists. Drawable resources aren't searched. | P1 |
 | T2 | `SKTextureAtlas(named:)`, `SKTextureAtlas(dictionary:)`, `preload` / `SKTexture.preload` | `named:` can map to an `assets/<name>.atlas/` folder packed by the existing runtime packer. | P2 |
 | T3 | `SKTexture.usesMipmaps`, `SKTexture(data:size:)`, `SKMutableTexture`, `SKTexture.generatingNormalMap`, noise-texture initializers | Normal maps only matter once lighting exists. | P3 |
-| T4 | `SKSpriteNode.centerRect` | 9-slice stretching — common for UI panels and buttons. | P1 |
+| ~~T4~~ | ~~`SKSpriteNode.centerRect`~~ | **Done**, verified by pixel probes on iOS/tvOS simulators: the border keeps its texture size on screen through `size` or scale. | P1 |
 | ~~T5~~ | ~~`SKSpriteNode.scale(to:)`~~ | **Done** as `scale(to)`. Recording it showed Apple's `SKSpriteNode.size` *includes* the scale, which this library's didn't — fixed along with it. | P1 |
 | ~~H1~~ | ~~Remaining `SKShapeNode` convenience initializers: `init(rect:)` / `init(rect:cornerRadius:)` (an arbitrary, non-centered rect), `init(ellipseIn:)`, `init(path:centered:)`, `init(points:count:)`, `init(splinePoints:count:)`~~ | **Done** as companion factories, matching Apple's paths element for element (verified on iOS/tvOS simulators). | P1 |
 | H2 | `SKShapeNode.isAntialiased`, `blendMode`, `lineLength` | `lineCap`/`lineJoin`/`miterLimit` exist. No antialiasing switch or MSAA configuration exists in the renderer; Apple's default is `isAntialiased = true`, so check how shape edges compare. | P2 |
 | L1 | `SKLabelNode.color`/`colorBlendFactor`, `blendMode` | | P2 |
-| L2 | `SKLabelNode.numberOfLines`, `preferredMaxLayoutWidth`, `lineBreakMode` | Recorded as a deviation; `android.text.StaticLayout` can do the layout. Needed for localized text. | P1 |
+| ~~L2~~ | ~~`SKLabelNode.numberOfLines`, `preferredMaxLayoutWidth`, `lineBreakMode`~~ | **Done** with `StaticLayout`, following Apple's layout rules as recorded on iOS/tvOS simulators (one line ignores the width; a multi-line block aligns `.baseline` like `.bottom`). | P1 |
 | L3 | `SKLabelNode.attributedText` | Map to `android.text.Spanned`. | P2 |
 
 ### 2.5 Actions
@@ -106,7 +106,7 @@ Missing `SKAction` factories (everything else in Apple's list is present):
 | ~~A2~~ | ~~`rotate(toAngle:duration:shortestUnitArc:)`~~ — **Done**, verified: the default interpolates straight to the target; both end exactly on it. Found along the way: `scaleBy` was additive, Apple's multiplies — fixed. | P1 |
 | ~~A3~~ | ~~`setTexture(_:)`, `setTexture(_:resize:)`~~ — **Done**. | P1 |
 | ~~A4~~ | ~~`speed(to:duration:)`, `speed(by:duration:)` (depends on N2)~~ — **Done** as `speedTo`/`speedBy`; `speedBy` multiplies, as Apple's does. | P1 |
-| A5 | `run(_:onChildWithName:)` with the full name-search syntax — exists for direct children only; follows N3 | P2 |
+| ~~A5~~ | ~~`run(_:onChildWithName:)` with the full name-search syntax~~ — **Done** with N3; runs on the first match only, as on Apple. | P2 |
 | A6 | `applyForce`/`applyTorque`/`applyImpulse`/`applyAngularImpulse` actions, `changeCharge`, `changeMass`, `strength(to:/by:)`, `falloff(to:/by:)` | P2 |
 | A7 | `wait(forDuration:withRange:)` re-randomizing per run, `group` leftover time (both recorded deviations) | P2 |
 | ~~A8~~ | ~~`SKAction.duration` as a public, settable property (verify current visibility)~~ — **Done** — settable; on a composite it changes only the reported value, as on Apple. | P1 |
@@ -200,7 +200,8 @@ Each step is one `feature/*` branch and PR against `develop`, with the matching
 4. ~~**Everyday API, batch 1** — H1 (shape initializers), N1, N2, A1–A4, A8, T5, C1.~~ Done,
    plus two Apple-parity fixes it surfaced: `SKSpriteNode.size` includes the scale, and
    `scaleBy` multiplies.
-5. **Everyday API, batch 2** — T1 (named textures), T4 (`centerRect`), L2, N3 + A5, V2.
+5. ~~**Everyday API, batch 2** — T1 (named textures), T4 (`centerRect`), L2, N3 + A5, V2.~~
+   Done.
 6. **Physics queries** — P1, P2.
 7. **Second tier** — the P2 rows above, driven by what host apps actually hit.
 8. **Renderer infrastructure** — R1–R4, then the P3 rows they unblock.

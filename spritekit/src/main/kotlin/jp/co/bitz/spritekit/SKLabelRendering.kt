@@ -3,36 +3,43 @@ package jp.co.bitz.spritekit
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.TextUtils
 import kotlin.math.ceil
 
 /**
- * Renders [text] into a new [Bitmap] using [fontName]/[fontSize]/[fontColor] (via
- * `android.graphics.Paint`/`Canvas` — there's no `CoreText` equivalent on Android, so this is how
- * [SKLabelNode] gets its texture; see `docs/API_COMPATIBILITY.md`), alongside the [SKLabelMetrics]
- * [labelQuadCorners] needs. `null` for empty text or degenerate metrics.
+ * Renders [key]'s text into a new [Bitmap] (via `android.graphics.Paint`/`Canvas`, and
+ * `android.text.StaticLayout` for a multi-line label — there's no `CoreText` equivalent on
+ * Android, so this is how [SKLabelNode] gets its texture; see `docs/API_COMPATIBILITY.md`),
+ * alongside the [SKLabelMetrics] [labelQuadCorners] needs. `null` for empty text or degenerate
+ * metrics.
  *
  * Touches real `Paint`/`Canvas`/`Bitmap` APIs, so — unlike [labelQuadCorners], which consumes
  * this function's [SKLabelMetrics] output — it isn't covered by unit tests; see
  * `docs/ROADMAP.md`'s testing notes.
  */
-@Suppress("ReturnCount") // two guard clauses read more clearly here than nesting/flattening them
-internal fun renderLabelBitmap(
-    text: String,
-    fontName: String?,
-    fontSize: Float,
-    fontColor: Int,
-): Pair<Bitmap, SKLabelMetrics>? {
+internal fun renderLabelBitmap(key: SKLabelCacheKey): Pair<Bitmap, SKLabelMetrics>? {
     // Guards *before* touching Paint at all, so empty text never reaches it -- callers (e.g.
     // buildRenderCommands' unit tests) rely on being able to construct an empty-text SKLabelNode
     // without needing a real Android runtime.
-    if (text.isEmpty()) return null
+    if (key.text.isEmpty()) return null
 
     val paint =
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.textSize = fontSize
-            this.color = fontColor
-            this.typeface = typefaceForFontName(fontName)
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.textSize = key.fontSize
+            this.color = key.fontColor
+            this.typeface = typefaceForFontName(key.fontName)
         }
+    val lineLayout = key.lineLayout
+    return if (lineLayout == null) renderOneLine(key.text, paint) else renderLines(key.text, paint, lineLayout)
+}
+
+private fun renderOneLine(
+    text: String,
+    paint: Paint,
+): Pair<Bitmap, SKLabelMetrics>? {
     val width = paint.measureText(text)
     val fontMetrics = paint.fontMetrics
     val ascent = -fontMetrics.ascent
@@ -40,12 +47,67 @@ internal fun renderLabelBitmap(
     val height = ascent + descent
     if (width <= 0f || height <= 0f) return null
 
-    val bitmap =
-        Bitmap.createBitmap(
-            ceil(width).toInt().coerceAtLeast(1),
-            ceil(height).toInt().coerceAtLeast(1),
-            Bitmap.Config.ARGB_8888,
-        )
+    val bitmap = blankBitmap(width, height)
     Canvas(bitmap).drawText(text, 0f, ascent, paint)
     return bitmap to SKLabelMetrics(width, ascent, descent)
 }
+
+private fun renderLines(
+    text: String,
+    paint: TextPaint,
+    settings: SKLabelLineLayout,
+): Pair<Bitmap, SKLabelMetrics>? {
+    // Lay out once at the wrap width to find the widest line, then again at exactly that width so
+    // the block is no wider than its text (Apple's frame is the text's, not the wrap width's).
+    val wrapWidth =
+        if (settings.maxWidth > 0f) settings.maxWidth else Layout.getDesiredWidth(text, paint)
+    val measured = buildLayout(text, paint, settings, ceil(wrapWidth).toInt())
+    val blockWidth = (0 until measured.lineCount).maxOfOrNull { measured.getLineWidth(it) } ?: 0f
+    val layout = buildLayout(text, paint, settings, ceil(blockWidth).toInt())
+    val height = layout.height.toFloat()
+    if (blockWidth <= 0f || height <= 0f) return null
+
+    val bitmap = blankBitmap(blockWidth, height)
+    layout.draw(Canvas(bitmap))
+    return bitmap to multiLineMetrics(blockWidth, height)
+}
+
+private fun buildLayout(
+    text: String,
+    paint: TextPaint,
+    settings: SKLabelLineLayout,
+    width: Int,
+): StaticLayout {
+    val builder =
+        StaticLayout.Builder
+            .obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
+            .setIncludePad(false)
+            .setAlignment(
+                when (settings.alignment) {
+                    SKLabelHorizontalAlignmentMode.Left -> Layout.Alignment.ALIGN_NORMAL
+                    SKLabelHorizontalAlignmentMode.Center -> Layout.Alignment.ALIGN_CENTER
+                    SKLabelHorizontalAlignmentMode.Right -> Layout.Alignment.ALIGN_OPPOSITE
+                },
+            )
+    if (settings.numberOfLines > 0) builder.setMaxLines(settings.numberOfLines)
+    truncateAt(settings.lineBreakMode)?.let(builder::setEllipsize)
+    return builder.build()
+}
+
+private fun truncateAt(mode: SKLineBreakMode): TextUtils.TruncateAt? =
+    when (mode) {
+        SKLineBreakMode.ByTruncatingHead -> TextUtils.TruncateAt.START
+        SKLineBreakMode.ByTruncatingTail -> TextUtils.TruncateAt.END
+        SKLineBreakMode.ByTruncatingMiddle -> TextUtils.TruncateAt.MIDDLE
+        SKLineBreakMode.ByWordWrapping, SKLineBreakMode.ByCharWrapping, SKLineBreakMode.ByClipping -> null
+    }
+
+private fun blankBitmap(
+    width: Float,
+    height: Float,
+): Bitmap =
+    Bitmap.createBitmap(
+        ceil(width).toInt().coerceAtLeast(1),
+        ceil(height).toInt().coerceAtLeast(1),
+        Bitmap.Config.ARGB_8888,
+    )

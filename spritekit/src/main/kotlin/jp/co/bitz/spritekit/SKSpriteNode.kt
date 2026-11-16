@@ -17,6 +17,13 @@ public open class SKSpriteNode(
     size: Vector2 = texture?.size() ?: Vector2.Zero,
     public var color: Int = Color.WHITE,
 ) : SKNode() {
+    /**
+     * A sprite showing the image [imageNamed] from the host app's `assets/` folder, sized to it —
+     * Apple's `SKSpriteNode(imageNamed:)`. See [SKTexture]'s `imageNamed` constructor for how the
+     * name is found.
+     */
+    public constructor(imageNamed: String) : this(SKTexture(imageNamed))
+
     /** The sprite's size before [xScale]/[yScale] apply — what it draws in its own local space. */
     internal var unscaledSize: Vector2 = size
 
@@ -54,6 +61,21 @@ public open class SKSpriteNode(
             if (unscaledSize.x == 0f) xScale else target.x / unscaledSize.x,
             if (unscaledSize.y == 0f) yScale else target.y / unscaledSize.y,
         )
+
+    /**
+     * Apple's `centerRect`: the part of [texture] that stretches when the sprite is drawn larger
+     * or smaller than the texture, in unit texture coordinates with the origin at the bottom left
+     * (`Rect(left = x, top = y, right = x + width, bottom = y + height)` for Apple's
+     * `CGRect(x:y:width:height:)`). The border around it keeps its texture size on screen —
+     * 9-slice stretching, for panels and buttons. Applies whether the sprite grows through
+     * [size] or through [xScale]/[yScale]. Defaults to the whole texture, which stretches all
+     * of it (verified on iOS/tvOS simulators).
+     */
+    public var centerRect: Rect = FULL_UNIT_RECT
+
+    /** This sprite's [centerRect] cells for [texture], in local space; see [nineSlices]. */
+    internal fun nineSlices(texture: SKTexture): List<SKSpriteSlice> =
+        nineSlices(localBounds, centerRect, texture.size(), Vector2(xScale, yScale), texture.textureRect)
 
     /**
      * How much [color] tints [texture]'s own colors, from `0` (texture shows through unmodified,

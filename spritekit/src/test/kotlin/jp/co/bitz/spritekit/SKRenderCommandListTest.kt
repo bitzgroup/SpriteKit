@@ -166,6 +166,22 @@ class SKRenderCommandListTest {
         assertEquals(1f, commands[1].color.b)
     }
 
+    // Apple, verified on iOS/tvOS simulators (tic-tac-toe's SKRenderPixelParityTests): with
+    // ignoresSiblingOrder false, a child at its parent's zPosition draws over it, and a child with
+    // a negative zPosition draws under it.
+    @Test
+    fun `a child at its parent's zPosition draws after it and a negative zPosition puts it before`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val parent = SKSpriteNode(size = Vector2(2f, 2f), color = 0xFFFF0000.toInt()).apply { colorBlendFactor = 1f }
+        val child = SKSpriteNode(size = Vector2(1f, 1f), color = 0xFF0000FF.toInt()).apply { colorBlendFactor = 1f }
+        parent.addChild(child)
+        scene.addChild(parent)
+
+        assertEquals(1f, buildRenderCommands(scene)[0].color.r)
+        child.zPosition = -1f
+        assertEquals(1f, buildRenderCommands(scene)[0].color.b)
+    }
+
     @Test
     fun `non-sprite nodes produce no command but their sprite descendants still appear`() {
         val scene = SKScene(size = Vector2(100f, 100f))
