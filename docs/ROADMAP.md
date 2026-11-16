@@ -59,7 +59,7 @@ Compose wrapper" section for the full rationale and API shape.
 ## Phase 0 — Project Setup
 
 - [x] Scaffold Gradle Android library module (Kotlin DSL, `com.android.library` plugin)
-- [x] Configure Kotlin, min/target/compile SDK versions (minSdk 24, compileSdk/targetSdk 34)
+- [x] Configure Kotlin, min/target/compile SDK versions (minSdk 24, compileSdk/targetSdk 34; `compileSdk` since raised to 37)
 - [x] Configure unit test setup (JUnit / kotlin.test)
 - [x] Configure `ktlint`/`detekt`
 - [x] Set up CI (build + test on push/PR via GitHub Actions)
@@ -179,8 +179,9 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `rotateTo`/`rotateBy` (shortest angular path), `resizeTo`/`resizeBy`, `fadeIn`/`fadeOut`/
       `fadeAlphaTo`/`fadeAlphaBy`, `hide`/`unhide`, `colorize`, `wait`/`wait(withRange:)`, `run`
       (block), `removeFromParent`, `sequence`/`group`/`repeat`/`repeatForever`, `customAction`,
-      `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`. **Deferred**
-      (see "Explicitly Out of Scope" below): `run(_:onChildWithName:)`
+      `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`.
+      `run(_:onChildWithName:)` was deferred here and added later (direct children only — see
+      `docs/API_COMPATIBILITY.md`)
 - [x] `SKAction.follow(_:asOffset:orientToPath:duration:)` / `follow(_:asOffset:orientToPath:speed:)`
       — path-following, added after a host app needed arc motion along a quadratic curve and found
       it missing. Follows only a path's first contour, via
@@ -390,7 +391,7 @@ algorithms (steering, noise, Gaussian sampling).
       (placement, clearing, non-automapped fallback), and coordinate conversions (14), plus 2 new
       tile-map render tests in `SKRenderCommandListTest.kt`
 
-> Hexagonal layouts (`SKTileSetType.HEXAGONAL_POINTY`/`HEXAGONAL_FLAT`) were added later, in
+> Hexagonal layouts (`SKTileSetType.HexagonalPointy`/`HexagonalFlat`) were added later, in
 > Phase 15.
 
 ## Phase 10 — Input
@@ -540,18 +541,18 @@ full parity; see `docs/ARCHITECTURE.md`.
 
 ## Phase 15 — Hexagonal Tile Maps
 
-- [x] `SKTileSetType` — `GRID` (Phase 9's original, unchanged, behavior), `HEXAGONAL_POINTY`,
-      `HEXAGONAL_FLAT`. Apple's `.isometric` case isn't implemented — no isometric layout math
+- [x] `SKTileSetType` — `Grid` (Phase 9's original, unchanged, behavior), `HexagonalPointy`,
+      `HexagonalFlat`. Apple's `.isometric` case isn't implemented — no isometric layout math
       exists in this port; see `docs/API_COMPATIBILITY.md`
-- [x] `SKTileSet.type` — new constructor parameter/property, defaulting to `GRID` (fully
+- [x] `SKTileSet.type` — new constructor parameter/property, defaulting to `Grid` (fully
       backward-compatible with every existing `SKTileSet` call site)
 - [x] `SKTileMapNode.centerOfTile`/`tileColumnIndex`/`tileRowIndex`/`calculateAccumulatedFrame`
       (via the map's internal layout size) now branch on `tileSet.type`:
-    - `HEXAGONAL_POINTY` — regular hexagons with a vertex pointing up, arranged in horizontal
+    - `HexagonalPointy` — regular hexagons with a vertex pointing up, arranged in horizontal
       rows; odd rows (`row % 2 != 0`) are shifted right by half a tile width relative to even
       rows (the "odd-r offset" convention), and rows are spaced 3/4 of a tile height apart
       (adjacent rows overlap by the other 1/4, matching a regular hexagon's geometry)
-    - `HEXAGONAL_FLAT` — the same idea rotated 90°: regular hexagons with a flat edge pointing
+    - `HexagonalFlat` — the same idea rotated 90°: regular hexagons with a flat edge pointing
       up, arranged in vertical columns, odd columns shifted down by half a tile height (the
       "odd-q offset" convention), columns spaced 3/4 of a tile width apart
     - `tileColumnIndex`/`tileRowIndex` for the hexagonal types pick whichever cell's
@@ -563,9 +564,9 @@ full parity; see `docs/ARCHITECTURE.md`.
       hexagonal types only — depends on the cell's own row/column parity (adjacent rows/columns
       are offset from each other by half a tile, so which grid-relative direction a given
       `SKTileAdjacencyMask` bit points to alternates):
-    - `HEXAGONAL_POINTY` cells have no `UP`/`DOWN` neighbor (adjacent same-row cells touch along
+    - `HexagonalPointy` cells have no `UP`/`DOWN` neighbor (adjacent same-row cells touch along
       a vertical edge) — only `LEFT`/`RIGHT` and the four corner bits are meaningful
-    - `HEXAGONAL_FLAT` cells have no `LEFT`/`RIGHT` neighbor (adjacent same-column cells touch
+    - `HexagonalFlat` cells have no `LEFT`/`RIGHT` neighbor (adjacent same-column cells touch
       along a horizontal edge) — only `UP`/`DOWN` and the four corner bits are meaningful
     - `SKTileAdjacencyMask` itself is unchanged (still all 8 directions) — hexagonal tile groups
       simply never see 2 of the 8 bits set, rather than needing a smaller dedicated mask type
@@ -584,8 +585,6 @@ full parity; see `docs/ARCHITECTURE.md`.
 
 ## Explicitly Out of Scope
 
-- `SKAction.run(_:onChildWithName:)` — a niche convenience over `childNode`/`enumerateChildNodes`
-  plus a plain `run`
 - `SKEffectNode.filter` — Core Image, no Android equivalent
 - `SKVideoNode` — video-texture playback; no immediate `SurfaceTexture`/`MediaPlayer` bridge
 - `SKLightNode` / normal-map lighting and shadows — shader-dependent, deferred with the rest of
@@ -601,7 +600,7 @@ full parity; see `docs/ARCHITECTURE.md`.
 - `SKReferenceNode` file-based scene loading — Apple's `.sks` scene archive format has no Android
   equivalent serialization; could be revisited with a custom Kotlin-serialization-based format
 - Any `GKScene`-style binding to [GameplayKit for Android](https://github.com/bitzgroup/GameplayKit)
-  — a separate integration concern, not part of this library
+  — a separate integration concern, provided by [GKSKBridge](https://github.com/bitzgroup/GKSKBridge)
 - Anything Metal-specific (obviously N/A)
 
 ## Post-roadmap: Apple parity gaps

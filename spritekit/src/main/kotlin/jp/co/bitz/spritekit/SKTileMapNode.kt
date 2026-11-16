@@ -17,7 +17,7 @@ private val GRID_NEIGHBOR_OFFSETS =
     )
 
 /**
- * A pointy-top hex cell's 6 neighbor directions (no `UP`/`DOWN` -- see [SKTileSetType.HEXAGONAL_POINTY]),
+ * A pointy-top hex cell's 6 neighbor directions (no `UP`/`DOWN` -- see [SKTileSetType.HexagonalPointy]),
  * for a cell on an even-numbered row (`row % 2 == 0`) in the "odd-r offset" layout.
  */
 private val HEXAGONAL_POINTY_EVEN_ROW_OFFSETS =
@@ -42,7 +42,7 @@ private val HEXAGONAL_POINTY_ODD_ROW_OFFSETS =
     )
 
 /**
- * A flat-top hex cell's 6 neighbor directions (no `LEFT`/`RIGHT` -- see [SKTileSetType.HEXAGONAL_FLAT]),
+ * A flat-top hex cell's 6 neighbor directions (no `LEFT`/`RIGHT` -- see [SKTileSetType.HexagonalFlat]),
  * for a cell on an even-numbered column (`column % 2 == 0`) in the "odd-q offset" layout.
  */
 private val HEXAGONAL_FLAT_EVEN_COLUMN_OFFSETS =
@@ -69,7 +69,7 @@ private val HEXAGONAL_FLAT_ODD_COLUMN_OFFSETS =
 /**
  * [type]'s neighbor-direction table for a cell at ([column], [row]) -- for the two hexagonal
  * types this depends on the cell's own row/column parity (adjacent rows/columns are offset from
- * each other by half a tile), unlike [SKTileSetType.GRID] where it's fixed.
+ * each other by half a tile), unlike [SKTileSetType.Grid] where it's fixed.
  */
 private fun neighborOffsets(
     type: SKTileSetType,
@@ -77,10 +77,10 @@ private fun neighborOffsets(
     row: Int,
 ): List<Pair<Int, Pair<Int, Int>>> =
     when (type) {
-        SKTileSetType.GRID -> GRID_NEIGHBOR_OFFSETS
-        SKTileSetType.HEXAGONAL_POINTY ->
+        SKTileSetType.Grid -> GRID_NEIGHBOR_OFFSETS
+        SKTileSetType.HexagonalPointy ->
             if (row % 2 == 0) HEXAGONAL_POINTY_EVEN_ROW_OFFSETS else HEXAGONAL_POINTY_ODD_ROW_OFFSETS
-        SKTileSetType.HEXAGONAL_FLAT ->
+        SKTileSetType.HexagonalFlat ->
             if (column % 2 == 0) HEXAGONAL_FLAT_EVEN_COLUMN_OFFSETS else HEXAGONAL_FLAT_ODD_COLUMN_OFFSETS
     }
 
@@ -214,13 +214,13 @@ public class SKTileMapNode(
     private val mapSize: Vector2
         get() =
             when (tileSet.type) {
-                SKTileSetType.GRID -> Vector2(numberOfColumns * tileSize.x, numberOfRows * tileSize.y)
-                SKTileSetType.HEXAGONAL_POINTY ->
+                SKTileSetType.Grid -> Vector2(numberOfColumns * tileSize.x, numberOfRows * tileSize.y)
+                SKTileSetType.HexagonalPointy ->
                     Vector2(
                         (numberOfColumns + 0.5f) * tileSize.x,
                         tileSize.y + (numberOfRows - 1) * HEX_LINE_SPACING_FACTOR * tileSize.y,
                     )
-                SKTileSetType.HEXAGONAL_FLAT ->
+                SKTileSetType.HexagonalFlat ->
                     Vector2(
                         tileSize.x + (numberOfColumns - 1) * HEX_LINE_SPACING_FACTOR * tileSize.x,
                         (numberOfRows + 0.5f) * tileSize.y,
@@ -235,15 +235,15 @@ public class SKTileMapNode(
         val size = mapSize
         val beforeAnchor =
             when (tileSet.type) {
-                SKTileSetType.GRID -> Vector2((column + 0.5f) * tileSize.x, (row + 0.5f) * tileSize.y)
-                SKTileSetType.HEXAGONAL_POINTY -> {
+                SKTileSetType.Grid -> Vector2((column + 0.5f) * tileSize.x, (row + 0.5f) * tileSize.y)
+                SKTileSetType.HexagonalPointy -> {
                     val rowShift = if (row % 2 == 0) 0f else 0.5f * tileSize.x
                     Vector2(
                         (column + 0.5f) * tileSize.x + rowShift,
                         (row * HEX_LINE_SPACING_FACTOR + 0.5f) * tileSize.y,
                     )
                 }
-                SKTileSetType.HEXAGONAL_FLAT -> {
+                SKTileSetType.HexagonalFlat -> {
                     val columnShift = if (column % 2 == 0) 0f else 0.5f * tileSize.y
                     Vector2(
                         (column * HEX_LINE_SPACING_FACTOR + 0.5f) * tileSize.x,
@@ -262,7 +262,7 @@ public class SKTileMapNode(
      * regions).
      */
     public fun tileColumnIndex(fromPosition: Vector2): Int =
-        if (tileSet.type == SKTileSetType.GRID) {
+        if (tileSet.type == SKTileSetType.Grid) {
             val size = mapSize
             floor((fromPosition.x + anchorPoint.x * size.x) / tileSize.x).toInt()
         } else {
@@ -274,7 +274,7 @@ public class SKTileMapNode(
      * bounds-checked, matching Apple. See [tileColumnIndex] for the hexagonal-type approach.
      */
     public fun tileRowIndex(fromPosition: Vector2): Int =
-        if (tileSet.type == SKTileSetType.GRID) {
+        if (tileSet.type == SKTileSetType.Grid) {
             val size = mapSize
             floor((fromPosition.y + anchorPoint.y * size.y) / tileSize.y).toInt()
         } else {
@@ -289,15 +289,15 @@ public class SKTileMapNode(
         val size = mapSize
         val beforeAnchor = Vector2(localPosition.x + anchorPoint.x * size.x, localPosition.y + anchorPoint.y * size.y)
         return when (tileSet.type) {
-            SKTileSetType.HEXAGONAL_POINTY -> {
+            SKTileSetType.HexagonalPointy -> {
                 val rowSpacing = HEX_LINE_SPACING_FACTOR * tileSize.y
                 floor(beforeAnchor.x / tileSize.x).toInt() to floor(beforeAnchor.y / rowSpacing).toInt()
             }
-            SKTileSetType.HEXAGONAL_FLAT -> {
+            SKTileSetType.HexagonalFlat -> {
                 val columnSpacing = HEX_LINE_SPACING_FACTOR * tileSize.x
                 floor(beforeAnchor.x / columnSpacing).toInt() to floor(beforeAnchor.y / tileSize.y).toInt()
             }
-            SKTileSetType.GRID -> error("nearestTile is only used for the hexagonal types")
+            SKTileSetType.Grid -> error("nearestTile is only used for the hexagonal types")
         }
     }
 
@@ -341,7 +341,7 @@ public class SKTileMapNode(
 
     /**
      * Re-evaluates ([column], [row])'s own definition, then each of its neighbors' (8 for
-     * [SKTileSetType.GRID], 6 for the hexagonal types) -- placing or clearing a tile can change
+     * [SKTileSetType.Grid], 6 for the hexagonal types) -- placing or clearing a tile can change
      * what best fits any of them.
      */
     private fun remapCellAndNeighbors(

@@ -92,13 +92,13 @@ class SKTileSetTest {
     fun `a tile set defaults to the grid type`() {
         val tileSet = SKTileSet(listOf(SKTileGroup(SKTileDefinition())))
 
-        assertEquals(SKTileSetType.GRID, tileSet.type)
+        assertEquals(SKTileSetType.Grid, tileSet.type)
     }
 
     @Test
     fun `a tile set's type can be set to a hexagonal layout`() {
-        val tileSet = SKTileSet(listOf(SKTileGroup(SKTileDefinition())), type = SKTileSetType.HEXAGONAL_POINTY)
+        val tileSet = SKTileSet(listOf(SKTileGroup(SKTileDefinition())), type = SKTileSetType.HexagonalPointy)
 
-        assertEquals(SKTileSetType.HEXAGONAL_POINTY, tileSet.type)
+        assertEquals(SKTileSetType.HexagonalPointy, tileSet.type)
     }
 }

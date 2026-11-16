@@ -5,9 +5,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertSame
 
 /**
- * [SKTileMapNode]'s [SKTileSetType.HEXAGONAL_POINTY]/[SKTileSetType.HEXAGONAL_FLAT] layouts:
+ * [SKTileMapNode]'s [SKTileSetType.HexagonalPointy]/[SKTileSetType.HexagonalFlat] layouts:
  * pixel placement (`centerOfTile` and its inverses) and automapping's 6-neighbor adjacency.
- * [SKTileMapNodeTest] covers the (unaffected) [SKTileSetType.GRID] behavior.
+ * [SKTileMapNodeTest] covers the (unaffected) [SKTileSetType.Grid] behavior.
  */
 class SKTileMapNodeHexagonalTest {
     private fun tileSet(
@@ -20,7 +20,7 @@ class SKTileMapNodeHexagonalTest {
         val group = SKTileGroup(SKTileDefinition())
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_POINTY),
+                tileSet(group, SKTileSetType.HexagonalPointy),
                 numberOfColumns = 2,
                 numberOfRows = 2,
                 tileSize = Vector2(10f, 10f),
@@ -39,7 +39,7 @@ class SKTileMapNodeHexagonalTest {
         val group = SKTileGroup(SKTileDefinition())
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_FLAT),
+                tileSet(group, SKTileSetType.HexagonalFlat),
                 numberOfColumns = 2,
                 numberOfRows = 2,
                 tileSize = Vector2(10f, 10f),
@@ -58,7 +58,7 @@ class SKTileMapNodeHexagonalTest {
         val group = SKTileGroup(SKTileDefinition())
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_POINTY),
+                tileSet(group, SKTileSetType.HexagonalPointy),
                 numberOfColumns = 6,
                 numberOfRows = 6,
                 tileSize = Vector2(10f, 14f),
@@ -78,7 +78,7 @@ class SKTileMapNodeHexagonalTest {
         val group = SKTileGroup(SKTileDefinition())
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_FLAT),
+                tileSet(group, SKTileSetType.HexagonalFlat),
                 numberOfColumns = 6,
                 numberOfRows = 6,
                 tileSize = Vector2(14f, 10f),
@@ -98,7 +98,7 @@ class SKTileMapNodeHexagonalTest {
         val group = SKTileGroup(SKTileDefinition())
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_POINTY),
+                tileSet(group, SKTileSetType.HexagonalPointy),
                 numberOfColumns = 3,
                 numberOfRows = 2,
                 tileSize = Vector2(10f, 10f),
@@ -113,7 +113,7 @@ class SKTileMapNodeHexagonalTest {
         val group = SKTileGroup(SKTileDefinition())
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_FLAT),
+                tileSet(group, SKTileSetType.HexagonalFlat),
                 numberOfColumns = 2,
                 numberOfRows = 3,
                 tileSize = Vector2(10f, 10f),
@@ -140,7 +140,7 @@ class SKTileMapNodeHexagonalTest {
             )
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_POINTY),
+                tileSet(group, SKTileSetType.HexagonalPointy),
                 numberOfColumns = 3,
                 numberOfRows = 3,
                 tileSize = Vector2(10f, 10f),
@@ -171,7 +171,7 @@ class SKTileMapNodeHexagonalTest {
             )
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_FLAT),
+                tileSet(group, SKTileSetType.HexagonalFlat),
                 numberOfColumns = 3,
                 numberOfRows = 3,
                 tileSize = Vector2(10f, 10f),
@@ -198,7 +198,7 @@ class SKTileMapNodeHexagonalTest {
             )
         val map =
             SKTileMapNode(
-                tileSet(group, SKTileSetType.HEXAGONAL_POINTY),
+                tileSet(group, SKTileSetType.HexagonalPointy),
                 numberOfColumns = 3,
                 numberOfRows = 3,
                 tileSize = Vector2(10f, 10f),

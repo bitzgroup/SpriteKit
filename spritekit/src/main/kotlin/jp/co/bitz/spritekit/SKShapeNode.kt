@@ -10,7 +10,8 @@ import android.graphics.RectF
  * fits the role well — see `docs/API_COMPATIBILITY.md`), triangulated for rendering via
  * [triangulateFill]/[triangulateStroke] once flattened by [flattenPath]. That triangulation is
  * cached per [triangulationCache] and only redone when [path] is reassigned to a new instance (or
- * [lineWidth] changes) — see [triangulatedShape]'s KDoc for why this matters. Reassign [path] to
+ * the stroke style — [lineWidth], [lineCap], [lineJoin], [miterLimit] — changes) — see
+ * [triangulatedShape]'s KDoc for why this matters. Reassign [path] to
  * change a shape's geometry (`shape.path = newPath`); mutating the existing `Path` object in
  * place and keeping the same instance defeats this cache and renders stale geometry.
  *
@@ -104,7 +105,7 @@ public open class SKShapeNode(
 
     /**
      * Render-thread-confined cache of this shape's flattened-and-triangulated geometry, keyed by
-     * the exact [path] instance and [lineWidth] it was computed from — see
+     * the exact [path] instance and stroke style it was computed from — see
      * [triangulatedShape]. `null` until first rendered. Not part of the public API.
      */
     internal var triangulationCache: SKShapeTriangulationCache? = null

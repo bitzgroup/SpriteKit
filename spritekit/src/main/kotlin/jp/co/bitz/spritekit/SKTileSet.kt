@@ -11,7 +11,7 @@ package jp.co.bitz.spritekit
  */
 public class SKTileSet(
     public val tileGroups: List<SKTileGroup>,
-    public val type: SKTileSetType = SKTileSetType.GRID,
+    public val type: SKTileSetType = SKTileSetType.Grid,
 ) {
     /** An identifying name, purely for the caller's own bookkeeping. */
     public var name: String? = null

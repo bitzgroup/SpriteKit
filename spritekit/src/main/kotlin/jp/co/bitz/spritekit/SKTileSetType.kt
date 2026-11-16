@@ -15,7 +15,7 @@ public enum class SKTileSetType {
      * A plain rectangular grid — [SKTileMapNode]'s original (and, until this type existed, only)
      * layout. Every neighbor bit in [SKTileAdjacencyMask] is meaningful.
      */
-    GRID,
+    Grid,
 
     /**
      * Regular hexagons with a vertex pointing straight up, arranged in horizontal rows; odd rows
@@ -24,7 +24,7 @@ public enum class SKTileSetType {
      * has no `UP`/`DOWN` neighbor — only [SKTileAdjacencyMask.LEFT]/[SKTileAdjacencyMask.RIGHT]
      * and the four corner bits are meaningful for automapping.
      */
-    HEXAGONAL_POINTY,
+    HexagonalPointy,
 
     /**
      * Regular hexagons with a flat edge pointing straight up, arranged in vertical columns; odd
@@ -33,5 +33,5 @@ public enum class SKTileSetType {
      * so a cell has no `LEFT`/`RIGHT` neighbor — only [SKTileAdjacencyMask.UP]/
      * [SKTileAdjacencyMask.DOWN] and the four corner bits are meaningful for automapping.
      */
-    HEXAGONAL_FLAT,
+    HexagonalFlat,
 }
