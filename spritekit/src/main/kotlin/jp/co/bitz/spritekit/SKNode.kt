@@ -87,6 +87,16 @@ public open class SKNode {
 
     /** This node's rigid-body simulation, or `null` (the default) to opt out of physics entirely. */
     public var physicsBody: SKPhysicsBody? = null
+        set(value) {
+            if (field === value) return
+            field?.let { old ->
+                old.node = null
+                old.contactedBodies = emptyList()
+            }
+            value?.node?.physicsBody = null // a body belongs to one node at a time
+            value?.node = this
+            field = value
+        }
 
     /**
      * Whether this node can receive touches at all — only a node with this `true` is ever a

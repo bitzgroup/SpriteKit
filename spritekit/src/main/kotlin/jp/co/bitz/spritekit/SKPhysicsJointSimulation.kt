@@ -106,10 +106,16 @@ private fun applySpringForce(
     if (distance == 0f) return
     val direction = displacement * (1f / distance)
 
+    // A damped spring oscillating at `frequency` Hz with damping ratio `damping`, whatever the
+    // bodies' masses: stiffness and damping scale with the pair's effective mass (Box2D's soft
+    // spring), so mass units don't change how the spring behaves.
     val stretch = distance - joint.restLength!!
-    val stiffness = (2f * PI.toFloat() * joint.frequency).let { it * it }
+    val effectiveMass = 1f / invMassSum
+    val angularFrequency = 2f * PI.toFloat() * joint.frequency
+    val stiffness = effectiveMass * angularFrequency * angularFrequency
+    val dampingCoefficient = 2f * effectiveMass * joint.damping * angularFrequency
     val velocityAlongAxis = (joint.bodyB.velocity - joint.bodyA.velocity) dot direction
-    val springForce = -stiffness * stretch - joint.damping * velocityAlongAxis
+    val springForce = -stiffness * stretch - dampingCoefficient * velocityAlongAxis
 
     val impulse = direction * (springForce * dt)
     joint.bodyA.velocity -= impulse * joint.bodyA.inverseMass

@@ -21,35 +21,36 @@ class SKPhysicsSimulationTest {
         scene.physicsWorld.gravity = Vector2(0f, -10f)
         val node =
             SKNode().apply {
-                position = Vector2(0f, 100f)
+                position = Vector2(0f, 2000f)
                 physicsBody = SKPhysicsBody.circleOfRadius(1f).apply { linearDamping = 0f }
             }
         scene.addChild(node)
 
         simulatePhysics(scene, 1.seconds)
 
-        // Semi-implicit Euler: velocity integrates first, then position uses the new velocity.
-        assertEquals(-10f, node.physicsBody!!.velocity.y)
-        assertEquals(90f, node.position.y)
+        // Gravity is in meters per second squared, 150 points each (Apple, verified on iOS/tvOS
+        // simulators). Semi-implicit Euler: velocity integrates first, then position uses it.
+        assertEquals(-1500f, node.physicsBody!!.velocity.y)
+        assertEquals(500f, node.position.y)
     }
 
     @Test
     fun `a dynamic body resting on a static floor doesn't fall through it`() {
         val scene = SKScene(size = Vector2(100f, 100f))
-        scene.physicsWorld.gravity = Vector2(0f, -10f)
+        scene.physicsWorld.gravity = Vector2(0f, -9.8f)
         val floorNode = SKNode().apply { physicsBody = SKPhysicsBody.edgeFrom(Vector2(-50f, 0f), Vector2(50f, 0f)) }
         scene.addChild(floorNode)
         val ballNode =
             SKNode().apply {
-                position = Vector2(0f, 1f) // resting exactly on the floor, body radius 1
-                physicsBody = SKPhysicsBody.circleOfRadius(1f)
+                position = Vector2(0f, 10f) // resting exactly on the floor, body radius 10
+                physicsBody = SKPhysicsBody.circleOfRadius(10f)
             }
         scene.addChild(ballNode)
 
         repeat(60) { simulatePhysics(scene, (1.0 / 60.0).seconds) }
 
         assertTrue(
-            ballNode.position.y >= 0.9f,
+            ballNode.position.y >= 9.5f,
             "expected the ball to stay near the floor, was at ${ballNode.position.y}",
         )
     }

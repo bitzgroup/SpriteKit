@@ -347,6 +347,14 @@ categories recur throughout and are called out once here rather than per item:
 - The physics engine is a self-contained, from-scratch 2D rigid-body implementation (no external
   physics library dependency), matching GameplayKit's zero-runtime-dependency convention.
   *Contract-conformant, not bit-identical* — Apple's own physics engine internals are not public.
+- **Physics units match Apple's** (since 0.4.0, verified on iOS/tvOS simulators): `area`, `mass`
+  and inertia measure lengths in meters of 150 points (a circle of radius 10 has an area of about
+  `0.014` m²), and `gravity` is in meters per second squared (the default `-9.8` accelerates at
+  `-1470` points/s²), while positions and velocities stay in points. An impulse changes the
+  velocity by `impulse / mass` points per second, and a force accelerates at `force / mass` points
+  per second squared, as on Apple. Before 0.4.0 lengths for mass were in points and gravity was
+  applied as points/s², so mass was 22,500 times Apple's and bodies fell 150 times slower; host apps
+  tuned to that need retuning.
 - **Mass/inertia formulas** are standard, well-known ones (a solid disk for circles, the classic
   polygon second-moment-of-area sum for convex polygons — hand-verified against the known
   `I = mass*(w²+h²)/12` square formula before implementation), not necessarily Apple's own
@@ -366,6 +374,21 @@ categories recur throughout and are called out once here rather than per item:
   measured from where the local shape's +x edge lands after the node's transform, which is exact
   under uniform scale/rotation but treats a non-uniformly-scaled circle as a (slightly wrong-sized)
   circle rather than the ellipse it should become.
+- **`SKPhysicsWorld` queries** follow Apple's observed behavior (verified on iOS/tvOS
+  simulators): `body(at:)` tests exact shapes and never finds an edge body; `body(in:)` (renamed
+  `body(rect)`, since `in` is a Kotlin keyword) tests bounding boxes widened by 15 points (Box2D's
+  0.1 m margin), so it also finds an edge loop around the rect; ray casts report hits nearest
+  first, skip a body the ray starts inside, hit an edge from either side, and give normals of
+  length 150 rather than 1, as Apple's do. The `enumerateBodies` callbacks have no `stop` flag;
+  the single-body forms cover the common early exit. Queries see bodies where their nodes are now;
+  Apple's see a moved body where it was at the last simulation step.
+- **`SKPhysicsBody.isResting`** behaves as Apple's does, not as its name suggests: the simulation
+  never sets it, and setting it `true` zeroes the velocity but is cleared by the next step or the
+  next velocity assignment.
+- **`allContactedBodies()`** lists bodies touching as of the last step where either body collides
+  with the other (one-sidedly is enough) or tests for contact with it. Bodies rest exactly on each
+  other here, where Box2D keeps about 1.5 points of skin between a body and an edge, so a contact
+  can begin a little later than on Apple.
 - **`SKPhysicsContact.collisionImpulse`** is always `0` — the resolved impulse magnitude isn't
   threaded back out of the solver to the notification path in this port. Apple's own docs are
   vague about its exact precision/derivation too.
@@ -376,13 +399,11 @@ categories recur throughout and are called out once here rather than per item:
   candidate pair regardless of either bitmask.
 - **`SKPhysicsJoint` subclasses are idiomatic Kotlin constructors** (`SKPhysicsJointPin(bodyA,
   bodyB, anchor)`, etc.), not Apple's `joint(withBodyA:bodyB:...)` class-method factories.
-- **A joint's anchor point(s) are bound lazily**, from each body's *current* transform, the first
-  frame the simulation processes that joint — not at construction/`add(_:)` time like Apple. A
-  body has no reference back to its owning node in this port (unlike Apple's engine, which does),
-  so a joint can't resolve a world-space anchor into each body's local space until a simulation
-  step hands it the node lookup it needs. In practice this only matters if a body moves between
-  constructing the joint and the next simulation step — construct/add joints and let a step run
-  before relying on the anchor tracking a specific point, rather than moving bodies in between.
+- **A joint's anchor points are fixed to its bodies when it's added to the world**, as on Apple,
+  provided both bodies' nodes are already in the scene (since 0.4.0, through `SKPhysicsBody.node`).
+  A joint added before that is bound on the first simulation step that finds both in the scene.
+- **`SKPhysicsJointSpring` is a classic soft spring**: it oscillates at `frequency` hertz with
+  `damping` as its damping ratio, whatever the bodies' masses. Apple doesn't document its formula.
 - **The joint solver is linear-only**, the same simplification collision response makes: joints
   correct relative *position*/*velocity* to satisfy their constraint but don't exchange torque, so
   a body's rotation is otherwise still driven only by its own `angularVelocity`/`applyTorque`.

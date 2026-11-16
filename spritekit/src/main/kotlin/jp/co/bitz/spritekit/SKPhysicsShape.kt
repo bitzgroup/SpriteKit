@@ -23,11 +23,34 @@ internal sealed class SKPhysicsShape {
     data class EdgeChain(val vertices: List<Vector2>, val closed: Boolean) : SKPhysicsShape()
 }
 
+/**
+ * Points per meter in the physics simulation: Apple measures [SKPhysicsBody.area] (and so mass)
+ * and inertia with lengths in meters of 150 points, and applies [SKPhysicsWorld.gravity] in meters
+ * per second squared, while positions and velocities stay in points (verified on iOS/tvOS
+ * simulators).
+ */
+internal const val POINTS_PER_METER: Float = 150f
+
+/** This shape with every length divided by [POINTS_PER_METER] — the space mass is computed in. */
+private fun SKPhysicsShape.inMeters(): SKPhysicsShape {
+    val scale = 1f / POINTS_PER_METER
+    return when (this) {
+        is SKPhysicsShape.Circle -> SKPhysicsShape.Circle(radius * scale, center * scale)
+        is SKPhysicsShape.Polygon -> SKPhysicsShape.Polygon(vertices.map { it * scale })
+        is SKPhysicsShape.EdgeChain -> this
+    }
+}
+
 /** [SKPhysicsBody.mass]/[SKPhysicsBody.inertia] for a given [SKPhysicsShape.area] and density. */
 internal data class SKMassProperties(val mass: Float, val inertia: Float)
 
-/** This shape's area (`0` for [SKPhysicsShape.EdgeChain], which has no interior). */
-internal fun SKPhysicsShape.area(): Float =
+/**
+ * This shape's area in square meters (see [POINTS_PER_METER]); `0` for
+ * [SKPhysicsShape.EdgeChain], which has no interior.
+ */
+internal fun SKPhysicsShape.area(): Float = inMeters().rawArea()
+
+private fun SKPhysicsShape.rawArea(): Float =
     when (this) {
         is SKPhysicsShape.Circle -> PI.toFloat() * radius * radius
         is SKPhysicsShape.Polygon -> abs(signedPolygonArea(vertices))
@@ -36,6 +59,7 @@ internal fun SKPhysicsShape.area(): Float =
 
 /**
  * [mass] and [SKMassProperties.inertia] (the moment of inertia about the *body's own origin* —
+ * in kilograms and kg·m², lengths in meters as Apple measures them, see [POINTS_PER_METER] —
  * i.e. [SKNode.position]/[SKNode.zRotation], not necessarily this shape's own centroid, since
  * that's what a node's transform actually rotates about) for this shape at [density].
  *
@@ -43,11 +67,13 @@ internal fun SKPhysicsShape.area(): Float =
  * standard formulas (a solid disk's inertia for [SKPhysicsShape.Circle], the classic polygon
  * second-moment-of-area sum for [SKPhysicsShape.Polygon]) — see `docs/API_COMPATIBILITY.md`.
  */
-internal fun SKPhysicsShape.massProperties(density: Float): SKMassProperties =
+internal fun SKPhysicsShape.massProperties(density: Float): SKMassProperties = inMeters().rawMassProperties(density)
+
+private fun SKPhysicsShape.rawMassProperties(density: Float): SKMassProperties =
     when (this) {
         is SKPhysicsShape.EdgeChain -> SKMassProperties(mass = 0f, inertia = 0f)
         is SKPhysicsShape.Circle -> {
-            val mass = density * area()
+            val mass = density * rawArea()
             // Solid-disk inertia about its own center, shifted to the body origin via the
             // parallel axis theorem if `center` isn't the origin.
             val inertia = mass * radius * radius / 2f + mass * center.lengthSquared()

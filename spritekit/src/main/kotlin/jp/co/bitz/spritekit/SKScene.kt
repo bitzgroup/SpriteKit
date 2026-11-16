@@ -85,7 +85,7 @@ public open class SKScene(
     public var camera: SKCameraNode? = null
 
     /** This scene's rigid-body simulation -- gravity/speed plus whatever [SKNode.physicsBody]s are in the tree. */
-    public val physicsWorld: SKPhysicsWorld = SKPhysicsWorld()
+    public val physicsWorld: SKPhysicsWorld = SKPhysicsWorld().also { it.scene = this }
 
     /**
      * Which node is currently handling each active touch, by pointer ID -- lets a touch that

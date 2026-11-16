@@ -72,10 +72,10 @@ public class SKPhysicsJointFixed(
 
 /**
  * A damped spring pulling [anchorA] (on [bodyA]) and [anchorB] (on [bodyB]) together — mirrors
- * Apple's `SKPhysicsJointSpring`. [frequency]/[damping] shape the spring's stiffness/settling
- * behavior; this port derives stiffness from [frequency] as `(2π·frequency)²` and applies
- * [damping] as a direct velocity-damping coefficient along the spring's axis — an approximation of
- * Apple's own (undocumented) damped-harmonic-oscillator formula, see `docs/API_COMPATIBILITY.md`.
+ * Apple's `SKPhysicsJointSpring`. The spring oscillates at [frequency] (in hertz) with
+ * [damping] as its damping ratio (`0` undamped, `1` critically damped), whatever the bodies'
+ * masses — the classic soft spring, whose stiffness and damping scale with the pair's effective
+ * mass. Apple doesn't document its own formula; see `docs/API_COMPATIBILITY.md`.
  */
 public class SKPhysicsJointSpring(
     override val bodyA: SKPhysicsBody,
