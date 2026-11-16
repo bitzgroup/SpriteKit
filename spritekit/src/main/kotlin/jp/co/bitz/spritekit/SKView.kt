@@ -1,11 +1,13 @@
 package jp.co.bitz.spritekit
 
 import android.content.Context
+import android.graphics.PixelFormat
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
+import android.view.KeyEvent
 import android.view.MotionEvent
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -37,10 +39,79 @@ public class SKView
          */
         public var onTouch: ((SKTouchEvent) -> Unit)? = null
 
+        /** Render-thread-confined; tracks the presses [forwardKeyEvent] has delivered. */
+        private val pressDispatcher = SKPressDispatcher()
+
+        @Volatile
         private var currentScene: SKScene? = null
+
+        /**
+         * The scene this view currently presents — Apple's `SKView.scene`. `null` until the first
+         * [presentScene] has taken effect on the render thread (it's set there, before the next
+         * frame, not synchronously by [presentScene]). Readable from any thread; the scene itself is
+         * still render-thread-confined, so cross with [runOnGLThread] before touching its state.
+         */
+        public val scene: SKScene?
+            get() = currentScene
+
+        /**
+         * Whether this view's scene is paused — Apple's `SKView.isPaused`. While `true`, the frame
+         * loop runs no `update`, actions, physics, constraints, particles, tile-map animation or
+         * audio stepping, whatever the scene's own [SKNode.isPaused] says; the scene keeps being
+         * drawn as it last was.
+         *
+         * Like Apple's (verified on an iOS simulator), setting it also sets the presented scene's
+         * [SKNode.isPaused] to the same value, and a view paused this way stays paused across
+         * [onPause]/[onResume] — unlike a scene paused only through its own `isPaused`, which
+         * [onResume] un-pauses, again as Apple does when an app returns to the foreground.
+         * [presentScene] without a transition sets it back to `false`, as Apple's does.
+         * Safe to set from any thread; the scene side takes effect on the render thread.
+         */
+        @Volatile
+        public var isPaused: Boolean = false
+            set(value) {
+                if (field == value) return
+                field = value
+                runOnGLThread { currentScene?.isPaused = value }
+            }
         private val sceneRenderer = SKSceneRenderer()
         private var viewWidth = 0
         private var viewHeight = 0
+
+        /** Pixels per density-independent pixel; refreshed with the surface size. */
+        private var density = context.resources.displayMetrics.density
+
+        /**
+         * Whether the view renders transparently where the scene doesn't cover it, so whatever is
+         * behind the view shows through — Apple's `SKView.allowsTransparency`. `false` (the default,
+         * as on Apple) renders opaquely: the scene's [SKScene.backgroundColor] is drawn at full
+         * opacity whatever its alpha. With `true`, give the scene a transparent `backgroundColor`
+         * (e.g. `Color.TRANSPARENT`) for the content behind to show.
+         *
+         * **Android limitation — read before using.** A `GLSurfaceView` renders into its own surface,
+         * which the system composites either entirely below its window (where nothing behind the view
+         * can show through) or entirely above it. Transparency therefore puts the surface **above its
+         * window** (`setZOrderOnTop`), and then it is drawn over everything else the app shows there.
+         * Tested on a phone emulator: a Material `AlertDialog` showed the scene through it and a
+         * `DropdownMenu` didn't appear. Only use this for a view nothing is ever shown on top of; to
+         * put a background behind the scene's content, drawing it inside the scene (a full-scene
+         * sprite below everything) is usually the better choice. Lifting this needs a `TextureView`
+         * core instead of `GLSurfaceView` — see `docs/PARITY_GAP_PLAN.md` section 2.9.
+         *
+         * Set this before the view is attached to a window; Android doesn't reliably reorder a surface
+         * that's already attached. UI-thread only, like any other `View` property.
+         */
+        public var allowsTransparency: Boolean = false
+            set(value) {
+                if (field == value) return
+                field = value
+                holder.setFormat(if (value) PixelFormat.TRANSLUCENT else PixelFormat.OPAQUE)
+                setZOrderOnTop(value)
+                runOnGLThread { renderTransparently = value }
+            }
+
+        /** Render-thread copy of [allowsTransparency]. */
+        private var renderTransparently = false
 
         private var transitionFromScene: SKScene? = null
         private var transitionSpec: SKTransition? = null
@@ -48,6 +119,10 @@ public class SKView
 
         init {
             setEGLContextClientVersion(2)
+            // Always ask for an alpha channel, so [allowsTransparency] can be switched on without
+            // recreating the EGL context (the config is fixed once the renderer is set). An opaque
+            // surface simply ignores the alpha.
+            setEGLConfigChooser(8, 8, 8, 8, DEPTH_BITS, 0)
             setRenderer(SceneRenderer())
             renderMode = RENDERMODE_CONTINUOUSLY
             audioPlaybackFactory = realAudioPlaybackFactory(context.applicationContext)
@@ -58,6 +133,8 @@ public class SKView
          * the render thread before the next frame — see [runOnGLThread].
          */
         public fun presentScene(scene: SKScene) {
+            // Apple's presentScene(_:) also un-pauses a paused view (verified on an iOS simulator).
+            isPaused = false
             runOnGLThread { setCurrentScene(scene) }
         }
 
@@ -87,10 +164,54 @@ public class SKView
          * `nil` once another scene replaces it. Must only be called on the render thread.
          */
         private fun setCurrentScene(scene: SKScene) {
-            currentScene?.view = null
+            currentScene?.let { outgoing ->
+                outgoing.willMove(this)
+                outgoing.view = null
+            }
             currentScene = scene
+            // Apple un-pauses a scene when it's presented, even into a paused view.
+            scene.isPaused = false
             scene.view = this
+            scene.didMove(this)
+            // Apple resizes a `.resizeFill` scene after `didMove(to:)`, on the next layout pass.
+            syncResizeFillSize(scene)
         }
+
+        /**
+         * Keeps a [SKSceneScaleMode.ResizeFill] scene's [SKScene.size] equal to this view's size
+         * (see [resizeFillSceneSize]). A no-op for other scale modes, before the surface has a size,
+         * or when the size already matches (so [SKScene.didChangeSize] only fires on real changes).
+         * Must only be called on the render thread.
+         */
+        private fun syncResizeFillSize(scene: SKScene) {
+            if (scene.scaleMode != SKSceneScaleMode.ResizeFill) return
+            resizeFillSceneSize(viewWidth, viewHeight, density)?.let { scene.size = it }
+        }
+
+        /**
+         * Converts [point] from this view's coordinate system (view pixels, origin top-left, y-down)
+         * into [scene]'s — Apple's `convert(_:to:)`. Renamed like [SKNode.convertTo], since Swift
+         * argument labels don't distinguish Kotlin overloads. Accounts for the scene's
+         * [SKScene.scaleMode], [SKScene.anchorPoint] and [SKScene.camera], with the same math that
+         * places touches and rendered content. Returns [point] unchanged before the view is laid out.
+         *
+         * Reads the scene's camera transform, which is render-thread state: call it on the render
+         * thread (e.g. inside [runOnGLThread]) for a result that matches the frame being drawn; from
+         * the UI thread it can lag a moving camera by a frame.
+         */
+        public fun convertTo(
+            point: Vector2,
+            scene: SKScene,
+        ): Vector2 = viewPointToScene(scene, point, width, height)
+
+        /**
+         * Converts [point] from [scene]'s coordinate system into this view's, in view pixels — Apple's
+         * `convert(_:from:)`, the inverse of [convertTo]. The same threading note applies.
+         */
+        public fun convertFrom(
+            point: Vector2,
+            scene: SKScene,
+        ): Vector2 = scenePointToView(scene, point, width, height)
 
         /**
          * Queues [block] to run on the render thread before the next frame. Fire-and-forget,
@@ -109,14 +230,62 @@ public class SKView
             mainHandler.post { block() }
         }
 
+        /**
+         * Suspends the render thread (`GLSurfaceView.onPause`) and pauses the presented scene. Call
+         * from the host's `Activity`/`Fragment` `onPause` (the Compose wrapper does this itself).
+         */
         override fun onPause() {
             runOnGLThread { currentScene?.isPaused = true }
             super.onPause()
         }
 
+        /**
+         * Resumes the render thread and un-pauses the presented scene — even one the app had paused
+         * through [SKNode.isPaused] itself, matching Apple, whose `SKView` un-pauses its scene when the
+         * app returns to the foreground (verified on an iOS simulator). To keep a scene paused across
+         * backgrounding, pause the view ([isPaused]) instead, or pause a child node holding the
+         * gameplay content rather than the scene.
+         */
         override fun onResume() {
             super.onResume()
-            runOnGLThread { currentScene?.isPaused = false }
+            runOnGLThread { currentScene?.isPaused = isPaused }
+        }
+
+        /**
+         * Forwards a key event to the presented scene as an Apple-shaped press — the counterpart of
+         * a tvOS view controller overriding `pressesBegan`/`pressesEnded` and passing them to its
+         * scene. Like Apple's SpriteKit, this view never delivers presses on its own; call this from
+         * the host `Activity`'s `onKeyDown`/`onKeyUp` (or `dispatchKeyEvent`) and return its result:
+         *
+         * ```
+         * override fun onKeyDown(keyCode: Int, event: KeyEvent) =
+         *     skView.forwardKeyEvent(event) || super.onKeyDown(keyCode, event)
+         * ```
+         *
+         * Keys with an [SKPressType] ([skPressTypeForKeyCode]) are delivered on the render thread:
+         * the first key-down as [SKNode.pressesBegan], the key-up as [SKNode.pressesEnded] (or
+         * [SKNode.pressesCancelled] for a cancelled key-up). Auto-repeat key-downs are consumed but
+         * not delivered, so a held button is one `began` and one `ended`, as on tvOS.
+         *
+         * Returns `true` when [event] was consumed, `false` for keys with no press type. Back maps to
+         * [SKPressType.Menu], and consuming it keeps the system from handling Back — as on tvOS,
+         * where a Menu press the game handles doesn't leave the app. Whether the game handles Back
+         * is the host's decision: don't forward it when the system should handle it.
+         */
+        public fun forwardKeyEvent(event: KeyEvent): Boolean {
+            val type = skPressTypeForKeyCode(event.keyCode)
+            val isPressAction = event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP
+            if (type != null && isPressAction && event.repeatCount == 0) {
+                val transition =
+                    SKKeyTransition(
+                        keyCode = event.keyCode,
+                        type = type,
+                        isDown = event.action == KeyEvent.ACTION_DOWN,
+                        isCanceled = event.isCanceled,
+                    )
+                runOnGLThread { pressDispatcher.dispatch(currentScene, transition) }
+            }
+            return type != null && isPressAction
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -154,9 +323,15 @@ public class SKView
         private fun renderFrame() {
             val scene = currentScene
             if (scene != null) {
-                sceneRenderer.draw(scene, viewWidth, viewHeight, resourceRegistry)
+                sceneRenderer.draw(
+                    scene,
+                    viewWidth,
+                    viewHeight,
+                    resourceRegistry,
+                    allowsTransparency = renderTransparently,
+                )
             } else {
-                GLES20.glClearColor(0f, 0f, 0f, 1f)
+                GLES20.glClearColor(0f, 0f, 0f, if (renderTransparently) 0f else 1f)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             }
         }
@@ -193,6 +368,7 @@ public class SKView
                     globalAlpha = layer.alpha,
                     clearFirst = layer.clearFirst,
                     outerClip = splitClip(layer.split, fromScene),
+                    allowsTransparency = renderTransparently,
                 )
             }
         }
@@ -213,6 +389,7 @@ public class SKView
                     fromScene.scaleMode,
                     viewWidth,
                     viewHeight,
+                    hasCamera = fromScene.camera != null,
                 )
             val midX = (projection.left + projection.right) / 2f
             return when (split) {
@@ -241,13 +418,17 @@ public class SKView
             ) {
                 viewWidth = width
                 viewHeight = height
+                density = resources.displayMetrics.density
                 GLES20.glViewport(0, 0, width, height)
+                currentScene?.let { syncResizeFillSize(it) }
             }
 
             override fun onDrawFrame(gl: GL10) {
                 val deltaTime = clock.tick(System.nanoTime())
                 val scene = currentScene
-                if (scene != null && !scene.isPaused) {
+                // Also covers a scene whose scaleMode was switched to `.resizeFill` after presenting.
+                scene?.let { syncResizeFillSize(it) }
+                if (scene != null && !isPaused && !scene.isPaused) {
                     scene.update(deltaTime)
                     scene.stepActions(deltaTime)
                     scene.didEvaluateActions()
@@ -264,5 +445,10 @@ public class SKView
                     renderTransitionFrame(deltaTime)
                 }
             }
+        }
+
+        private companion object {
+            /** Matches `GLSurfaceView`'s default config chooser (the renderer itself uses no depth test). */
+            const val DEPTH_BITS = 16
         }
     }

@@ -59,7 +59,7 @@ Compose wrapper" section for the full rationale and API shape.
 ## Phase 0 — Project Setup
 
 - [x] Scaffold Gradle Android library module (Kotlin DSL, `com.android.library` plugin)
-- [x] Configure Kotlin, min/target/compile SDK versions (minSdk 24, compileSdk/targetSdk 34)
+- [x] Configure Kotlin, min/target/compile SDK versions (minSdk 24, compileSdk/targetSdk 34; `compileSdk` since raised to 37)
 - [x] Configure unit test setup (JUnit / kotlin.test)
 - [x] Configure `ktlint`/`detekt`
 - [x] Set up CI (build + test on push/PR via GitHub Actions)
@@ -179,11 +179,12 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `rotateTo`/`rotateBy` (shortest angular path), `resizeTo`/`resizeBy`, `fadeIn`/`fadeOut`/
       `fadeAlphaTo`/`fadeAlphaBy`, `hide`/`unhide`, `colorize`, `wait`/`wait(withRange:)`, `run`
       (block), `removeFromParent`, `sequence`/`group`/`repeat`/`repeatForever`, `customAction`,
-      `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`. **Deferred**
-      (see "Explicitly Out of Scope" below): `run(_:onChildWithName:)`
+      `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`.
+      `run(_:onChildWithName:)` was deferred here and added later (direct children only — see
+      `docs/API_COMPATIBILITY.md`)
 - [x] `SKAction.follow(_:asOffset:orientToPath:duration:)` / `follow(_:asOffset:orientToPath:speed:)`
-      — path-following, added after a host app (Backgammon) needed arc motion along a quadratic
-      curve and found it missing. Follows only a path's first contour, via
+      — path-following, added after a host app needed arc motion along a quadratic curve and found
+      it missing. Follows only a path's first contour, via
       `android.graphics.PathMeasure.getPosTan` (arc-length parameterized, so it works for curves,
       not just straight segments); `reversed()` flips a `reversedDirection` flag rather than
       reversing the `Path` itself, since `android.graphics.Path` has no public reversal API.
@@ -226,6 +227,13 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
 - [x] Pure Kotlin, no OpenGL/Android dependency — fully unit-tested (27 new tests: constraint
       math, `SKCameraNode.containsNode`, `Rect.intersection`, and crop-node clip-rect
       propagation/nesting)
+
+> **Bug found later (a downstream hex-grid wargame)**: `SKScene.anchorPoint` was still being
+> applied even when a camera was active, so a non-default `anchorPoint` pushed the camera's
+> framing off-center instead of leaving it centered on the camera's own position (Apple's real,
+> verified behavior). Fixed by making `anchorPoint` a no-op whenever `scene.camera != null` —
+> `computeSceneProjection` (`SKSceneProjection.kt`) takes a `hasCamera` flag now, and
+> `SKCameraNode.containsNode` follows the same rule. See `docs/API_COMPATIBILITY.md`.
 
 ## Phase 7 — Physics
 
@@ -383,6 +391,9 @@ algorithms (steering, noise, Gaussian sampling).
       (placement, clearing, non-automapped fallback), and coordinate conversions (14), plus 2 new
       tile-map render tests in `SKRenderCommandListTest.kt`
 
+> Hexagonal layouts (`SKTileSetType.HexagonalPointy`/`HexagonalFlat`) were added later, in
+> Phase 15.
+
 ## Phase 10 — Input
 
 - [x] Full `SKNode` touch dispatch (`touchesBegan`/`touchesMoved`/`touchesEnded`/
@@ -528,10 +539,52 @@ full parity; see `docs/ARCHITECTURE.md`.
 - **Not in this repo**: no sample/demo app — this repo is consumed as a git submodule by host
       apps, so it stays library code + docs only, same policy as GameplayKit
 
+## Phase 15 — Hexagonal Tile Maps
+
+- [x] `SKTileSetType` — `Grid` (Phase 9's original, unchanged, behavior), `HexagonalPointy`,
+      `HexagonalFlat`. Apple's `.isometric` case isn't implemented — no isometric layout math
+      exists in this port; see `docs/API_COMPATIBILITY.md`
+- [x] `SKTileSet.type` — new constructor parameter/property, defaulting to `Grid` (fully
+      backward-compatible with every existing `SKTileSet` call site)
+- [x] `SKTileMapNode.centerOfTile`/`tileColumnIndex`/`tileRowIndex`/`calculateAccumulatedFrame`
+      (via the map's internal layout size) now branch on `tileSet.type`:
+    - `HexagonalPointy` — regular hexagons with a vertex pointing up, arranged in horizontal
+      rows; odd rows (`row % 2 != 0`) are shifted right by half a tile width relative to even
+      rows (the "odd-r offset" convention), and rows are spaced 3/4 of a tile height apart
+      (adjacent rows overlap by the other 1/4, matching a regular hexagon's geometry)
+    - `HexagonalFlat` — the same idea rotated 90°: regular hexagons with a flat edge pointing
+      up, arranged in vertical columns, odd columns shifted down by half a tile height (the
+      "odd-q offset" convention), columns spaced 3/4 of a tile width apart
+    - `tileColumnIndex`/`tileRowIndex` for the hexagonal types pick whichever cell's
+      `centerOfTile` is nearest the queried position (a small fixed-radius local search around a
+      cheap rough guess, not a closed-form formula) — equivalent to the grid case's simple
+      division, since a regular hexagonal tiling's cells are exactly the Voronoi regions of their
+      own centers
+- [x] Automapping's neighbor-adjacency table is now per-`SKTileSetType`, and — for the two
+      hexagonal types only — depends on the cell's own row/column parity (adjacent rows/columns
+      are offset from each other by half a tile, so which grid-relative direction a given
+      `SKTileAdjacencyMask` bit points to alternates):
+    - `HexagonalPointy` cells have no `UP`/`DOWN` neighbor (adjacent same-row cells touch along
+      a vertical edge) — only `LEFT`/`RIGHT` and the four corner bits are meaningful
+    - `HexagonalFlat` cells have no `LEFT`/`RIGHT` neighbor (adjacent same-column cells touch
+      along a horizontal edge) — only `UP`/`DOWN` and the four corner bits are meaningful
+    - `SKTileAdjacencyMask` itself is unchanged (still all 8 directions) — hexagonal tile groups
+      simply never see 2 of the 8 bits set, rather than needing a smaller dedicated mask type
+    - placing or clearing a tile still re-evaluates that tile and each of its neighbors (6 for
+      the hexagonal types, matching their neighbor count), same as Phase 9's grid behavior
+- [x] Rendering needed no changes — hexagonal cells render through the exact same
+      per-cell-quad `SKRenderCommand` path Phase 9 built for grid maps; only the *position* each
+      quad is placed at differs
+- [x] 11 new tests: `SKTileSet.type` defaulting/construction (2, in `SKTileSetTest.kt`), and in
+      the new `SKTileMapNodeHexagonalTest.kt` — `centerOfTile`'s exact odd-row/odd-column pixel
+      shift for both hexagonal types (2), `tileColumnIndex`/`tileRowIndex` round-tripping
+      `centerOfTile` across a 6×6 grid for both types (2, one assertion per cell), layout-size/
+      `calculateAccumulatedFrame` sizing (2), automapping correctly identifying each type's true
+      6 geometric neighbors by row/column parity rather than the grid's 8 (2), and an isolated
+      hex tile matching a no-adjacency rule (1)
+
 ## Explicitly Out of Scope
 
-- `SKAction.run(_:onChildWithName:)` — a niche convenience over `childNode`/`enumerateChildNodes`
-  plus a plain `run`
 - `SKEffectNode.filter` — Core Image, no Android equivalent
 - `SKVideoNode` — video-texture playback; no immediate `SurfaceTexture`/`MediaPlayer` bridge
 - `SKLightNode` / normal-map lighting and shadows — shader-dependent, deferred with the rest of
@@ -547,5 +600,12 @@ full parity; see `docs/ARCHITECTURE.md`.
 - `SKReferenceNode` file-based scene loading — Apple's `.sks` scene archive format has no Android
   equivalent serialization; could be revisited with a custom Kotlin-serialization-based format
 - Any `GKScene`-style binding to [GameplayKit for Android](https://github.com/bitzgroup/GameplayKit)
-  — a separate integration concern, not part of this library
+  — a separate integration concern, provided by [GKSKBridge](https://github.com/bitzgroup/GKSKBridge)
 - Anything Metal-specific (obviously N/A)
+
+## Post-roadmap: Apple parity gaps
+
+The phases above are complete, but a 2026-11-15 audit of the whole public surface against Apple's
+documentation found API that is absent without having been recorded as a deviation. The gap list
+and the plan for closing it live in [`PARITY_GAP_PLAN.md`](PARITY_GAP_PLAN.md) — read it before
+starting any parity work, and update it as items land.

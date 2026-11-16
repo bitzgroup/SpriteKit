@@ -41,11 +41,14 @@ batched run of render commands now also shares a shader identity, resolved to a 
 `SKProgramBinding` the same way `SKTexture` lazily re-uploads; a shader that fails to compile falls
 back to the default program rather than crashing the render thread; ships with one built-in example,
 `SKShader.grayscale`), and Phase 14 (documentation: full public-API KDoc coverage,
-`docs/API_COMPATIBILITY.md`, and README usage examples per subsystem) are complete — the internal
+`docs/API_COMPATIBILITY.md`, and README usage examples per subsystem), and Phase 15 (hexagonal
+tile maps: `SKTileSetType`) are complete — the internal
 renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile maps through one
 generalized triangle-list pipeline,
 camera-relative and crop-clipped via `glScissor` when applicable. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist, and
+[`docs/PARITY_GAP_PLAN.md`](docs/PARITY_GAP_PLAN.md) for the post-roadmap Apple-parity gap list and
+which of its items have landed.
 
 ## Intent
 
@@ -148,6 +151,11 @@ branching model.
   — this is an OSS project.
 - **Documentation location:** project docs beyond the root `README.md` (roadmap, architecture
   notes, API compatibility notes, etc.) live under `docs/`.
+- **Never name a private/unreleased consumer app.** This repo is public; some fixes here are
+  discovered while building other apps against it, and those apps may be private or unreleased.
+  Never reference such an app by name anywhere in this repo — commit messages, PR titles/
+  descriptions, code comments, or docs (e.g. `docs/ROADMAP.md`'s changelog-style notes). Use
+  generic phrasing instead ("a host app", "a consumer app").
 - **No app/demo module, ever.** This repo is meant to be embedded into host apps as a **git
   submodule** — `settings.gradle.kts` must only ever include the `:spritekit` library module.
   Adding a sample/demo Android app module (even for internal testing) would confuse a host app's

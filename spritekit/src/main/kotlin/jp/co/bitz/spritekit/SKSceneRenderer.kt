@@ -80,7 +80,8 @@ internal class SKSceneRenderer {
      * content into a `glViewport` of [viewportSize] (defaulting to the full [viewWidth]x
      * [viewHeight]) at [viewportOffset], each vertex's alpha additionally scaled by [globalAlpha],
      * and — if set — every command further clipped to [outerClip] (in the same space as
-     * [SKRenderCommand.clipRect], intersected with each command's own).
+     * [SKRenderCommand.clipRect], intersected with each command's own). [allowsTransparency] keeps
+     * the background's alpha (see [SKView.allowsTransparency]).
      */
     @Suppress("LongParameterList")
     fun draw(
@@ -93,20 +94,25 @@ internal class SKSceneRenderer {
         globalAlpha: Float = 1f,
         clearFirst: Boolean = true,
         outerClip: Rect? = null,
+        allowsTransparency: Boolean = false,
     ) {
-        val projection = computeSceneProjection(scene.size, scene.anchorPoint, scene.scaleMode, viewWidth, viewHeight)
+        val projection =
+            computeSceneProjection(
+                scene.size,
+                scene.anchorPoint,
+                scene.scaleMode,
+                viewWidth,
+                viewHeight,
+                hasCamera = scene.camera != null,
+            )
         Matrix.orthoM(mvpMatrix, 0, projection.left, projection.right, projection.bottom, projection.top, -1f, 1f)
 
         val size = viewportSize ?: Vector2(viewWidth.toFloat(), viewHeight.toFloat())
         GLES20.glViewport(viewportOffset.x.toInt(), viewportOffset.y.toInt(), size.x.toInt(), size.y.toInt())
 
         if (clearFirst) {
-            GLES20.glClearColor(
-                redOf(scene.backgroundColor),
-                greenOf(scene.backgroundColor),
-                blueOf(scene.backgroundColor),
-                1f,
-            )
+            val clear = backgroundClearColor(scene.backgroundColor, allowsTransparency)
+            GLES20.glClearColor(clear[0], clear[1], clear[2], clear[3])
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         }
 
@@ -263,7 +269,9 @@ internal class SKSceneRenderer {
         state: SKTextureGpuState,
         resourceRegistry: SKResourceRegistry,
     ) {
-        if (state.glTextureId == 0) {
+        // A name from an older context (any generation mismatch) is meaningless in this one, and
+        // reusing it could alias a texture this context has since generated under the same name.
+        if (state.glTextureId == 0 || state.uploadedGeneration != resourceRegistry.generation) {
             val ids = IntArray(1)
             GLES20.glGenTextures(1, ids, 0)
             state.glTextureId = ids[0]
@@ -398,6 +406,20 @@ private fun applyBlendMode(blendMode: SKBlendMode) {
     GLES20.glBlendEquation(
         if (blendMode == SKBlendMode.Subtract) GLES20.GL_FUNC_REVERSE_SUBTRACT else GLES20.GL_FUNC_ADD,
     )
+    if (blendMode == SKBlendMode.Alpha) {
+        // The alpha channel is blended separately ("over" in premultiplied form), so the frame's own
+        // alpha comes out right where content is drawn over a transparent background
+        // (`SKView.allowsTransparency`). Plain `glBlendFunc(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)` would
+        // square a half-transparent node's alpha there. On an opaque frame the alpha is unused, so
+        // nothing visible changes for views without transparency.
+        GLES20.glBlendFuncSeparate(
+            GLES20.GL_SRC_ALPHA,
+            GLES20.GL_ONE_MINUS_SRC_ALPHA,
+            GLES20.GL_ONE,
+            GLES20.GL_ONE_MINUS_SRC_ALPHA,
+        )
+        return
+    }
     val (src, dst) =
         when (blendMode) {
             SKBlendMode.Alpha -> GLES20.GL_SRC_ALPHA to GLES20.GL_ONE_MINUS_SRC_ALPHA

@@ -1,5 +1,6 @@
 package jp.co.bitz.spritekit
 
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -103,8 +104,86 @@ class SKShapeTriangulationTest {
         val open = triangulateStroke(triangle, lineWidth = 1f, closed = false)
         val closed = triangulateStroke(triangle, lineWidth = 1f, closed = true)
 
-        assertEquals(12, open.size) // 2 segments (the closing edge back to the start is omitted)
-        assertEquals(18, closed.size) // 3 segments, all edges stroked including the closing one
+        // 2 segments (the closing edge back to the start is omitted) + a miter join at the one
+        // interior corner (bevel triangle + miter tip); butt caps add nothing.
+        assertEquals(12 + 6, open.size)
+        // 3 segments, all edges stroked including the closing one + a miter join at every corner.
+        assertEquals(18 + 18, closed.size)
+    }
+
+    @Test
+    fun `a square cap extends each end of an open stroke by half the line width`() {
+        val line = listOf(Vector2(0f, 0f), Vector2(10f, 0f))
+
+        val result = triangulateStroke(line, lineWidth = 2f, closed = false, lineCap = LineCap.Square)
+
+        assertEquals(-1f, result.minOf { it.x })
+        assertEquals(11f, result.maxOf { it.x })
+        assertEquals(2f * 12f, totalArea(result), 0.001f) // a 12 x 2 rectangle
+    }
+
+    @Test
+    fun `a round cap adds a half disc past each end of an open stroke`() {
+        val line = listOf(Vector2(0f, 0f), Vector2(10f, 0f))
+
+        val result = triangulateStroke(line, lineWidth = 2f, closed = false, lineCap = LineCap.Round)
+
+        assertEquals(-1f, result.minOf { it.x }, 0.001f)
+        assertEquals(11f, result.maxOf { it.x }, 0.001f)
+        // The 10 x 2 ribbon plus two half discs of radius 1 (a polygonal approximation, slightly smaller).
+        val area = totalArea(result)
+        assertTrue(area > 20f + PI.toFloat() * 0.95f && area <= 20f + PI.toFloat(), "area was $area")
+    }
+
+    @Test
+    fun `a butt cap is the default and adds nothing past the endpoints`() {
+        val line = listOf(Vector2(0f, 0f), Vector2(10f, 0f))
+
+        val result = triangulateStroke(line, lineWidth = 2f, closed = false)
+
+        assertEquals(0f, result.minOf { it.x })
+        assertEquals(10f, result.maxOf { it.x })
+    }
+
+    @Test
+    fun `a miter join extends the outer corner of a right angle to a sharp point`() {
+        val corner = listOf(Vector2(0f, 0f), Vector2(10f, 0f), Vector2(10f, 10f))
+
+        val result = triangulateStroke(corner, lineWidth = 2f, closed = false)
+
+        // The outer corner of the turn at (10, 0) is (11, -1).
+        assertTrue(result.any { abs(it.x - 11f) < 0.001f && abs(it.y + 1f) < 0.001f })
+    }
+
+    @Test
+    fun `a bevel join cuts the outer corner off instead`() {
+        val corner = listOf(Vector2(0f, 0f), Vector2(10f, 0f), Vector2(10f, 10f))
+
+        val result = triangulateStroke(corner, lineWidth = 2f, closed = false, lineJoin = LineJoin.Bevel)
+
+        assertTrue(result.none { abs(it.x - 11f) < 0.001f && abs(it.y + 1f) < 0.001f })
+        assertEquals(12 + 3, result.size) // two segment quads + one bevel triangle
+    }
+
+    @Test
+    fun `a round join fills the outer corner with an arc`() {
+        val corner = listOf(Vector2(0f, 0f), Vector2(10f, 0f), Vector2(10f, 10f))
+
+        val result = triangulateStroke(corner, lineWidth = 2f, closed = false, lineJoin = LineJoin.Round)
+
+        assertTrue(result.size > 12 + 3)
+        assertTrue(result.all { Vector2(it.x - 10f, it.y).length() <= 1.001f || it.y >= -1.001f })
+    }
+
+    @Test
+    fun `a miter join past the miter limit falls back to a bevel`() {
+        // A very sharp turn: the miter would be far longer than 10 line widths.
+        val spike = listOf(Vector2(0f, 0f), Vector2(10f, 0f), Vector2(0f, 0.2f))
+
+        val miter = triangulateStroke(spike, lineWidth = 2f, closed = false)
+        val bevel = triangulateStroke(spike, lineWidth = 2f, closed = false, lineJoin = LineJoin.Bevel)
+
+        assertEquals(bevel, miter)
     }
 
     private fun totalArea(triangles: List<Vector2>): Float {

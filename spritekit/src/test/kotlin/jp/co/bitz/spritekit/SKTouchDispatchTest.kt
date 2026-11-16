@@ -115,6 +115,38 @@ class SKTouchDispatchTest {
     }
 
     @Test
+    fun `the scene receives a touch anywhere in the view, even outside its own size`() {
+        // A camera framing content around the scene origin: most of the view maps to negative
+        // scene coordinates, outside the scene's (0, 0)..size rect. Apple still delivers those
+        // touches to the scene (it's the last responder for its whole view).
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val camera = SKCameraNode().apply { position = Vector2(-500f, -500f) }
+        scene.addChild(camera)
+        scene.camera = camera
+
+        val touch = SKTouchEvent(0, 10f, 190f, SKTouchPhase.Began)
+        dispatchTouches(scene, listOf(touch), viewWidth = 200, viewHeight = 200)
+
+        assertEquals(scene, scene.activeTouchTargets[0])
+    }
+
+    @Test
+    fun `an interactive child still wins over the scene outside the scene's own size`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val camera = SKCameraNode().apply { position = Vector2(-500f, -500f) }
+        scene.addChild(camera)
+        scene.camera = camera
+        val node = sprite().apply { position = Vector2(-500f, -500f) }
+        scene.addChild(node)
+
+        // The view's center maps to the camera's position, where the sprite sits.
+        val touch = SKTouchEvent(0, 100f, 100f, SKTouchPhase.Began)
+        dispatchTouches(scene, listOf(touch), viewWidth = 200, viewHeight = 200)
+
+        assertEquals(1, node.began.size)
+    }
+
+    @Test
     fun `a non-interactive node never receives touches, even directly under the touch point`() {
         val scene = SKScene(size = Vector2(100f, 100f))
         val node =

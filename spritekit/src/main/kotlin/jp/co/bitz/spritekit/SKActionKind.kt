@@ -46,6 +46,8 @@ internal sealed class SKActionKind {
 
     data class RunBlock(val block: () -> Unit) : SKActionKind()
 
+    data class RunOnChild(val action: SKAction, val childName: String) : SKActionKind()
+
     data object RemoveFromParent : SKActionKind()
 
     data class Sequence(val actions: List<SKAction>) : SKActionKind()

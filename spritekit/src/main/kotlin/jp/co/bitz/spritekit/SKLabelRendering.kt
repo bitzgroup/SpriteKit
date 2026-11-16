@@ -3,7 +3,6 @@ package jp.co.bitz.spritekit
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Typeface
 import kotlin.math.ceil
 
 /**
@@ -32,7 +31,7 @@ internal fun renderLabelBitmap(
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.textSize = fontSize
             this.color = fontColor
-            this.typeface = fontName?.let { Typeface.create(it, Typeface.NORMAL) } ?: Typeface.DEFAULT
+            this.typeface = typefaceForFontName(fontName)
         }
     val width = paint.measureText(text)
     val fontMetrics = paint.fontMetrics

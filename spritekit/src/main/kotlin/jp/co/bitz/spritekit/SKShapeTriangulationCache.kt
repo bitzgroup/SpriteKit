@@ -16,7 +16,7 @@ import android.graphics.Path
  */
 internal class SKShapeTriangulationCache(
     val path: Path,
-    val lineWidth: Float,
+    val strokeStyle: SKStrokeStyle,
     val contours: List<SKFlattenedContour>,
     val allLocalVertices: List<Vector2>,
     val fillRanges: List<IntRange>,
@@ -29,6 +29,17 @@ internal class SKShapeTriangulationCache(
      */
     val fillBounds: Rect? by lazy { fillBoundsOf(allLocalVertices, fillRanges) }
 }
+
+/**
+ * Every [SKShapeNode] property that shapes its stroke geometry — the part of the cache key besides
+ * the [Path] instance itself. Changing any of them re-triangulates.
+ */
+internal data class SKStrokeStyle(
+    val lineWidth: Float,
+    val lineCap: LineCap,
+    val lineJoin: LineJoin,
+    val miterLimit: Float,
+)
 
 /** The bounding box of [vertices]' [fillRanges] slices, or `null` if every range is empty. */
 internal fun fillBoundsOf(
@@ -43,7 +54,8 @@ internal fun fillBoundsOf(
  * [node]'s triangulated geometry for [path], reusing [SKShapeNode.triangulationCache] when it was
  * computed from this exact [path] instance (mutating a `Path` in place and reusing it is not
  * supported — assign a new `Path` instead, matching this library's own usage throughout the
- * `scenes` layer of consumer apps) and [SKShapeNode.lineWidth] unchanged, and recomputing
+ * `scenes` layer of consumer apps) and the same stroke style ([SKShapeNode.lineWidth],
+ * [SKShapeNode.lineCap], [SKShapeNode.lineJoin], [SKShapeNode.miterLimit]), and recomputing
  * (flatten, then ear-clip fill / ribbon stroke) otherwise.
  *
  * This is the fix for the hot path [SKRenderCommandList.kt]'s `addShapeCommands` used to run
@@ -59,17 +71,30 @@ internal fun triangulatedShape(
     path: Path,
 ): SKShapeTriangulationCache {
     val cached = node.triangulationCache
-    if (cached != null && cached.path === path && cached.lineWidth == node.lineWidth) return cached
+    val strokeStyle = SKStrokeStyle(node.lineWidth, node.lineCap, node.lineJoin, node.miterLimit)
+    if (cached != null && cached.path === path && cached.strokeStyle == strokeStyle) return cached
 
     val contours = flattenPath(path)
     val allLocalVertices = mutableListOf<Vector2>()
     val fillRanges = contours.map { appendRange(allLocalVertices, triangulateFill(it.points)) }
     val strokeRanges =
-        contours.map { appendRange(allLocalVertices, triangulateStroke(it.points, node.lineWidth, it.closed)) }
+        contours.map {
+            appendRange(
+                allLocalVertices,
+                triangulateStroke(
+                    it.points,
+                    strokeStyle.lineWidth,
+                    it.closed,
+                    strokeStyle.lineCap,
+                    strokeStyle.lineJoin,
+                    strokeStyle.miterLimit,
+                ),
+            )
+        }
     val fresh =
         SKShapeTriangulationCache(
             path = path,
-            lineWidth = node.lineWidth,
+            strokeStyle = strokeStyle,
             contours = contours,
             allLocalVertices = allLocalVertices,
             fillRanges = fillRanges,

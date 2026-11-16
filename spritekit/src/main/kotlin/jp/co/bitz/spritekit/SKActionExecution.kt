@@ -228,6 +228,7 @@ private fun applyLeafEffect(
         is SKActionKind.Hide -> node.isHidden = true
         is SKActionKind.Unhide -> node.isHidden = false
         is SKActionKind.RunBlock -> kind.block()
+        is SKActionKind.RunOnChild -> node.childNode(kind.childName)?.run(kind.action)
         is SKActionKind.RemoveFromParent -> node.removeFromParent()
         is SKActionKind.Wait -> Unit
         is SKActionKind.Custom -> kind.block(node, elapsed)

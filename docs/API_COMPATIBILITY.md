@@ -25,10 +25,8 @@ categories recur throughout and are called out once here rather than per item:
 - **Nullability** uses Kotlin's `?` type system throughout, not Optional-as-comment.
 - **Durations.** Where SpriteKit's API takes an elapsed/relative time interval (e.g.
   `SKAction.wait(forDuration:)`), this library uses `kotlin.time.Duration` rather than a raw
-  `Double` of seconds, to prevent unit-confusion bugs — SpriteKit's `update(_ currentTime:
-  TimeInterval)` callback (an *absolute* timestamp, not a duration) is the one place this library
-  still exposes a raw value, since wrapping an absolute clock reading in `Duration` would be
-  misleading; see the "Scene lifecycle" section once Phase 2 lands.
+  `Double` of seconds, to prevent unit-confusion bugs. This includes `SKScene.update`, which is
+  shaped differently from Apple's — see "Scene graph" below.
 - **No SIMD/Core Graphics vector or path types.** `CGPoint`/`CGVector`/`CGSize` map to plain
   Kotlin data classes or existing Android types where one already fits (e.g. `android.graphics.Path`
   for `SKShapeNode`'s `path`, rather than introducing a parallel path type).
@@ -52,6 +50,15 @@ categories recur throughout and are called out once here rather than per item:
   is where Android's UI toolkit investment goes now. Compose and the `View` system are officially
   interoperable (`AndroidView`/`ComposeView`), so this is additive, not a fork of the API surface.
   See `docs/ARCHITECTURE.md`'s "Hosting: a View core, a Compose wrapper" section.
+
+- **`SKView.allowsTransparency` puts the view above everything else in its window.** It's
+  implemented (default `false`, as on Apple; also an `allowsTransparency` parameter on the Compose
+  `SKView`), but a `GLSurfaceView`'s surface can only be composited entirely below its window (where
+  nothing behind the view can show through) or entirely above it. Transparency needs the latter
+  (`setZOrderOnTop`), so a transparent `SKView` is drawn over dialogs, popup menus and any other UI
+  the app shows over it — on Apple, `SKView` is an ordinary layer and none of this applies. Use it only
+  for a view nothing is shown on top of; to put a background behind a scene, draw it inside the scene.
+  It must be set before the view is attached to a window. See `docs/PARITY_GAP_PLAN.md` section 2.9.
 
 ## Scene graph (`SKNode`, `SKScene`)
 
@@ -85,10 +92,58 @@ categories recur throughout and are called out once here rather than per item:
   which put *all* of it on the max-coordinate side for the default `anchorPoint (0, 0)`.
   `bitzgroup/tic-tac-toe`'s Android build visibly sat lower on screen than its iOS twin because of
   this — found comparing screenshots of the two apps, not from a written spec.)
-- **`SKNode.isPaused`** exists as a property, but per-node pause propagation to descendants during
-  action evaluation/physics simulation isn't implemented yet — there's no action or physics system
-  to propagate to until later phases. Only `SKScene.isPaused` (inherited from here) is currently
-  honored, by `SKView`'s render loop.
+- **`anchorPoint` is a no-op whenever `SKScene.camera` is set** — every render command and touch
+  coordinate is already expressed relative to the camera (camera-relative `(0, 0)` *is* the
+  camera's own position), so the projection is always centered on that reference point instead,
+  regardless of `anchorPoint`. Verified against Apple's real `SKScene`/`SKCameraNode` on an iOS
+  Simulator: a camera's position renders at the center of the view no matter what `anchorPoint` is
+  set to (swept `(0, 0)`/`(0.5, 0.5)`/`(1, 1)`, pixel-identical each time) — unlike the no-camera
+  case just above, where `anchorPoint` only relabels the still-centered rect's own coordinates,
+  this makes it disappear from the equation entirely once a camera is active. `SKCameraNode
+  .containsNode`'s viewport approximation follows the same rule. (Found building a downstream hex-
+  grid wargame: with the default `anchorPoint (0, 0)` and a camera panned to frame the board, the
+  board rendered pushed into one corner of the view instead of centered on the camera.)
+- **`SKSceneScaleMode.ResizeFill` sizes the scene in density-independent pixels.** The presenting
+  `SKView` keeps `SKScene.size` equal to its own size in dp — this library's stand-in for Apple's
+  points, so one scene point covers about the same physical size on both platforms — and calls
+  `didChangeSize(_:)` whenever it changes. As on Apple, the resize happens *after* `didMove(view)`,
+  so `size` may still be the scene's initial size inside `didMove`. (Previously `.resizeFill` was
+  rendered exactly like `.fill` — the declared size stretched to the view — and the scene was never
+  resized.)
+- **`didMove(view)`/`willMove(view)` instead of `didMove(to:)`/`willMove(from:)`** — Kotlin can't
+  overload on argument labels alone, so each callback keeps its own name and a plain `view`
+  parameter. Both run on the render thread, from `SKView.presentScene`.
+- **`SKScene.update(deltaTime: Duration)` instead of `update(_ currentTime: TimeInterval)`.**
+  Apple passes an *absolute* timestamp and leaves every scene to subtract the previous frame's
+  value itself; this library passes the time elapsed since the previous frame directly, as a
+  `Duration`. Ported code that computes `currentTime - lastUpdateTime` drops that bookkeeping and
+  uses `deltaTime` as is. The first frame after the GL surface is (re)created gets a zero
+  `deltaTime`; deltas are not otherwise clamped.
+- **`SKNode.isPaused`** behaves like Apple's: a paused node's whole subtree is skipped by action
+  evaluation, constraint application, physics, particle emission, tile-map animation and audio
+  stepping, and still renders. A paused `SKScene` additionally gets no `update`/`did…` callbacks.
+- **`SKView.isPaused` and `SKView.scene`** match Apple's (behavior verified on an iOS simulator):
+  setting `view.isPaused` sets the presented scene's `isPaused` to the same value, and while the
+  view is paused nothing in the scene runs whatever the scene's own `isPaused` says.
+  `presentScene(scene)` un-pauses both the incoming scene and the view itself, as Apple's does;
+  `presentScene(scene, transition)` un-pauses the incoming scene but leaves a paused view paused
+  (Apple's `SKTransition.pausesIncomingScene`/`pausesOutgoingScene` aren't implemented — see
+  `PARITY_GAP_PLAN.md` X1).
+  `SKView.onResume()` (the Android counterpart of returning to the foreground) un-pauses the scene
+  even if the app had paused it through `scene.isPaused` — Apple's `SKView` does the same — but
+  leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
+  on the render thread.
+
+- **`SKNode.nodes(point)`/`atPoint(point)`** are Apple's `nodes(at:)`/`atPoint(_:)` with the
+  argument label dropped, and are top-level extension functions rather than members (call sites
+  read the same). `frame` and `contains(_:)` are members. Semantics match Apple's, probed on
+  macOS: `contains` tests the accumulated frame with `CGRect`'s half-open edges, while
+  `nodes`/`atPoint` test it with all four edges inclusive; hidden and `alpha == 0` subtrees are
+  skipped; results are frontmost first; `atPoint` falls back to the receiver.
+- **View ↔ scene conversion** — Apple's `SKScene.convertPoint(fromView:)`/`convertPoint(toView:)`
+  and `SKView.convert(_:to:)`/`convert(_:from:)` — are `convertPointFromView`/`convertPointToView`
+  and `SKView.convertTo`/`convertFrom` (Kotlin can't overload on argument labels). View
+  coordinates are Android view **pixels**, origin top-left, y-down, where Apple's are UIKit points.
 
 ## Textures & sprites (`SKTexture`, `SKTextureAtlas`, `SKSpriteNode`)
 
@@ -130,10 +185,22 @@ categories recur throughout and are called out once here rather than per item:
   this library never renders it via `Canvas`.
 - **Fill triangulation** (`triangulateFill`) is classic ear-clipping: doesn't support holes, and
   stops early (returning whatever was triangulated so far) on self-intersecting input rather than
-  producing garbage geometry. **Stroke triangulation** (`triangulateStroke`) doesn't generate
-  miter/bevel/round joins between segments — adjacent quads simply meet (or gap slightly, at sharp
-  angles) without extra join geometry. Both are *contract-conformant, not bit-identical* with
-  Apple's own (undocumented) shape rendering.
+  producing garbage geometry. **Stroke triangulation** (`triangulateStroke`) builds a quad per
+  segment plus join geometry at every corner (`lineJoin`: miter — falling back to bevel past
+  `miterLimit`, as Core Graphics does — round, or bevel) and cap geometry at an open contour's ends
+  (`lineCap`: butt, round, or square). Round caps/joins are polygonal (8 segments per half circle).
+  Both are *contract-conformant, not bit-identical* with Apple's own (undocumented) shape
+  rendering. (Joins were originally omitted, so polylines showed notches or gaps at their corners
+  that Apple's default miter join doesn't have.)
+- **`LineCap`/`LineJoin` stand in for `CGLineCap`/`CGLineJoin`** on `SKShapeNode.lineCap`/
+  `lineJoin` — plain Kotlin enums rather than `android.graphics.Paint.Cap`/`Join`, for the same
+  reason `Rect` stands in for `CGRect`: stroke geometry is built and unit-tested in pure Kotlin.
+  Defaults match Apple's (`.butt`, `.miter`, `miterLimit` 10).
+- **`SKShapeNode.circle(radius)`/`rect(size, cornerRadius)`/`ellipse(size)` instead of
+  `SKShapeNode(circleOfRadius:)`/`SKShapeNode(rectOf:cornerRadius:)`/`SKShapeNode(ellipseOf:)`.**
+  Companion factory functions rather than secondary constructors, since several Apple
+  initializers differ only in argument label (`rectOf:` vs `ellipseOf:` both take one size), which
+  Kotlin overload resolution can't tell apart. Each is centered on the node's origin, as on Apple.
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
   blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13).
 - **`SKShapeNode.fillTexture`** is stretched across the bounding box of the shape's (flattened,
@@ -144,6 +211,14 @@ categories recur throughout and are called out once here rather than per item:
   implemented** — the stroke is still a flat `strokeColor` ribbon.
 - **`SKLabelNode`** renders glyphs via `android.graphics.Paint`/`Typeface` into a cached texture —
   there is no CoreText equivalent on Android.
+- **`SKLabelNode.fontName` takes Apple-style names and maps them onto Android families.** A
+  PostScript-style `-Style` suffix (`"Helvetica-Bold"`, `"HelveticaNeue-LightItalic"`,
+  `"AvenirNext-SemiBold"`) is read as a weight and italic flag and applied to the family Android
+  resolves via `Typeface.create`; Apple's monospaced families (`Menlo`, `Courier`, ...) map to
+  `monospace`, and other Apple families Android doesn't ship fall back to the default sans-serif
+  (Android's closest match for Helvetica). Android family names (`"sans-serif-medium"`) also work.
+  Exact weights need API 28; below that, weights of 600 and up render bold. (Previously the whole
+  name went to `Typeface.create(name, NORMAL)`, so `"Helvetica-Bold"` silently rendered regular.)
 - **`SKLabelNode` is single-line only** — Apple's `numberOfLines`/`preferredMaxLayoutWidth`
   multi-line wrapping isn't implemented.
 
@@ -152,6 +227,8 @@ categories recur throughout and are called out once here rather than per item:
 - **`fadeAlphaTo`/`fadeAlphaBy` instead of an overloaded `fadeAlpha(to:duration:)`/
   `fadeAlpha(by:duration:)`.** Same Kotlin-overload-resolution collision (and the same rename
   pattern) as `SKNode.convertTo`/`convertFrom`.
+- **`run(_:onChildWithName:)` only looks among direct children**, like `SKNode.childNode` (see
+  "Scene graph" above) — no path syntax.
 - **`wait(duration:withRange:)` picks its random duration once, when the action is created.**
   Apple re-randomizes on every run of a reused action instance (e.g. inside a `repeatForever`);
   this library doesn't, for simplicity.
@@ -302,8 +379,17 @@ categories recur throughout and are called out once here rather than per item:
 
 - **Configured programmatically only** — no `.sks` tile-set archive format to parse, and no
   bundled/built-in tile sets (Apple ships several) to draw from.
-- **Only grid-shaped maps are supported.** Apple's `SKTileSetType` (and the isometric/hexagonal
-  variants it selects) isn't implemented, so `SKTileSet` has no corresponding property at all.
+- **`SKTileSetType` covers `Grid`/`HexagonalPointy`/`HexagonalFlat` — Apple's `.isometric` case
+  isn't implemented.** No isometric layout math exists in this port; `SKTileSet.type` can't be set
+  to it because the enum has no such case. `SKTileSet.type` defaults to `Grid`, matching this
+  port's original (and, before this, only) behavior.
+- **The two hexagonal layouts use fixed "offset coordinate" conventions**, not Apple's (largely
+  undocumented) internal scheme: `HexagonalPointy` is "odd-r" (odd-numbered rows shifted right by
+  half a tile width; rows spaced 3/4 of a tile height apart), `HexagonalFlat` is "odd-q" (odd-
+  numbered columns shifted down by half a tile height; columns spaced 3/4 of a tile width apart).
+  `centerOfTile`/`tileColumnIndex`/`tileRowIndex` and the map's overall layout size (which feeds
+  `calculateAccumulatedFrame`) all follow this same convention consistently, but Apple's own exact
+  formulas for these aren't public, so this is *contract-conformant, not bit-identical*.
 - **`SKTileDefinition.textures` may be empty**, unlike Apple (which always requires at least one)
   — an empty-textures definition renders flat-colored, this port's usual "no texture" convention
   (matching untextured `SKSpriteNode`/`SKEmitterNode` particles). Chosen deliberately so
@@ -312,14 +398,20 @@ categories recur throughout and are called out once here rather than per item:
   test).
 - **`SKTileAdjacencyMask` is a plain `Int`-bitmask `object`** (`SKTileAdjacencyMask.UP`, `.ALL`,
   etc.), matching this library's existing `categoryBitMask`-style bitmask convention, rather than
-  a dedicated option-set type.
+  a dedicated option-set type. It's shared across all three `SKTileSetType`s rather than each
+  getting its own narrower mask type: a hexagonal tile group's rules simply never see 2 of the 8
+  bits set (`UP`/`DOWN` for `HexagonalPointy`, `LEFT`/`RIGHT` for `HexagonalFlat`), since a hex
+  cell only has 6 neighbors.
 - **`SKTileMapNode.numberOfColumns`/`numberOfRows` are fixed at construction** — Apple allows
   resizing a live map (preserving existing tiles); this port doesn't.
 - **Automapping's rule-matching algorithm is *contract-conformant, not bit-identical*** with
   Apple's own (undocumented) version: it scores each candidate `SKTileGroupRule` by how many
-  adjacency bits it shares with the tile's actual same-group 8-neighbor configuration (an exact
-  match always wins outright; otherwise the closest by Hamming distance), rather than Apple's
-  unpublished matching/tie-breaking behavior.
+  adjacency bits it shares with the tile's actual same-group neighbor configuration (8 neighbors
+  for `Grid`, 6 for the hexagonal types — an exact match always wins outright; otherwise the
+  closest by Hamming distance), rather than Apple's unpublished matching/tie-breaking behavior.
+  For the hexagonal types, which of the 8 `SKTileAdjacencyMask` bits corresponds to which actual
+  neighbor cell depends on the tile's own row (`HexagonalPointy`) or column (`HexagonalFlat`)
+  parity, since adjacent rows/columns are offset from each other by half a tile.
 - **Placement/rotation/flip variants of `SKTileDefinition`** aren't implemented — every tile
   renders axis-aligned, unrotated.
 - **Tile map rendering reuses the existing `SKRenderCommandList.kt` pipeline** — each non-empty
@@ -344,6 +436,12 @@ categories recur throughout and are called out once here rather than per item:
   bounding-box containment in that node's local space) rather than Apple's (undocumented, possibly
   per-node-type/shape-aware) precise hit-testing — e.g. `SKShapeNode`'s actual path isn't tested,
   just its bounds.
+- **The scene receives every touch no descendant takes, anywhere in its view** — it isn't
+  bounds-tested, matching Apple, where the scene is the last responder for its whole `SKView`.
+  (It used to be bounds-tested like any other node, so touches on the parts of the view showing
+  content outside the scene's `(0, 0)..size` rect — routine once an `SKCameraNode` pans or the
+  content is centered on the origin — were silently dropped, and a scene-level tap handler simply
+  never fired there.)
 - **`SKCropNode` clipping isn't considered during hit-testing** — a touch can still reach a node
   positioned somewhere an ancestor crop node would actually clip it from view.
 - **A touch is hit-tested once, on `touchesBegan`**, then delivered to that same node for
@@ -352,6 +450,33 @@ categories recur throughout and are called out once here rather than per item:
   re-hit-tested every frame.
 - **No responder-chain bubbling**: a node with `isUserInteractionEnabled == false` is never a hit
   candidate and never receives touches at all — no walking up to find an enabled ancestor.
+
+## Input (`presses*` — remote and game-controller buttons)
+
+- **`SKPress`/`SKPressesEvent` stand in for `UIPress`/`UIPressesEvent`.** `pressesBegan(presses:
+  Set<SKPress>, event: SKPressesEvent?)` and its siblings match Apple's `pressesBegan(_:with:)`
+  shape; each `SKPress` persists from key-down to key-up and carries Apple's `type`
+  (`SKPressType`: `UpArrow`/`DownArrow`/`LeftArrow`/`RightArrow`/`Select`/`Menu`/`PlayPause`) and
+  `phase`. Only `SKPressesEvent.allPresses` is mirrored; `UIPress`'s `force`/`key`/`timestamp`
+  aren't, and `SKPress.keyCode` (the Android key code) is an addition.
+- **Delivery is forwarded by the host, matching Apple.** Apple's SpriteKit never delivers presses to
+  a scene by itself — not even with the `SKView` as first responder (verified on a tvOS simulator,
+  recorded in the sample app's `SpriteKitParity` probes); a tvOS game overrides `presses*` on its
+  view controller and forwards them. Here the host `Activity` calls
+  `SKView.forwardKeyEvent(event)` from `onKeyDown`/`onKeyUp`, which delivers to the presented
+  scene on the render thread. Nodes below the scene only see presses the scene passes on itself —
+  there is no focus engine or responder chain.
+- **Key mapping** (`skPressTypeForKeyCode`): D-pad arrows → arrows; D-pad center, Enter, numpad
+  Enter and gamepad A → `Select`; Back and Escape → `Menu`; media play/pause → `PlayPause`. Other
+  keys aren't forwarded (`forwardKeyEvent` returns `false`).
+- **A held button is one `began` and one `ended`**, as on tvOS: Android's auto-repeat key-downs are
+  consumed but not delivered. A key-up the system cancels (`KeyEvent.isCanceled`) is delivered as
+  `pressesCancelled`. `pressesChanged` exists for shape parity but is never called — every mapped
+  button is digital.
+- **Back (`Menu`) is the host's call.** Forwarding it consumes it, so the system won't leave the
+  screen — like a tvOS app whose view controller handles Menu instead of calling `super`. Because
+  delivery is asynchronous (render thread), `forwardKeyEvent` can't report whether the scene
+  handled it; the host decides up front whether to forward Back.
 
 ## Transitions (`SKTransition`)
 

@@ -10,15 +10,17 @@ complexity:
     # SKNode (and later SKScene/SKSpriteNode/...) mirror SpriteKit's own large per-node APIs
     # (transform properties, child management, coordinate conversion, actions, physics, touch
     # handling, ...) — a wide surface by design, not poor organization. Raised generously since
-    # these classes grow across roadmap phases.
-    thresholdInClasses: 30
-    # SKAction's companion mirrors SpriteKit's own 36-factory-method SKAction API 1:1 (including
+    # these classes grow across roadmap phases. SKNode carries both UIResponder callback families
+    # Apple's SKNode inherits (touches* and presses*), which must stay overridable members.
+    thresholdInClasses: 34
+    # SKAction's companion mirrors SpriteKit's own 37-factory-method SKAction API 1:1 (including
     # the Phase 12 audio actions: play/pause/stop/changeVolume/changePlaybackRate/
-    # playSoundFileNamed, and the two `follow` overloads added for path-following) — a deliberate,
+    # playSoundFileNamed, the two `follow` overloads added for path-following, and
+    # `run(_:onChildWithName:)`) — a deliberate,
     # cohesive API surface, not poor organization (same rationale GameplayKit-for-Android's
     # detekt.yml documents for GKGoal's companion). detekt flags at `>= threshold`, so this is set
     # one above the actual count.
-    thresholdInObjects: 37
+    thresholdInObjects: 38
     # SKActionExecution.kt is the frame-stepped action interpreter: one function per SKActionKind
     # composite (sequence/group/repeat) plus one apply-effect function per leaf kind.
     # SKPhysicsCollision.kt is the narrow-phase SAT/distance-test suite: one small pure function

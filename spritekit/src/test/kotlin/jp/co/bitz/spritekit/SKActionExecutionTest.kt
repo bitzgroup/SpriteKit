@@ -317,6 +317,40 @@ class SKActionExecutionTest {
     }
 
     @Test
+    fun `run onChildWithName starts the action on the first direct child with that name`() {
+        val parent = SKNode()
+        val first = SKNode().apply { name = "face" }
+        val second = SKNode().apply { name = "face" }
+        parent.addChild(first)
+        parent.addChild(second)
+
+        parent.run(SKAction.run(SKAction.hide(), onChildWithName = "face"))
+        parent.stepActions(0.seconds)
+        first.stepActions(0.seconds)
+
+        assertTrue(first.isHidden)
+        assertFalse(second.isHidden)
+    }
+
+    @Test
+    fun `run onChildWithName takes no time itself and ignores a missing child`() {
+        val parent = SKNode()
+        var ranAfter = false
+        parent.run(
+            SKAction.sequence(
+                listOf(
+                    SKAction.run(SKAction.wait(5.seconds), onChildWithName = "missing"),
+                    SKAction.run { ranAfter = true },
+                ),
+            ),
+        )
+
+        parent.stepActions(0.seconds)
+
+        assertTrue(ranAfter)
+    }
+
+    @Test
     fun `run with a key replaces any existing action under that key`() {
         val node = SKNode()
         node.run(SKAction.wait(5.seconds), withKey = "key")

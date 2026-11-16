@@ -2,6 +2,7 @@ package jp.co.bitz.spritekit
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 
 class SKResourceRegistryTest {
     @Test
@@ -38,13 +39,26 @@ class SKResourceRegistryTest {
     }
 
     @Test
-    fun `generation starts at zero and is bumped by every reloadAll call`() {
+    fun `generation starts at zero and changes on every reloadAll call`() {
         val registry = SKResourceRegistry()
 
         assertEquals(0, registry.generation)
         registry.reloadAll()
-        assertEquals(1, registry.generation)
+        val first = registry.generation
         registry.reloadAll()
-        assertEquals(2, registry.generation)
+        assertNotEquals(0, first)
+        assertNotEquals(first, registry.generation)
+    }
+
+    @Test
+    fun `a new registry never reuses a generation an older registry already used`() {
+        // An SKView recreated with its Activity gets a fresh registry, while textures/scenes kept
+        // from the old view still carry the old view's generation; they must not look uploaded.
+        val oldView = SKResourceRegistry()
+        oldView.reloadAll()
+        val newView = SKResourceRegistry()
+        newView.reloadAll()
+
+        assertNotEquals(oldView.generation, newView.generation)
     }
 }

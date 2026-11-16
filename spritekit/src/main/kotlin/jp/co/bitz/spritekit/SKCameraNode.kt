@@ -12,20 +12,22 @@ package jp.co.bitz.spritekit
  */
 public open class SKCameraNode : SKNode() {
     /**
-     * Whether [node] is within this camera's current viewport (approximated as [SKScene.size],
-     * centered per [SKScene.anchorPoint] — this doesn't account for [SKScene.scaleMode]'s
-     * letterbox/crop adjustment against the presenting [SKView]'s actual aspect ratio, since a
-     * node has no way to know that from here; see `docs/API_COMPATIBILITY.md`). `false` if this
-     * camera isn't part of a presented scene.
+     * Whether [node] is within this camera's current viewport (approximated as [SKScene.size]
+     * centered on this camera's own position — [SKScene.anchorPoint] plays no role once a camera
+     * is active, matching [computeSceneProjection]'s `hasCamera` handling and Apple's real,
+     * verified behavior; see `docs/API_COMPATIBILITY.md`. Doesn't account for
+     * [SKScene.scaleMode]'s letterbox/crop adjustment against the presenting [SKView]'s actual
+     * aspect ratio, since a node has no way to know that from here). `false` if this camera isn't
+     * part of a presented scene.
      */
     public fun containsNode(node: SKNode): Boolean {
         val scene = scene ?: return false
         val visibleRect =
             Rect(
-                left = 0f - scene.size.x * scene.anchorPoint.x,
-                top = 0f - scene.size.y * scene.anchorPoint.y,
-                right = scene.size.x * (1f - scene.anchorPoint.x),
-                bottom = scene.size.y * (1f - scene.anchorPoint.y),
+                left = -scene.size.x / 2f,
+                top = -scene.size.y / 2f,
+                right = scene.size.x / 2f,
+                bottom = scene.size.y / 2f,
             )
         val nodeReferenceSpace = node.parent ?: node
         val nodeCorners = corners(node.calculateAccumulatedFrame()).map { convertFrom(it, nodeReferenceSpace) }

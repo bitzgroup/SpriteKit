@@ -56,12 +56,16 @@ foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (texture
 `SKAudioNode`, the `play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate`/`playSoundFileNamed`
 `SKAction`s), Phase 13 (shaders — `SKShader`/`SKUniform` on `SKSpriteNode`, plus the built-in
 `SKShader.grayscale` example), and Phase 14 (documentation — full public-API KDoc coverage,
-`docs/API_COMPATIBILITY.md`, and this README's [Usage](#usage) section) are complete. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and progress checklist.
+`docs/API_COMPATIBILITY.md`, and this README's [Usage](#usage) section), and Phase 15 (hexagonal
+tile maps — `SKTileSetType`) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full
+phased plan and progress checklist. A later audit against Apple's SpriteKit recorded the API still
+missing in [`docs/PARITY_GAP_PLAN.md`](docs/PARITY_GAP_PLAN.md), with the plan for closing it; its
+first items (remote/game-controller `presses*` input, point queries and view ↔ scene coordinate
+conversion, `SKView.isPaused`/`scene`) have landed.
 
 ## Requirements
 
-- Android `minSdk` 24, `compileSdk`/`targetSdk` 34
+- Android `minSdk` 24, `compileSdk` 37
 - Kotlin 2.0+
 
 ## Building
@@ -168,6 +172,11 @@ map.setTileGroup(tileSet.tileGroups.first(), column = 0, row = 0)
 scene.addChild(map)
 ```
 
+`SKTileSet(tileGroups = ..., type = SKTileSetType.HexagonalPointy)` (or `.HexagonalFlat`) lays
+out that same map as regular hexagons instead of a grid — `centerOfTile`/`tileColumnIndex`/
+`tileRowIndex` and automapping all follow suit; see `docs/API_COMPATIBILITY.md` for the exact
+offset-coordinate convention.
+
 ### Camera and crop
 
 ```kotlin
@@ -202,6 +211,28 @@ class Ship : SKSpriteNode(texture = shipTexture, size = Vector2(64f, 64f)) {
         position = touches.first().location(parent)
     }
 }
+```
+
+Remote and game-controller buttons (Android TV, a D-pad, a gamepad) arrive as Apple-shaped
+`presses*` callbacks on the scene — forwarded by the host, as a tvOS view controller forwards its
+own `presses*` to its scene:
+
+```kotlin
+class GameScene : SKScene(size = Vector2(1920f, 1080f)) {
+    override fun pressesBegan(
+        presses: Set<SKPress>,
+        event: SKPressesEvent?,
+    ) {
+        if (presses.any { it.type == SKPressType.Select }) fire()
+    }
+}
+
+// In the host Activity:
+override fun onKeyDown(keyCode: Int, event: KeyEvent) =
+    skView.forwardKeyEvent(event) || super.onKeyDown(keyCode, event)
+
+override fun onKeyUp(keyCode: Int, event: KeyEvent) =
+    skView.forwardKeyEvent(event) || super.onKeyUp(keyCode, event)
 ```
 
 ### Transitions
