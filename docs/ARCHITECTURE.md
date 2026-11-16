@@ -109,6 +109,12 @@ node. `SKNode`/`SKScene`'s `touchesBegan`/`touchesMoved`/`touchesEnded`/
 `touchesCancelled` (Phase 10) always run on the render thread — the same thread as node mutation —
 so hit-testing and touch handling need no synchronization with the render/update loop.
 
+Remote and game-controller buttons take the same path, but only when the host forwards them: as on
+tvOS, where a view controller forwards its `presses*` to its scene, the host `Activity` passes
+`KeyEvent`s to `SKView.forwardKeyEvent`, which maps the keys it knows to `SKPress`es (on the UI
+thread) and delivers `pressesBegan`/`pressesEnded`/`pressesCancelled` to the scene on the render
+thread.
+
 ### What this deliberately does not provide
 
 There is no general "read live node state from the UI thread" API in v1 — querying, say, a

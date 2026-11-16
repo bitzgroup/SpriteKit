@@ -41,11 +41,14 @@ batched run of render commands now also shares a shader identity, resolved to a 
 `SKProgramBinding` the same way `SKTexture` lazily re-uploads; a shader that fails to compile falls
 back to the default program rather than crashing the render thread; ships with one built-in example,
 `SKShader.grayscale`), and Phase 14 (documentation: full public-API KDoc coverage,
-`docs/API_COMPATIBILITY.md`, and README usage examples per subsystem) are complete — the internal
+`docs/API_COMPATIBILITY.md`, and README usage examples per subsystem), and Phase 15 (hexagonal
+tile maps: `SKTileSetType`) are complete — the internal
 renderer (`SKSceneRenderer`) draws sprites/labels/shapes/particles/tile maps through one
 generalized triangle-list pipeline,
 camera-relative and crop-clipped via `glScissor` when applicable. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist.
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phase-by-phase plan and progress checklist, and
+[`docs/PARITY_GAP_PLAN.md`](docs/PARITY_GAP_PLAN.md) for the post-roadmap Apple-parity gap list and
+which of its items have landed.
 
 ## Intent
 

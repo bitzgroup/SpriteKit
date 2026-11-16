@@ -56,12 +56,16 @@ foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (texture
 `SKAudioNode`, the `play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate`/`playSoundFileNamed`
 `SKAction`s), Phase 13 (shaders — `SKShader`/`SKUniform` on `SKSpriteNode`, plus the built-in
 `SKShader.grayscale` example), and Phase 14 (documentation — full public-API KDoc coverage,
-`docs/API_COMPATIBILITY.md`, and this README's [Usage](#usage) section) are complete. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and progress checklist.
+`docs/API_COMPATIBILITY.md`, and this README's [Usage](#usage) section), and Phase 15 (hexagonal
+tile maps — `SKTileSetType`) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full
+phased plan and progress checklist. A later audit against Apple's SpriteKit recorded the API still
+missing in [`docs/PARITY_GAP_PLAN.md`](docs/PARITY_GAP_PLAN.md), with the plan for closing it; its
+first items (remote/game-controller `presses*` input, point queries and view ↔ scene coordinate
+conversion, `SKView.isPaused`/`scene`) have landed.
 
 ## Requirements
 
-- Android `minSdk` 24, `compileSdk`/`targetSdk` 34
+- Android `minSdk` 24, `compileSdk` 37
 - Kotlin 2.0+
 
 ## Building
@@ -168,7 +172,7 @@ map.setTileGroup(tileSet.tileGroups.first(), column = 0, row = 0)
 scene.addChild(map)
 ```
 
-`SKTileSet(tileGroups = ..., type = SKTileSetType.HEXAGONAL_POINTY)` (or `.HEXAGONAL_FLAT`) lays
+`SKTileSet(tileGroups = ..., type = SKTileSetType.HexagonalPointy)` (or `.HexagonalFlat`) lays
 out that same map as regular hexagons instead of a grid — `centerOfTile`/`tileColumnIndex`/
 `tileRowIndex` and automapping all follow suit; see `docs/API_COMPATIBILITY.md` for the exact
 offset-coordinate convention.

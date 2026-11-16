@@ -54,7 +54,8 @@ internal fun fillBoundsOf(
  * [node]'s triangulated geometry for [path], reusing [SKShapeNode.triangulationCache] when it was
  * computed from this exact [path] instance (mutating a `Path` in place and reusing it is not
  * supported — assign a new `Path` instead, matching this library's own usage throughout the
- * `scenes` layer of consumer apps) and [SKShapeNode.lineWidth] unchanged, and recomputing
+ * `scenes` layer of consumer apps) and the same stroke style ([SKShapeNode.lineWidth],
+ * [SKShapeNode.lineCap], [SKShapeNode.lineJoin], [SKShapeNode.miterLimit]), and recomputing
  * (flatten, then ear-clip fill / ribbon stroke) otherwise.
  *
  * This is the fix for the hot path [SKRenderCommandList.kt]'s `addShapeCommands` used to run
