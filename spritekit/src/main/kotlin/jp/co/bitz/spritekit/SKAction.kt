@@ -304,9 +304,10 @@ public class SKAction internal constructor(
         public fun run(block: () -> Unit): SKAction = SKAction(Duration.ZERO, SKActionKind.RunBlock(block))
 
         /**
-         * Starts [action] on the running node's direct child named [onChildWithName] (the first
-         * match, as [SKNode.childNode] finds it), taking no time itself — the child's action keeps
-         * running on its own afterwards. Does nothing if there's no such child. Mirrors Apple's
+         * Starts [action] on the first node [onChildWithName] finds from the running node — the
+         * full search syntax [SKNode.childNode] describes, so `"//enemy"` works — taking no time
+         * itself; the found node's action keeps running on its own afterwards. Only the first
+         * match runs it, and nothing happens if there's none. Mirrors Apple's
          * `run(_:onChildWithName:)`.
          */
         public fun run(

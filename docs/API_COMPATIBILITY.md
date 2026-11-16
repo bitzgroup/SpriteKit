@@ -67,11 +67,15 @@ categories recur throughout and are called out once here rather than per item:
   `convert(point: Vector2, node: SKNode): Vector2` overload — the same problem, and the same
   rename pattern, as GameplayKit-for-Android's `GKGraphNode.pathFrom`/`pathTo` (renamed from
   `findPath(from:)`/`findPath(to:)`).
-- **`childNode`/`enumerateChildNodes` only support an exact-name match among *direct* children.**
-  Apple's `childNode(withName:)`/`enumerateChildNodes(withName:using:)` additionally support a
-  `/`-separated path syntax with `//` for recursive descent and `*` wildcards — not implemented.
-  `enumerateChildNodes` also drops the `UnsafeMutablePointer<ObjCBool>` "stop" out-parameter from
-  its callback (no Kotlin/Obj-C runtime equivalent); the callback is a plain `(SKNode) -> Unit`.
+- **Node search (`childNode`, `enumerateChildNodes`, `node[name]`) uses Apple's full search
+  syntax** (since 0.4.0; before that, only an exact name among direct children): `/` and `//`
+  steps, a leading `/` or `//` to start at the tree's root, `*` and `[a-z]` patterns, `.` and
+  `..`. Apple's undocumented details are matched as recorded on iOS/tvOS simulators: `//` lists
+  each node's matching children before searching deeper; the root's own name is never matched;
+  `*` matches unnamed nodes; an empty search string throws, as Apple raises. Apple's
+  `subscript(_:)` is the `get` operator. `enumerateChildNodes` drops the
+  `UnsafeMutablePointer<ObjCBool>` "stop" out-parameter (no Kotlin equivalent); the callback is a
+  plain `(SKNode) -> Unit`, and a `for` loop over `node[name]` with `break` stops early.
 - **`Vector2` stands in for `CGPoint`, `CGVector`, and `CGSize`** (position vs. velocity/force/
   gravity vs. size in Apple's API) — one Kotlin type covers every role, since the split is a Core
   Graphics/Objective-C legacy this port doesn't need. A size-valued `Vector2` (e.g.
@@ -164,6 +168,17 @@ categories recur throughout and are called out once here rather than per item:
   uses a classic shelf/next-fit bin-packing algorithm (simple, not space-optimal); Apple's own
   atlas-packing algorithm isn't documented, so there's nothing to match even if this library could
   hook into a build step.
+- **`SKTexture(imageNamed:)`/`SKSpriteNode(imageNamed:)` read the host app's `assets/` folder**,
+  the same stand-in for Apple's main bundle the audio API uses (see "Audio"). The extension may be
+  left out (`"hero"` tries `.png`, `.jpg`, `.jpeg`, `.webp`), and a missing image gives Apple's
+  128×128 placeholder (a red cross) plus a logged warning. The application `Context` this needs
+  is captured at start-up by `SKBundleInitializer`, a no-data `ContentProvider` merged in from
+  this library's manifest — so, as on Apple, textures can be loaded before any view exists. No
+  `@2x`/`@3x` variants or asset catalogs: the file is used at its pixel size.
+- **`SKSpriteNode.centerRect` takes a `Rect`** in unit texture space with Apple's bottom-left
+  origin (`top` holds the lower edge, as for every `Rect`). Verified on iOS/tvOS simulators: the
+  border keeps its texture size on screen whether the sprite grows through `size` or through its
+  scale. When a sprite is smaller than its two borders, they shrink in proportion.
 - **`SKTexture(rect:in:)`** doesn't compose nested sub-rects — `rect` is always interpreted
   relative to the passed-in texture's *underlying bitmap*, even if that texture is itself already
   a sub-rect. `SKTextureAtlas` (this constructor's only real use case in this library) never
@@ -242,16 +257,24 @@ categories recur throughout and are called out once here rather than per item:
   (Android's closest match for Helvetica). Android family names (`"sans-serif-medium"`) also work.
   Exact weights need API 28; below that, weights of 600 and up render bold. (Previously the whole
   name went to `Typeface.create(name, NORMAL)`, so `"Helvetica-Bold"` silently rendered regular.)
-- **`SKLabelNode` is single-line only** — Apple's `numberOfLines`/`preferredMaxLayoutWidth`
-  multi-line wrapping isn't implemented.
+- **Multi-line labels (`numberOfLines`, `preferredMaxLayoutWidth`, `lineBreakMode`) are laid out
+  by `android.text.StaticLayout`** (since 0.4.0; before that, labels were single-line only). The
+  rules match Apple's, as recorded on iOS/tvOS simulators: `numberOfLines = 1` (the default)
+  ignores the width and line-break mode; otherwise the block wraps, its frame is as wide as its
+  widest line, and `.baseline` vertical alignment acts like `.bottom`. Line breaks and glyph
+  metrics are Android's, so exact sizes differ. `lineBreakMode` takes `SKLineBreakMode`, a
+  stand-in for `NSLineBreakMode`: character wrapping falls back to word wrapping, and head/middle
+  truncation shows no ellipsis on a multi-line block (Android's layout only does those on a single
+  line).
 
 ## Actions (`SKAction`)
 
 - **`fadeAlphaTo`/`fadeAlphaBy` instead of an overloaded `fadeAlpha(to:duration:)`/
   `fadeAlpha(by:duration:)`.** Same Kotlin-overload-resolution collision (and the same rename
   pattern) as `SKNode.convertTo`/`convertFrom`.
-- **`run(_:onChildWithName:)` only looks among direct children**, like `SKNode.childNode` (see
-  "Scene graph" above) — no path syntax.
+- **`run(_:onChildWithName:)` uses the full search syntax** of `SKNode.childNode` (see "Scene
+  graph" above) and runs on the first match only, as on Apple (since 0.4.0; before that, direct
+  children only).
 - **`wait(duration:withRange:)` picks its random duration once, when the action is created.**
   Apple re-randomizes on every run of a reused action instance (e.g. inside a `repeatForever`);
   this library doesn't, for simplicity.

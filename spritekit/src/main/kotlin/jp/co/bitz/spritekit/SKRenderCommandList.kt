@@ -216,13 +216,21 @@ private fun addSpriteCommand(
     context: RenderContext,
     alpha: Float,
 ) {
-    val corners = node.convertAllTo(node.localQuadCorners(), context.referenceNode)
-    val uv = node.texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
+    val texture = node.texture
+    val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
+    val vertices =
+        if (texture == null || node.centerRect == FULL_UNIT_RECT) {
+            quadVertices(node.convertAllTo(node.localQuadCorners(), context.referenceNode), uv)
+        } else {
+            node.nineSlices(
+                texture,
+            ).flatMap { quadVertices(node.convertAllTo(it.corners, context.referenceNode), it.uv) }
+        }
     context.add(
         SKRenderCommand(
-            texture = node.texture,
+            texture = texture,
             blendMode = node.blendMode,
-            vertices = quadVertices(corners, uv),
+            vertices = vertices,
             color = tintedVertexColor(node.color, node.colorBlendFactor, alpha),
             clipRect = context.clipRect,
             shader = node.shader,
