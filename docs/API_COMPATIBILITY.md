@@ -144,6 +144,18 @@ categories recur throughout and are called out once here rather than per item:
   and `SKView.convert(_:to:)`/`convert(_:from:)` — are `convertPointFromView`/`convertPointToView`
   and `SKView.convertTo`/`convertFrom` (Kotlin can't overload on argument labels). View
   coordinates are Android view **pixels**, origin top-left, y-down, where Apple's are UIKit points.
+- **Child-list API** — `insertChild(node, index)`, `removeChildren(nodes)`,
+  `inParentHierarchy(parent)` and `moveToParent(parent)` (Apple's `insertChild(_:at:)`,
+  `removeChildren(in:)`, `inParentHierarchy(_:)`, `move(toParent:)`; `moveToParent` because Kotlin
+  can't take the `toParent:` label) match Apple's, verified on iOS/tvOS simulators:
+  `insertChild` throws `IndexOutOfBoundsException` past the end, as Apple raises; `removeChildren`
+  ignores nodes that aren't children; `inParentHierarchy` is `false` for the node itself;
+  `moveToParent` keeps only the **position** in place — `zRotation` and the scale keep their local
+  values — and carries it through every ancestor's transform on both sides, each tree's topmost
+  node's own included.
+- **`SKNode.speed`** multiplies how fast a node's actions run and, as on Apple, is inherited: a
+  node's actions run at the product of its own and every ancestor's speed. `0` stops them while
+  leaving them attached. A negative speed stops them too.
 
 ## Textures & sprites (`SKTexture`, `SKTextureAtlas`, `SKSpriteNode`)
 
@@ -167,6 +179,11 @@ categories recur throughout and are called out once here rather than per item:
   this library didn't prioritize. Blending is implemented via standard `glBlendFunc`/
   `glBlendEquation` combinations — *contract-conformant, not bit-identical*, since Apple's own
   blending isn't independently documented beyond its observable effect.
+- **`SKSpriteNode.size` includes the node's scale, as Apple's does** (verified on iOS/tvOS
+  simulators): it reads as the unscaled size times `|xScale|`/`|yScale|`, and assigning it stores
+  the value divided by them (ignored on an axis whose scale is `0`). The constructor's `size` is
+  the unscaled size. (Before 0.4.0, `size` ignored the scale.) `scale(to)` is Apple's
+  `scale(to:)`.
 - **`SKSpriteNode.colorBlendFactor`** is applied as a CPU-computed-per-sprite vertex-color
   multiplier (`mix(white, color, colorBlendFactor)`, scaled by the node's accumulated alpha) rather
   than a per-pixel shader `mix` between the sampled texture color and `color` — a modulate
@@ -201,6 +218,12 @@ categories recur throughout and are called out once here rather than per item:
   Companion factory functions rather than secondary constructors, since several Apple
   initializers differ only in argument label (`rectOf:` vs `ellipseOf:` both take one size), which
   Kotlin overload resolution can't tell apart. Each is centered on the node's origin, as on Apple.
+  The rest of Apple's set follows the same pattern: `rect(rect, cornerRadius)` and `ellipseIn(rect)`
+  (not centered), `path(path, centered)`, `points(points)` and `splinePoints(points)` (a `List`
+  instead of a pointer and count). Their paths match Apple's element for element (verified on
+  iOS/tvOS simulators), down to two quirks: `points` starts with a line from the first point to
+  itself, and `splinePoints` — a Catmull-Rom spline drawn as cubic Béziers — starts with a
+  zero-length curve from the first point to itself.
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
   blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13).
 - **`SKShapeNode.fillTexture`** is stretched across the bounding box of the shape's (flattened,
@@ -237,6 +260,19 @@ categories recur throughout and are called out once here rather than per item:
   `resizeTo`, `fadeAlphaTo`, `colorize` — return an unreversed copy of themselves, since the value
   they started from isn't known until run time. Actions with no natural inverse (`wait`, `run`,
   `removeFromParent`, `customAction`, `animate`) do the same.
+- **Single-axis and Kotlin-named factories.** Apple's label-only overloads get distinct names:
+  `moveToX`/`moveToY` (`moveTo(x:)`/`moveTo(y:)`), `scaleXTo`/`scaleYTo` (`scaleX(to:)`/
+  `scaleY(to:)`), `scaleTo(size)` (`scale(to: CGSize)`, sprites only, as on Apple),
+  `resizeToWidth`/`resizeToHeight` (`resize(toWidth:)`/`resize(toHeight:)`; the two-dimension form
+  is the existing `resizeTo(size)`), `speedTo`/`speedBy` (`speed(to:)`/`speed(by:)`), and
+  `setTexture(texture, resize)`.
+- **Apple's arithmetic, verified on iOS/tvOS simulators.** `scaleBy` and `speedBy` multiply (their
+  `reversed()` divides). `rotateTo` interpolates straight to the target by default and turns the
+  short way only with `shortestUnitArc = true` — either way ending exactly on the target angle.
+  (Before 0.4.0, `scaleBy` added and `rotateTo` always took the short way.)
+- **`SKAction.duration` is settable**, as on Apple: on a single action it changes how long the
+  action runs; on a `sequence`/`group`/`repeat` it changes only the reported value, which Apple's
+  does too.
 - **A `group`'s exact leftover time isn't tracked.** In an enclosing `sequence`, a finished
   `group` always hands zero leftover time to whatever runs next, even if its children actually
   finished partway through the available frame time — contract-conformant for "did the group
@@ -266,10 +302,12 @@ categories recur throughout and are called out once here rather than per item:
   masking. A non-rectangular or partially-transparent mask (e.g. a circular `SKShapeNode`) clips
   to its rectangular bounds, not its actual silhouette. Nested crop nodes still intersect
   correctly (each narrows the inherited clip rect further).
-- **`SKCameraNode.containsNode`** approximates the camera's viewport as `SKScene.size` (centered
-  per `SKScene.anchorPoint`) — it doesn't account for `SKScene.scaleMode`'s letterbox/crop
+- **`SKCameraNode.containsNode`/`containedNodeSet`** approximate the camera's viewport as
+  `SKScene.size` centered on the camera — they don't account for `SKScene.scaleMode`'s letterbox/crop
   adjustment against the presenting `SKView`'s actual aspect ratio, since a node has no way to
-  know that from the scene-graph layer alone.
+  know that from the scene-graph layer alone. `containedNodeSet` otherwise matches Apple's
+  (verified on iOS/tvOS simulators): every descendant whose own `frame` overlaps the viewport,
+  hidden ones included, but not content-less nodes, the scene, or the camera.
 - **`SKRange.atLeast`/`atMost`** replace Apple's overloaded `SKRange(lowerLimit:)`/
   `SKRange(upperLimit:)` initializers — the same Kotlin-overload-resolution collision (and rename
   pattern) as `SKNode.convertTo`/`convertFrom`.

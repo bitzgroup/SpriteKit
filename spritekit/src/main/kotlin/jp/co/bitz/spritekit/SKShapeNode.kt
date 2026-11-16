@@ -24,6 +24,81 @@ public open class SKShapeNode(
 ) : SKNode() {
     public companion object {
         /**
+         * A rectangle exactly at [rect] in the node's space — not centered on its origin. Corners
+         * are rounded by [cornerRadius] (`0` for square corners). Mirrors Apple's
+         * `SKShapeNode(rect:cornerRadius:)`.
+         */
+        public fun rect(
+            rect: Rect,
+            cornerRadius: Float = 0f,
+        ): SKShapeNode {
+            val bounds = RectF(rect.left, rect.top, rect.right, rect.bottom)
+            return SKShapeNode(
+                Path().apply {
+                    if (cornerRadius > 0f) {
+                        addRoundRect(bounds, cornerRadius, cornerRadius, Path.Direction.CW)
+                    } else {
+                        addRect(bounds, Path.Direction.CW)
+                    }
+                },
+            )
+        }
+
+        /**
+         * An ellipse inscribed in [rect], not centered on the node's origin. Mirrors Apple's
+         * `SKShapeNode(ellipseIn:)`.
+         */
+        public fun ellipseIn(rect: Rect): SKShapeNode =
+            SKShapeNode(
+                Path().apply { addOval(RectF(rect.left, rect.top, rect.right, rect.bottom), Path.Direction.CW) },
+            )
+
+        /**
+         * A shape drawing [path] — moved so its bounding box is centered on the node's origin when
+         * [centered] is `true`, as given otherwise. Mirrors Apple's `SKShapeNode(path:centered:)`.
+         * [path] itself isn't modified.
+         */
+        public fun path(
+            path: Path,
+            centered: Boolean,
+        ): SKShapeNode {
+            val copy = Path(path)
+            if (centered) {
+                val bounds = RectF()
+                copy.computeBounds(bounds, true)
+                copy.offset(-bounds.centerX(), -bounds.centerY())
+            }
+            return SKShapeNode(copy)
+        }
+
+        /**
+         * An open polyline through [points] — Apple's `SKShapeNode(points:count:)`. Like Apple's,
+         * its first line runs from the first point to itself.
+         */
+        public fun points(points: List<Vector2>): SKShapeNode =
+            SKShapeNode(
+                Path().apply {
+                    points.firstOrNull()?.let { moveTo(it.x, it.y) }
+                    points.forEach { lineTo(it.x, it.y) }
+                },
+            )
+
+        /**
+         * A smooth curve through every one of [points] — Apple's
+         * `SKShapeNode(splinePoints:count:)`, built the same way (a Catmull-Rom spline as cubic
+         * Béziers; see `docs/API_COMPATIBILITY.md`).
+         */
+        public fun splinePoints(points: List<Vector2>): SKShapeNode =
+            SKShapeNode(
+                Path().apply {
+                    points.firstOrNull()?.let { moveTo(it.x, it.y) }
+                    splineSegments(points).forEach {
+                        cubicTo(it.control1.x, it.control1.y, it.control2.x, it.control2.y, it.end.x, it.end.y)
+                    }
+                },
+            )
+
+        /**
          * A circle of [radius] centered on the node's origin. Mirrors Apple's
          * `SKShapeNode(circleOfRadius:)`.
          */

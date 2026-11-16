@@ -7,19 +7,38 @@ import kotlin.time.Duration
 internal sealed class SKActionKind {
     data class MoveTo(val position: Vector2) : SKActionKind()
 
+    /** A `null` axis is left alone. */
+    data class MoveToAxis(val x: Float?, val y: Float?) : SKActionKind()
+
     data class MoveBy(val delta: Vector2) : SKActionKind()
 
     data class ScaleTo(val xScale: Float, val yScale: Float) : SKActionKind()
 
+    /** A `null` axis is left alone. */
+    data class ScaleToAxis(val xScale: Float?, val yScale: Float?) : SKActionKind()
+
+    data class ScaleToSize(val size: Vector2) : SKActionKind()
+
+    /** Multiplicative factors. */
     data class ScaleBy(val dx: Float, val dy: Float) : SKActionKind()
 
-    data class RotateTo(val angle: Float) : SKActionKind()
+    data class RotateTo(val angle: Float, val shortestUnitArc: Boolean) : SKActionKind()
 
     data class RotateBy(val delta: Float) : SKActionKind()
 
     data class ResizeTo(val size: Vector2) : SKActionKind()
 
+    /** A `null` dimension is left alone. */
+    data class ResizeToAxis(val width: Float?, val height: Float?) : SKActionKind()
+
     data class ResizeBy(val delta: Vector2) : SKActionKind()
+
+    data class SetTexture(val texture: SKTexture, val resize: Boolean) : SKActionKind()
+
+    data class SpeedTo(val speed: Float) : SKActionKind()
+
+    /** A multiplicative factor. */
+    data class SpeedBy(val factor: Float) : SKActionKind()
 
     /**
      * [reversedDirection] tracks whether [SKActionKind.reversed] was applied — see that
@@ -86,11 +105,13 @@ internal sealed class SKActionKind {
  */
 internal fun SKActionKind.reversed(): SKActionKind =
     when (this) {
+        // The multiplicative kinds (`ScaleBy`, `SpeedBy`) reverse to the reciprocal, as Apple's do.
         // `0f - x` rather than unary `-`/`* -1f`, so a zero component negates to `+0f`, not
         // `-0f` (IEEE 754: negating zero flips its sign bit; subtracting from zero doesn't) --
         // `-0f != 0f` under Kotlin's (and SKActionKind's data class) `equals`.
         is SKActionKind.MoveBy -> SKActionKind.MoveBy(-delta)
-        is SKActionKind.ScaleBy -> SKActionKind.ScaleBy(0f - dx, 0f - dy)
+        is SKActionKind.ScaleBy -> SKActionKind.ScaleBy(1f / dx, 1f / dy)
+        is SKActionKind.SpeedBy -> SKActionKind.SpeedBy(1f / factor)
         is SKActionKind.RotateBy -> SKActionKind.RotateBy(0f - delta)
         is SKActionKind.ResizeBy -> SKActionKind.ResizeBy(-delta)
         is SKActionKind.Follow -> copy(reversedDirection = !reversedDirection)
