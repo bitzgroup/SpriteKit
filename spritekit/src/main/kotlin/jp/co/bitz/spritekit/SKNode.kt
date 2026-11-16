@@ -121,6 +121,26 @@ public open class SKNode {
         mutableChildren.add(node)
     }
 
+    /**
+     * Inserts [node] as a child at [index] in [children] — Apple's `insertChild(_:at:)`. [index]
+     * may equal the number of children (appending).
+     *
+     * @throws IllegalStateException if [node] already has a parent, as for [addChild].
+     * @throws IndexOutOfBoundsException if [index] is past the end — Apple raises too.
+     */
+    public fun insertChild(
+        node: SKNode,
+        index: Int,
+    ) {
+        if (index !in 0..mutableChildren.size) {
+            throw IndexOutOfBoundsException("index $index is out of bounds for ${mutableChildren.size} children")
+        }
+        check(node.parent == null) { "node is already the child of another node" }
+        node.parent = this
+        node.transformStamp++
+        mutableChildren.add(index, node)
+    }
+
     /** Removes this node from its parent. No-op if it has none. */
     public fun removeFromParent() {
         parent?.mutableChildren?.remove(this)
@@ -215,6 +235,15 @@ public open class SKNode {
         return calculateAccumulatedFrame().intersects(boundingRectOf(otherCornersInMySpace))
     }
 
+    /**
+     * How fast this node's actions run: `2` runs them twice as fast, `0` stops them (they stay
+     * attached, as [hasActions] reports). Like Apple's `speed`, it applies to the whole subtree —
+     * a node's actions run at the product of its own and every ancestor's speed (verified on
+     * iOS/tvOS simulators). A negative speed stops actions too; Apple's doesn't run them backwards
+     * either.
+     */
+    public var speed: Float = 1f
+
     private val runningActions = mutableListOf<SKRunningAction>()
 
     /** Runs [action] on this node. */
@@ -261,10 +290,13 @@ public open class SKNode {
     /**
      * Advances this node's own running actions by [deltaTime], then recurses into its children —
      * called once per frame by [SKScene]'s presenting [SKView]. A [isPaused] node (and its whole
-     * subtree) is skipped entirely, matching Apple's documented per-node pause semantics.
+     * subtree) is skipped entirely, matching Apple's documented per-node pause semantics, and so is
+     * one whose [speed] isn't positive; otherwise [deltaTime] is scaled by [speed] for this node
+     * and everything below it.
      */
-    internal fun stepActions(deltaTime: Duration) {
-        if (isPaused) return
+    internal fun stepActions(parentDeltaTime: Duration) {
+        if (isPaused || speed <= 0f) return
+        val deltaTime = if (speed == 1f) parentDeltaTime else parentDeltaTime * speed.toDouble()
         if (runningActions.isNotEmpty()) {
             val finished = mutableListOf<SKRunningAction>()
             for (running in runningActions.toList()) { // snapshot: a running action's own effects may mutate this list
@@ -397,7 +429,7 @@ public open class SKNode {
      * Transforms [point] from this node's local space into its parent's space, applying
      * position/rotation/scale.
      */
-    private fun localToParent(point: Vector2): Vector2 {
+    internal fun localToParent(point: Vector2): Vector2 {
         val scaledX = point.x * xScale
         val scaledY = point.y * yScale
         val cos = cos(zRotation)
@@ -412,7 +444,7 @@ public open class SKNode {
      * Transforms [point] from this node's parent's space into this node's local space; the
      * inverse of [localToParent].
      */
-    private fun parentToLocal(point: Vector2): Vector2 {
+    internal fun parentToLocal(point: Vector2): Vector2 {
         val translated = Vector2(point.x - position.x, point.y - position.y)
         val cos = cos(zRotation)
         val sin = sin(zRotation)

@@ -190,14 +190,139 @@ class SKActionExecutionTest {
         assertEquals(0.1f - PI.toFloat(), delta, absoluteTolerance = 1e-4f)
     }
 
+    // Expectations below were recorded from Apple's SpriteKit on iOS/tvOS simulators — see the
+    // tic-tac-toe sample's SpriteKitParity probes (SKActionParityTests).
+
     @Test
-    fun `rotateTo drives zRotation via shortestAngleDelta`() {
-        val node = SKNode().apply { zRotation = 0f }
-        val state = SKActionState(SKAction.rotateTo(PI.toFloat() + 0.1f, 1.seconds))
+    fun `rotateTo interpolates the long way by default and ends exactly on the target`() {
+        val node = SKNode().apply { zRotation = 0.1f }
+        val state = SKActionState(SKAction.rotateTo(6f, 1.seconds))
 
-        stepAction(state, node, 1.seconds)
+        stepAction(state, node, 0.5.seconds)
+        assertEquals(3.05f, node.zRotation, absoluteTolerance = 1e-4f)
+        stepAction(state, node, 0.5.seconds)
+        assertEquals(6f, node.zRotation, absoluteTolerance = 1e-6f)
+    }
 
-        assertEquals(0.1f - PI.toFloat(), node.zRotation, absoluteTolerance = 1e-4f)
+    @Test
+    fun `rotateTo with shortestUnitArc turns the short way and still ends exactly on the target`() {
+        val node = SKNode().apply { zRotation = 0.1f }
+        val state = SKActionState(SKAction.rotateTo(6f, 1.seconds, shortestUnitArc = true))
+
+        stepAction(state, node, 0.5.seconds)
+        // Halfway along the short arc, expressed relative to the target (6 < value < 0.1 + 2π).
+        assertTrue(node.zRotation > 6f && node.zRotation < 6.4f, "was ${node.zRotation}")
+        stepAction(state, node, 0.5.seconds)
+        assertEquals(6f, node.zRotation, absoluteTolerance = 1e-6f)
+
+        val far = SKNode().apply { zRotation = 7f }
+        stepAction(SKActionState(SKAction.rotateTo(0.5f, 1.seconds, shortestUnitArc = true)), far, 1.seconds)
+        assertEquals(0.5f, far.zRotation, absoluteTolerance = 1e-6f)
+    }
+
+    @Test
+    fun `scaleBy multiplies the current scale and its reverse divides`() {
+        val node =
+            SKNode().apply {
+                xScale = 2f
+                yScale = 3f
+            }
+        stepAction(SKActionState(SKAction.scaleBy(2f, 1.seconds)), node, 1.seconds)
+        assertEquals(4f, node.xScale, absoluteTolerance = 1e-5f)
+        assertEquals(6f, node.yScale, absoluteTolerance = 1e-5f)
+
+        val axes =
+            SKNode().apply {
+                xScale = 2f
+                yScale = 3f
+            }
+        stepAction(SKActionState(SKAction.scaleBy(2f, 0.5f, 1.seconds)), axes, 1.seconds)
+        assertEquals(4f, axes.xScale, absoluteTolerance = 1e-5f)
+        assertEquals(1.5f, axes.yScale, absoluteTolerance = 1e-5f)
+
+        val reversed =
+            SKNode().apply {
+                xScale = 2f
+                yScale = 3f
+            }
+        stepAction(SKActionState(SKAction.scaleBy(2f, 1.seconds).reversed()), reversed, 1.seconds)
+        assertEquals(1f, reversed.xScale, absoluteTolerance = 1e-5f)
+        assertEquals(1.5f, reversed.yScale, absoluteTolerance = 1e-5f)
+    }
+
+    @Test
+    fun `single-axis moves and scales leave the other axis alone`() {
+        val node =
+            SKNode().apply {
+                position = Vector2(1f, 2f)
+                xScale = 2f
+                yScale = 3f
+            }
+        stepAction(SKActionState(SKAction.moveToY(9f, 1.seconds)), node, 1.seconds)
+        stepAction(SKActionState(SKAction.scaleXTo(5f, 1.seconds)), node, 1.seconds)
+        assertEquals(Vector2(1f, 9f), node.position)
+        assertEquals(5f, node.xScale)
+        assertEquals(3f, node.yScale)
+
+        stepAction(SKActionState(SKAction.moveToX(4f, 1.seconds)), node, 1.seconds)
+        stepAction(SKActionState(SKAction.scaleYTo(7f, 1.seconds)), node, 1.seconds)
+        assertEquals(Vector2(4f, 9f), node.position)
+        assertEquals(5f, node.xScale)
+        assertEquals(7f, node.yScale)
+    }
+
+    @Test
+    fun `resizeToWidth and resizeToHeight change one dimension each`() {
+        val sprite = SKSpriteNode(size = Vector2(10f, 20f))
+        stepAction(SKActionState(SKAction.resizeToWidth(30f, 1.seconds)), sprite, 1.seconds)
+        assertEquals(Vector2(30f, 20f), sprite.size)
+        stepAction(SKActionState(SKAction.resizeToHeight(40f, 1.seconds)), sprite, 1.seconds)
+        assertEquals(Vector2(30f, 40f), sprite.size)
+    }
+
+    @Test
+    fun `scaleTo a size scales a sprite to it whatever its current scale and ignores other nodes`() {
+        val sprite = SKSpriteNode(size = Vector2(10f, 20f)).apply { xScale = 2f }
+        stepAction(SKActionState(SKAction.scaleTo(Vector2(40f, 10f), 1.seconds)), sprite, 1.seconds)
+        assertEquals(4f, sprite.xScale, absoluteTolerance = 1e-5f)
+        assertEquals(0.5f, sprite.yScale, absoluteTolerance = 1e-5f)
+        assertEquals(Vector2(40f, 10f), sprite.size)
+
+        val plain = SKNode()
+        stepAction(SKActionState(SKAction.scaleTo(Vector2(40f, 10f), 1.seconds)), plain, 1.seconds)
+        assertEquals(1f, plain.xScale)
+        assertEquals(1f, plain.yScale)
+    }
+
+    @Test
+    fun `speedTo sets and speedBy multiplies the node's speed, reversed dividing`() {
+        val node = SKNode()
+        stepAction(SKActionState(SKAction.speedTo(3f, 1.seconds)), node, 1.seconds)
+        assertEquals(3f, node.speed, absoluteTolerance = 1e-5f)
+        stepAction(SKActionState(SKAction.speedBy(0.5f, 1.seconds)), node, 1.seconds)
+        assertEquals(1.5f, node.speed, absoluteTolerance = 1e-5f)
+        stepAction(SKActionState(SKAction.speedBy(0.5f, 1.seconds).reversed()), node, 1.seconds)
+        assertEquals(3f, node.speed, absoluteTolerance = 1e-5f)
+    }
+
+    @Test
+    fun `a leaf action's duration can be reassigned but a sequence's reassignment doesn't change its run`() {
+        val move = SKAction.moveBy(Vector2(10f, 0f), 5.seconds).apply { duration = 1.seconds }
+        val node = SKNode()
+        assertTrue(stepAction(SKActionState(move), node, 1.seconds) != null)
+        assertEquals(Vector2(10f, 0f), node.position)
+
+        val sequence =
+            SKAction.sequence(
+                listOf(SKAction.moveBy(Vector2(10f, 0f), 1.seconds), SKAction.moveBy(Vector2(10f, 0f), 1.seconds)),
+            )
+        assertEquals(2.seconds, sequence.duration)
+        sequence.duration = 0.1.seconds
+        val other = SKNode()
+        val state = SKActionState(sequence)
+        assertNull(stepAction(state, other, 1.seconds))
+        assertTrue(stepAction(state, other, 1.seconds) != null)
+        assertEquals(Vector2(20f, 0f), other.position)
     }
 
     @Test

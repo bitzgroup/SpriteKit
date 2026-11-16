@@ -1,6 +1,7 @@
 package jp.co.bitz.spritekit
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -62,5 +63,49 @@ class SKCameraNodeTest {
         scene.addChild(node)
 
         assertFalse(camera.containsNode(node))
+    }
+
+    // Recorded from Apple's SpriteKit on iOS/tvOS simulators — see the tic-tac-toe sample's
+    // SpriteKitParity probes (SKCameraParityTests).
+    @Test
+    fun `containedNodeSet has every descendant whose own frame reaches the viewport`() {
+        val scene = SKScene(size = Vector2(400f, 400f))
+        val camera = SKCameraNode().apply { position = Vector2(200f, 200f) }
+        scene.addChild(camera)
+        scene.camera = camera
+
+        fun sprite(
+            name: String,
+            at: Vector2,
+        ) = SKSpriteNode(size = Vector2(10f, 10f)).apply {
+            this.name = name
+            position = at
+        }
+        val inside = sprite("inside", Vector2(200f, 200f))
+        scene.addChild(inside)
+        inside.addChild(sprite("descendant", Vector2.Zero))
+        scene.addChild(sprite("straddlingTheEdge", Vector2(403f, 200f)))
+        scene.addChild(sprite("outside", Vector2(900f, 900f)))
+        scene.addChild(sprite("hidden", Vector2(200f, 200f)).apply { isHidden = true })
+        scene.addChild(
+            SKNode().apply {
+                name = "emptyNode"
+                position = Vector2(200f, 200f)
+            },
+        )
+
+        val contained = camera.containedNodeSet()
+
+        assertEquals(
+            setOf("inside", "descendant", "straddlingTheEdge", "hidden"),
+            contained.mapNotNull { it.name }.toSet(),
+        )
+        assertFalse(camera in contained)
+        assertFalse(scene in contained)
+    }
+
+    @Test
+    fun `containedNodeSet is empty outside a scene`() {
+        assertTrue(SKCameraNode().containedNodeSet().isEmpty())
     }
 }
