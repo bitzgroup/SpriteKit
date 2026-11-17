@@ -117,6 +117,20 @@ categories recur throughout and are called out once here rather than per item:
 - **`didMove(view)`/`willMove(view)` instead of `didMove(to:)`/`willMove(from:)`** — Kotlin can't
   overload on argument labels alone, so each callback keeps its own name and a plain `view`
   parameter. Both run on the render thread, from `SKView.presentScene`.
+- **`SKScene.sceneDidLoad()` runs on first presentation, not in the initializer.** Apple calls it
+  once from inside the scene's initializer (verified on iOS/tvOS simulators: the size is already
+  set, and presenting again or resizing never calls it again). A Kotlin superclass constructor
+  can't safely call an override before the subclass's own properties are initialized, so here it
+  runs once on the render thread, right before the first `didMove(view)` — a scene that's never
+  presented never gets it. Presenting again or resizing doesn't call it again, as on Apple.
+- **`SKScene.delegate` / `SKSceneDelegate`** match Apple's per-method replacement (verified on
+  iOS/tvOS simulators): each frame step calls the delegate's method *instead of* the scene's own,
+  and a step the delegate doesn't implement still reaches the scene's override. Apple's optional
+  protocol methods become interface methods whose default bodies forward to the scene, so an
+  override that calls `super` runs the scene's callback too. `update(deltaTime, scene)` passes the
+  elapsed time like `SKScene.update` (see below). The delegate is held strongly, where Apple's is
+  `weak`: the JVM collects reference cycles, and a weak reference would let an otherwise
+  unreferenced `object :` delegate be collected and silently stop being called.
 - **`SKScene.update(deltaTime: Duration)` instead of `update(_ currentTime: TimeInterval)`.**
   Apple passes an *absolute* timestamp and leaves every scene to subtract the previous frame's
   value itself; this library passes the time elapsed since the previous frame directly, as a

@@ -44,6 +44,25 @@ public open class SKScene(
         internal set
 
     /**
+     * Takes over this scene's per-frame callbacks, method by method — Apple's `SKScene.delegate`;
+     * see [SKSceneDelegate]. `null` (the default) leaves them to this scene. Held strongly, where
+     * Apple's is `weak`: the JVM collects reference cycles, and a weakly held delegate (an `object :`
+     * expression nothing else references) would silently stop being called.
+     * Read on the render thread each frame.
+     */
+    public var delegate: SKSceneDelegate? = null
+
+    /** Whether [sceneDidLoad] has run — see [loadIfNeeded]. */
+    private var loaded = false
+
+    /** Runs [sceneDidLoad] the first time it's called, never again. Render thread only. */
+    internal fun loadIfNeeded() {
+        if (loaded) return
+        loaded = true
+        sceneDidLoad()
+    }
+
+    /**
      * Converts [point] from the presenting [view]'s coordinate system into this scene's — Apple's
      * `convertPoint(fromView:)`. View coordinates are Android view pixels (origin top-left, y-down),
      * where Apple's are UIKit points; everything else — [scaleMode], [anchorPoint], [camera] — is
@@ -107,6 +126,17 @@ public open class SKScene(
             )
 
     /**
+     * Called once in this scene's lifetime, on the render thread, when an [SKView] first presents
+     * it — right before the first [didMove], with [size] already the scene's own (a
+     * [SKSceneScaleMode.ResizeFill] scene isn't resized to the view yet). Mirrors Apple's
+     * `sceneDidLoad()`, which runs inside the scene's initializer; a Kotlin superclass constructor
+     * can't safely call an override before the subclass's properties are initialized, so it's
+     * deferred to the first presentation, and a scene that's never presented never gets it.
+     * Presenting the scene again, or resizing it, doesn't call it again — as on Apple.
+     */
+    public open fun sceneDidLoad() {}
+
+    /**
      * Called on the render thread right after an [SKView] starts presenting this scene (via
      * [SKView.presentScene]), with [view] already set. Mirrors Apple's `didMove(to:)` — the usual
      * place to build the scene's content. Like Apple's, it runs *before* an
@@ -129,7 +159,8 @@ public open class SKScene(
 
     /**
      * Called once per frame with the time elapsed since the previous frame, before actions,
-     * physics, and constraints are evaluated. Override to drive custom per-frame logic.
+     * physics, and constraints are evaluated. Override to drive custom per-frame logic. This and
+     * the four `did…` callbacks below are replaced by [delegate]'s counterparts when it has one.
      */
     public open fun update(deltaTime: Duration) {}
 

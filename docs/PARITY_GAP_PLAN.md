@@ -62,8 +62,8 @@ Priorities:
 
 | # | Missing | Notes | Pri |
 | --- | --- | --- | --- |
-| S1 | `SKScene.sceneDidLoad()` | `didMove`/`willMove`/`didChangeSize` exist; this is the one lifecycle callback still absent. On Apple it runs once after the scene is initialized or decoded — with no archive loading here, define it as "once, before the first `didMove`". | P2 |
-| S2 | `SKSceneDelegate` (`SKScene.delegate`) | `update(_:for:)`, `didEvaluateActions(for:)`, `didSimulatePhysics(for:)`, `didApplyConstraints(for:)`, `didFinishUpdate(for:)`. The subclass hooks exist; the delegate forwarding does not. | P2 |
+| ~~S1~~ | ~~`SKScene.sceneDidLoad()`~~ | **Done**, verified on iOS/tvOS simulators: Apple runs it once, inside the initializer (size already set), never again on presenting or resizing. A Kotlin superclass constructor can't safely call an override, so it runs once right before the first `didMove` instead (recorded deviation). | P2 |
+| ~~S2~~ | ~~`SKSceneDelegate` (`SKScene.delegate`)~~ | **Done**, verified on iOS/tvOS simulators: the delegate replaces the scene's own callbacks *per method* (one it doesn't implement still reaches the scene), in the scene's order. The interface's default methods forward to the scene to get the same effect; held strongly (Apple: `weak`). | P2 |
 | ~~V1~~ | ~~`SKView.isPaused`, `SKView.scene` (public getter)~~ | **Done**, with Apple's semantics verified on an iOS simulator: setting the view's `isPaused` sets the scene's too; a paused view runs nothing whatever the scene says; `presentScene` un-pauses the incoming scene, and (without a transition) the view too. These Apple behaviors are recorded as tests in the sample app's `SpriteKitParityTests` target. | P0 |
 | ~~V2~~ | ~~`SKView.ignoresSiblingOrder`~~ | **Done.** The renderer already drew Apple's default (`false`) order — effective `zPosition`, then tree order — verified by pixel probes on iOS/tvOS simulators. `true` only allows any order for equal-`zPosition` nodes, so the flag is accepted and tree order kept. | P1 |
 | V3 | `SKView.preferredFramesPerSecond` | Frame-rate cap (battery; TV). | P2 |
@@ -138,7 +138,7 @@ Missing `SKAction` factories (everything else in Apple's list is present):
 
 | Class | Recommendation |
 | --- | --- |
-| `SKSceneDelegate`, `SKViewDelegate` | Add (S2, V5) |
+| ~~`SKSceneDelegate`~~, `SKViewDelegate` | ~~Add (S2)~~ done; add `SKViewDelegate` (V5) |
 | `SKReachConstraints` | P3 (N5) |
 | `SKMutableTexture` | P3 (T3) |
 | `SKTransformNode`, `SK3DNode`, `SKRenderer` | Record as out of scope (3D transform / SceneKit / Metal) |
@@ -196,7 +196,7 @@ Each step is one `feature/*` branch and PR against `develop`, with the matching
 
 1. **Docs and bugs first** — B3, B4 (documentation), then B1 (investigate and fix), B2 + V1.
 2. **Input parity** — I1 (`presses*`), I3 (point queries), I4 (coordinate conversion).
-3. **Lifecycle** — S1 (`sceneDidLoad`), S2.
+3. ~~**Lifecycle** — S1 (`sceneDidLoad`), S2.~~ Done.
 4. ~~**Everyday API, batch 1** — H1 (shape initializers), N1, N2, A1–A4, A8, T5, C1.~~ Done,
    plus two Apple-parity fixes it surfaced: `SKSpriteNode.size` includes the scale, and
    `scaleBy` multiplies.
