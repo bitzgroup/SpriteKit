@@ -116,8 +116,8 @@ Missing `SKAction` factories (everything else in Apple's list is present):
 
 | # | Missing | Notes | Pri |
 | --- | --- | --- | --- |
-| P1 | `SKPhysicsWorld.body(at:)`, `body(in:)`, `body(alongRayStart:end:)`, `enumerateBodies(at:/in:/alongRayStart:end:)` | Spatial queries and ray casts — very common in gameplay code. | P1 |
-| P2 | `SKPhysicsBody.node`, `isResting`, `area`, `joints`, `allContactedBodies()` | `node` back-reference also unblocks eager joint anchors (a recorded deviation). | P1 |
+| ~~P1~~ | ~~`SKPhysicsWorld.body(at:)`, `body(in:)`, `body(alongRayStart:end:)`, `enumerateBodies(at:/in:/alongRayStart:end:)`~~ | **Done**, verified on iOS/tvOS simulators, including Apple's padded bounding boxes for `body(in:)` and length-150 ray normals. Recording them found that the port's physics units were not Apple's — mass in points² and gravity in points/s² — fixed along with them. | P1 |
+| ~~P2~~ | ~~`SKPhysicsBody.node`, `isResting`, `area`, `joints`, `allContactedBodies()`~~ | **Done**, verified on iOS/tvOS simulators; joint anchors are now fixed when a joint is added. | P1 |
 | P3 | `applyForce(_:at:)`, `applyImpulse(_:at:)`, torque from off-centre contacts | The solver is linear-only (recorded); these need the angular half. | P2 |
 | P4 | `SKPhysicsBody(bodies:)`, `init(edgeChainFrom:)`, `init(edgeLoopFrom: path)`, `init(polygonFrom: path)` | Compound and path-based bodies. | P2 |
 | P5 | `SKPhysicsBody.charge`, `SKPhysicsWorld.sampleFields(at:)`, `SKRegion`, remaining field kinds, `SKPhysicsContact.collisionImpulse`, joint limits/reaction forces | Already recorded; grouped here as one physics-completeness work item. | P3 |
@@ -202,7 +202,7 @@ Each step is one `feature/*` branch and PR against `develop`, with the matching
    `scaleBy` multiplies.
 5. ~~**Everyday API, batch 2** — T1 (named textures), T4 (`centerRect`), L2, N3 + A5, V2.~~
    Done.
-6. **Physics queries** — P1, P2.
+6. ~~**Physics queries** — P1, P2.~~ Done, plus the physics-units fix it surfaced.
 7. **Second tier** — the P2 rows above, driven by what host apps actually hit.
 8. **Renderer infrastructure** — R1–R4, then the P3 rows they unblock.
 
