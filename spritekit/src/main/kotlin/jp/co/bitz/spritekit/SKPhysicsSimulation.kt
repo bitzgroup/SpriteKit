@@ -35,12 +35,16 @@ internal fun simulatePhysics(
     val nodeByBody = bodies.associate { it.body to it.node }
     bindJoints(world.joints, nodeByBody, scene)
 
-    for (entry in bodies) integrateForces(entry.body, world.gravity, dt)
+    for (entry in bodies) {
+        entry.body.wake()
+        integrateForces(entry.body, world.gravity, dt)
+    }
     applyJointForces(world.joints, nodeByBody, scene, dt)
     applyFieldForces(scene, bodies, dt)
 
     val shapes = bodies.associateWith { worldShape(it.node, scene, it.body.shape) }
     val observations = findContactObservations(bodies, shapes)
+    recordContactedBodies(bodies, observations)
 
     val physicalContacts = observations.mapNotNull(::toResolvedContact)
     repeat(VELOCITY_ITERATIONS) {
@@ -76,7 +80,7 @@ private fun collectPhysicsBodies(
  * approximated from where its local +x edge lands after the transform -- exact under uniform
  * scale/rotation, an approximation (treating an ellipse as a circle) under non-uniform scale.
  */
-private fun worldShape(
+internal fun worldShape(
     node: SKNode,
     scene: SKScene,
     shape: SKPhysicsShape,
@@ -113,7 +117,10 @@ private fun integrateForces(
         body.clearAccumulators()
         return
     }
-    val acceleration = body.forceAccumulator * body.inverseMass + if (body.affectedByGravity) gravity else Vector2.Zero
+    // Forces accelerate at force/mass points per second squared, but gravity is in meters per
+    // second squared -- both as Apple applies them (verified on iOS/tvOS simulators).
+    val gravityAcceleration = if (body.affectedByGravity) gravity * POINTS_PER_METER else Vector2.Zero
+    val acceleration = body.forceAccumulator * body.inverseMass + gravityAcceleration
     body.velocity += acceleration * dt
     if (body.allowsRotation) {
         body.angularVelocity += body.torqueAccumulator * body.inverseInertia * dt
@@ -272,6 +279,31 @@ private fun correctPosition(contact: SKResolvedContact) {
     val correction = contact.normal * (depth / invMassSum * POSITION_CORRECTION_PERCENT)
     if (!contact.bodyA.pinned) contact.nodeA.position -= correction * contact.bodyA.inverseMass
     if (!contact.bodyB.pinned) contact.nodeB.position += correction * contact.bodyB.inverseMass
+}
+
+/**
+ * Refreshes every body's [SKPhysicsBody.allContactedBodies] from this step's touching pairs. As
+ * on Apple (verified on iOS/tvOS simulators), a pair counts when either body collides with the
+ * other -- one-sidedly is enough -- or tests for contact with it, but never between two
+ * non-dynamic bodies.
+ */
+private fun recordContactedBodies(
+    bodies: List<SKPhysicsEntry>,
+    observations: List<SKContactObservation>,
+) {
+    val contacted = bodies.associate { it.body to mutableListOf<SKPhysicsBody>() }
+    for (observation in observations) {
+        val a = observation.bodyA
+        val b = observation.bodyB
+        val collidesEitherWay =
+            (a.categoryBitMask and b.collisionBitMask) != 0 || (b.categoryBitMask and a.collisionBitMask) != 0
+        val counts = (a.isDynamic || b.isDynamic) && (collidesEitherWay || shouldNotifyContact(a, b))
+        if (counts) {
+            contacted[a]?.add(b)
+            contacted[b]?.add(a)
+        }
+    }
+    for ((body, list) in contacted) body.contactedBodies = list
 }
 
 /**

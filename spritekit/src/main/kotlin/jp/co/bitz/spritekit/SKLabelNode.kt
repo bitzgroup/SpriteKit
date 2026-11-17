@@ -3,13 +3,10 @@ package jp.co.bitz.spritekit
 import android.graphics.Color
 
 /**
- * A node that draws a line of text — mirrors Apple's `SKLabelNode`. Text is rendered into a
- * cached texture (regenerated only when [text]/[fontName]/[fontSize]/[fontColor] actually
- * change) via `android.graphics.Paint`/`Canvas`; see [renderLabelBitmap] and
- * `docs/API_COMPATIBILITY.md`.
- *
- * Deviation: single-line only — Apple's `numberOfLines`/`preferredMaxLayoutWidth` multi-line
- * wrapping isn't implemented; see `docs/API_COMPATIBILITY.md`.
+ * A node that draws text — mirrors Apple's `SKLabelNode`. Text is rendered into a cached
+ * texture (regenerated only when something that affects it actually changes) via
+ * `android.graphics.Paint`/`Canvas`, and `android.text.StaticLayout` for multi-line text; see
+ * [renderLabelBitmap] and `docs/API_COMPATIBILITY.md`.
  */
 public open class SKLabelNode(
     public var text: String = "",
@@ -41,6 +38,28 @@ public open class SKLabelNode(
      */
     public var verticalAlignmentMode: SKLabelVerticalAlignmentMode = SKLabelVerticalAlignmentMode.Baseline
 
+    /**
+     * How many lines the text may take — Apple's `numberOfLines`. `1` (the default) draws one
+     * line however long, ignoring [preferredMaxLayoutWidth] and [lineBreakMode] and drawing a
+     * newline in place rather than breaking at it. `0` breaks at newlines and wraps at
+     * [preferredMaxLayoutWidth] with no line limit; a larger number does the same but keeps at
+     * most that many lines, truncating per [lineBreakMode] (verified on iOS/tvOS simulators).
+     */
+    public var numberOfLines: Int = 1
+
+    /**
+     * The width, in points, a multi-line label wraps at — Apple's `preferredMaxLayoutWidth`. `0`
+     * (the default) means no limit: lines break only at newlines. Ignored when
+     * [numberOfLines] is `1`.
+     */
+    public var preferredMaxLayoutWidth: Float = 0f
+
+    /**
+     * How a multi-line label wraps and truncates — Apple's `lineBreakMode`. Defaults to
+     * [SKLineBreakMode.ByTruncatingTail], as on Apple. Ignored when [numberOfLines] is `1`.
+     */
+    public var lineBreakMode: SKLineBreakMode = SKLineBreakMode.ByTruncatingTail
+
     private var cacheKey: SKLabelCacheKey? = null
     private var cachedTexture: SKTexture? = null
     private var cachedMetrics: SKLabelMetrics? = null
@@ -50,9 +69,15 @@ public open class SKLabelNode(
      * current texture + metrics.
      */
     internal fun renderedLabel(): Pair<SKTexture, SKLabelMetrics>? {
-        val key = SKLabelCacheKey(text, fontName, fontSize, fontColor)
+        val layout =
+            if (numberOfLines == 1) {
+                null
+            } else {
+                SKLabelLineLayout(numberOfLines, preferredMaxLayoutWidth, lineBreakMode, horizontalAlignmentMode)
+            }
+        val key = SKLabelCacheKey(text, fontName, fontSize, fontColor, layout)
         if (key != cacheKey) {
-            val rendered = renderLabelBitmap(text, fontName, fontSize, fontColor)
+            val rendered = renderLabelBitmap(key)
             cachedTexture = rendered?.let { (bitmap, _) -> SKTexture(bitmap) }
             cachedMetrics = rendered?.second
             cacheKey = key

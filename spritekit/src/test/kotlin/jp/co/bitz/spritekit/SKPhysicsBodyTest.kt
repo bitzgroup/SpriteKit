@@ -17,19 +17,20 @@ class SKPhysicsBodyTest {
 
     @Test
     fun `mass defaults from density and the body's shape area`() {
-        val body = SKPhysicsBody.rectangleOf(Vector2(2f, 3f)) // area 6, default density 1
+        // Area in square meters of 150 points, as Apple measures it: 300×150 points is 2 m².
+        val body = SKPhysicsBody.rectangleOf(Vector2(300f, 150f))
 
-        assertEquals(6f, body.mass)
+        assertEquals(2f, body.mass, 1e-5f)
     }
 
     @Test
     fun `setting mass back-computes density rather than being stored directly`() {
-        val body = SKPhysicsBody.rectangleOf(Vector2(2f, 3f)) // area 6
+        val body = SKPhysicsBody.rectangleOf(Vector2(300f, 150f)) // 2 m²
 
         body.mass = 12f
 
-        assertEquals(2f, body.density)
-        assertEquals(12f, body.mass)
+        assertEquals(6f, body.density, 1e-4f)
+        assertEquals(12f, body.mass, 1e-4f)
     }
 
     @Test
@@ -46,8 +47,8 @@ class SKPhysicsBodyTest {
         val circle = SKPhysicsBody.circleOfRadius(2f)
         val rectangle = SKPhysicsBody.rectangleOf(Vector2(4f, 5f))
 
-        assertEquals(Math.PI.toFloat() * 4f, circle.shape.area())
-        assertEquals(20f, rectangle.shape.area())
+        assertEquals(Math.PI.toFloat() * 4f / 22500f, circle.shape.area(), 1e-9f)
+        assertEquals(20f / 22500f, rectangle.shape.area(), 1e-9f)
     }
 
     @Test

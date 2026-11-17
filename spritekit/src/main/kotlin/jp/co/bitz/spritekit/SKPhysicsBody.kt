@@ -55,11 +55,82 @@ public class SKPhysicsBody internal constructor(
     /** Fraction of angular velocity retained each second, damping rotation. Defaults to `0.1`, matching Apple. */
     public var angularDamping: Float = 0.1f
 
-    /** Current linear velocity, in points per second. */
+    /** Current linear velocity, in points per second. Setting it clears [isResting]. */
     public var velocity: Vector2 = Vector2.Zero
+        set(value) {
+            field = value
+            resting = false
+        }
 
-    /** Current angular velocity, in radians per second. */
+    /** Current angular velocity, in radians per second. Setting it clears [isResting]. */
     public var angularVelocity: Float = 0f
+        set(value) {
+            field = value
+            resting = false
+        }
+
+    /**
+     * The node this body is attached to via [SKNode.physicsBody] — Apple's `node`. `null` while
+     * it's attached to none.
+     */
+    public var node: SKNode? = null
+        internal set
+
+    /**
+     * This body's area in square meters, measuring 150 points as one meter as Apple does — so
+     * a circle of radius `10` has an area of about `0.014`, and [mass] is [density] times it. The
+     * node's scale doesn't change it. `0` for an edge body.
+     */
+    public val area: Float get() = shapeArea
+
+    private var resting = false
+
+    /**
+     * Apple's `isResting`, as it behaves (verified on iOS/tvOS simulators): the simulation never
+     * sets it — a body lying still on the floor reads `false` — and setting it `true` stops the
+     * body at once (zeroing [velocity] and [angularVelocity]) but lasts only until the next
+     * simulation step, or until a velocity is set, which clears it again.
+     */
+    public var isResting: Boolean
+        get() = resting
+        set(value) {
+            if (value) {
+                velocity = Vector2.Zero
+                angularVelocity = 0f
+            }
+            resting = value
+        }
+
+    /**
+     * The joints in this body's world that connect it, while both of each joint's bodies are in
+     * the same scene — Apple's `joints`. Empty while the body isn't in a scene. A joint whose
+     * other body's node left the scene isn't listed, as on Apple.
+     */
+    public val joints: List<SKPhysicsJoint>
+        get() {
+            val scene = node?.scene ?: return emptyList()
+            return scene.physicsWorld.joints.filter { joint ->
+                (joint.bodyA === this || joint.bodyB === this) &&
+                    joint.bodyA.node?.scene === scene &&
+                    joint.bodyB.node?.scene === scene
+            }
+        }
+
+    /** The bodies [allContactedBodies] reports, refreshed every simulation step. */
+    internal var contactedBodies: List<SKPhysicsBody> = emptyList()
+
+    /**
+     * The bodies touching this one as of the last simulation step — Apple's
+     * `allContactedBodies()`. A touching pair counts when either body collides with the other or
+     * tests for contact with it ([collisionBitMask]/[contactTestBitMask] against the other's
+     * [categoryBitMask]); two non-dynamic bodies never do. Empty before the first step.
+     */
+    public fun allContactedBodies(): List<SKPhysicsBody> = contactedBodies
+
+    /** Called at the start of each simulation step: whatever set [isResting], the step clears it. */
+    internal fun wake() {
+        resting = false
+    }
 
     /**
      * Whether [SKPhysicsWorld] moves this body (forces, gravity, collision response) or treats it

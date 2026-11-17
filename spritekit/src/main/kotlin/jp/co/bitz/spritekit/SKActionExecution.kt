@@ -186,35 +186,8 @@ private fun applyLeafEffect(
     progress: Float,
     elapsed: Duration,
 ) {
+    if (applyTransformEffect(state, kind, node, progress)) return
     when (kind) {
-        is SKActionKind.MoveTo -> {
-            val from = state.captureOnce { node.position }
-            node.position = from + (kind.position - from) * progress
-        }
-        is SKActionKind.MoveBy -> {
-            val from = state.captureOnce { node.position }
-            node.position = from + kind.delta * progress
-        }
-        is SKActionKind.ScaleTo -> {
-            val from = state.captureOnce { Vector2(node.xScale, node.yScale) }
-            node.xScale = from.x + (kind.xScale - from.x) * progress
-            node.yScale = from.y + (kind.yScale - from.y) * progress
-        }
-        is SKActionKind.ScaleBy -> {
-            val from = state.captureOnce { Vector2(node.xScale, node.yScale) }
-            node.xScale = from.x + kind.dx * progress
-            node.yScale = from.y + kind.dy * progress
-        }
-        is SKActionKind.RotateTo -> {
-            val from = state.captureOnce { node.zRotation }
-            node.zRotation = from + shortestAngleDelta(from, kind.angle) * progress
-        }
-        is SKActionKind.RotateBy -> {
-            val from = state.captureOnce { node.zRotation }
-            node.zRotation = from + kind.delta * progress
-        }
-        is SKActionKind.ResizeTo -> applyResize(state, node, progress) { from -> kind.size - from }
-        is SKActionKind.ResizeBy -> applyResize(state, node, progress) { kind.delta }
         is SKActionKind.Follow -> applyFollow(state, kind, node, progress)
         is SKActionKind.FadeAlphaTo -> {
             val from = state.captureOnce { node.alpha }
@@ -241,9 +214,78 @@ private fun applyLeafEffect(
         // Handled specially by stepPlaySound (no fixed duration to drive progress from);
         // never reaches here.
         is SKActionKind.PlaySoundFileNamed -> Unit
-        // Composite kinds are handled by stepAction's own dispatch and never reach this function.
-        is SKActionKind.Sequence, is SKActionKind.Group, is SKActionKind.Repeat -> Unit
+        // Composite kinds are handled by stepAction's own dispatch, and transform kinds by
+        // applyTransformEffect; neither reaches this `when`.
+        else -> Unit
     }
+}
+
+/**
+ * Applies [kind] if it's one of the transform kinds (position, scale, rotation, size, texture,
+ * speed), returning whether it was — split out of [applyLeafEffect] to keep each function short.
+ */
+@Suppress("CyclomaticComplexMethod") // one branch per transform SKActionKind
+private fun applyTransformEffect(
+    state: SKActionState,
+    kind: SKActionKind,
+    node: SKNode,
+    progress: Float,
+): Boolean {
+    when (kind) {
+        is SKActionKind.MoveTo -> {
+            val from = state.captureOnce { node.position }
+            node.position = from + (kind.position - from) * progress
+        }
+        is SKActionKind.MoveToAxis -> {
+            val from = state.captureOnce { node.position }
+            node.position =
+                Vector2(
+                    kind.x?.let { from.x + (it - from.x) * progress } ?: node.position.x,
+                    kind.y?.let { from.y + (it - from.y) * progress } ?: node.position.y,
+                )
+        }
+        is SKActionKind.MoveBy -> {
+            val from = state.captureOnce { node.position }
+            node.position = from + kind.delta * progress
+        }
+        is SKActionKind.ScaleTo -> {
+            val from = state.captureOnce { Vector2(node.xScale, node.yScale) }
+            node.xScale = from.x + (kind.xScale - from.x) * progress
+            node.yScale = from.y + (kind.yScale - from.y) * progress
+        }
+        is SKActionKind.ScaleToAxis -> {
+            val from = state.captureOnce { Vector2(node.xScale, node.yScale) }
+            kind.xScale?.let { node.xScale = from.x + (it - from.x) * progress }
+            kind.yScale?.let { node.yScale = from.y + (it - from.y) * progress }
+        }
+        is SKActionKind.ScaleToSize -> applyScaleToSize(state, kind, node, progress)
+        is SKActionKind.ScaleBy -> {
+            val from = state.captureOnce { Vector2(node.xScale, node.yScale) }
+            node.xScale = from.x + (from.x * kind.dx - from.x) * progress
+            node.yScale = from.y + (from.y * kind.dy - from.y) * progress
+        }
+        is SKActionKind.RotateTo -> {
+            val from = state.captureOnce { node.zRotation }
+            val delta = if (kind.shortestUnitArc) shortestAngleDelta(from, kind.angle) else kind.angle - from
+            // Interpolated back from the target, so the rotation ends exactly on it, as Apple's does.
+            node.zRotation = kind.angle - delta * (1f - progress)
+        }
+        is SKActionKind.RotateBy -> {
+            val from = state.captureOnce { node.zRotation }
+            node.zRotation = from + kind.delta * progress
+        }
+        is SKActionKind.ResizeTo -> applyResize(state, node, progress) { from -> kind.size - from }
+        is SKActionKind.ResizeToAxis ->
+            applyResize(state, node, progress) { from ->
+                Vector2(kind.width?.let { it - from.x } ?: 0f, kind.height?.let { it - from.y } ?: 0f)
+            }
+        is SKActionKind.ResizeBy -> applyResize(state, node, progress) { kind.delta }
+        is SKActionKind.SetTexture -> applySetTexture(kind, node)
+        is SKActionKind.SpeedTo -> applySpeed(state, node, progress) { kind.speed }
+        is SKActionKind.SpeedBy -> applySpeed(state, node, progress) { from -> from * kind.factor }
+        else -> return false
+    }
+    return true
 }
 
 private fun applyChangeVolume(
@@ -266,6 +308,38 @@ private fun applyChangePlaybackRate(
     val audio = node as? SKAudioNode ?: return
     val from = state.captureOnce { audio.playbackRate }
     audio.playbackRate = from + (kind.rate - from) * progress
+}
+
+private fun applySpeed(
+    state: SKActionState,
+    node: SKNode,
+    progress: Float,
+    target: (from: Float) -> Float,
+) {
+    val from = state.captureOnce { node.speed }
+    node.speed = from + (target(from) - from) * progress
+}
+
+private fun applyScaleToSize(
+    state: SKActionState,
+    kind: SKActionKind.ScaleToSize,
+    node: SKNode,
+    progress: Float,
+) {
+    val sprite = node as? SKSpriteNode ?: return
+    val from = state.captureOnce { Vector2(sprite.xScale, sprite.yScale) }
+    val target = sprite.scaleForSize(kind.size)
+    sprite.xScale = from.x + (target.x - from.x) * progress
+    sprite.yScale = from.y + (target.y - from.y) * progress
+}
+
+private fun applySetTexture(
+    kind: SKActionKind.SetTexture,
+    node: SKNode,
+) {
+    val sprite = node as? SKSpriteNode ?: return
+    sprite.texture = kind.texture
+    if (kind.resize) sprite.size = kind.texture.size()
 }
 
 private fun applyResize(

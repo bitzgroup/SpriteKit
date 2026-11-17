@@ -11,16 +11,17 @@ complexity:
     # (transform properties, child management, coordinate conversion, actions, physics, touch
     # handling, ...) — a wide surface by design, not poor organization. Raised generously since
     # these classes grow across roadmap phases. SKNode carries both UIResponder callback families
-    # Apple's SKNode inherits (touches* and presses*), which must stay overridable members.
-    thresholdInClasses: 34
-    # SKAction's companion mirrors SpriteKit's own 37-factory-method SKAction API 1:1 (including
-    # the Phase 12 audio actions: play/pause/stop/changeVolume/changePlaybackRate/
-    # playSoundFileNamed, the two `follow` overloads added for path-following, and
-    # `run(_:onChildWithName:)`) — a deliberate,
-    # cohesive API surface, not poor organization (same rationale GameplayKit-for-Android's
-    # detekt.yml documents for GKGoal's companion). detekt flags at `>= threshold`, so this is set
-    # one above the actual count.
-    thresholdInObjects: 38
+    # Apple's SKNode inherits (touches* and presses*), which must stay overridable members, and
+    # child-list members (addChild/insertChild/...) that need its private child list. Functions
+    # that only use public API live in extension files (SKNodeHierarchy.kt, SKNodePointQueries.kt).
+    thresholdInClasses: 36
+    # SKAction's companion mirrors SpriteKit's own SKAction factory API 1:1 (moves, scales,
+    # rotations, resizes, fades, textures, speed, audio, path-following, composition, ...) — a
+    # deliberate, cohesive API surface, not poor organization (same rationale GameplayKit-for-
+    # Android's detekt.yml documents for GKGoal's companion). Apple's SKAction has well over 60
+    # factories and PARITY_GAP_PLAN.md is still adding the missing ones, so this is set with room
+    # to grow rather than one above the current count.
+    thresholdInObjects: 70
     # SKActionExecution.kt is the frame-stepped action interpreter: one function per SKActionKind
     # composite (sequence/group/repeat) plus one apply-effect function per leaf kind.
     # SKPhysicsCollision.kt is the narrow-phase SAT/distance-test suite: one small pure function

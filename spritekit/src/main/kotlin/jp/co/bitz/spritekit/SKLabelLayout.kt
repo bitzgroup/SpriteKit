@@ -6,11 +6,29 @@ internal data class SKLabelCacheKey(
     val fontName: String?,
     val fontSize: Float,
     val fontColor: Int,
+    /** `null` for a one-line label. */
+    val lineLayout: SKLabelLineLayout? = null,
+)
+
+/**
+ * A multi-line label's layout settings ([SKLabelNode.numberOfLines] other than `1`).
+ * [alignment] aligns the lines within the block, the way the label's
+ * [SKLabelNode.horizontalAlignmentMode] places the block itself.
+ */
+internal data class SKLabelLineLayout(
+    val numberOfLines: Int,
+    val maxWidth: Float,
+    val lineBreakMode: SKLineBreakMode,
+    val alignment: SKLabelHorizontalAlignmentMode,
 )
 
 /**
  * A rendered label's measured extent, in points: [width], and how far the text rises ([ascent])
  * and falls ([descent]) from its baseline.
+ *
+ * A multi-line block has no single baseline: Apple aligns it as if the baseline were its bottom
+ * edge (verified on iOS/tvOS simulators), so its metrics are its whole height as [ascent] and no
+ * [descent] — see [multiLineMetrics].
  */
 internal data class SKLabelMetrics(
     val width: Float,
@@ -51,3 +69,9 @@ internal fun labelQuadCorners(
 
     return listOf(Vector2(left, bottom), Vector2(right, bottom), Vector2(right, top), Vector2(left, top))
 }
+
+/** The [SKLabelMetrics] of a multi-line block [width] × [height]; see [SKLabelMetrics]. */
+internal fun multiLineMetrics(
+    width: Float,
+    height: Float,
+): SKLabelMetrics = SKLabelMetrics(width, ascent = height, descent = 0f)

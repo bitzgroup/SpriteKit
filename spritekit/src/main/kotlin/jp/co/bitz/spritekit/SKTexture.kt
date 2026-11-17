@@ -32,6 +32,19 @@ public class SKTexture internal constructor(
     public constructor(bitmap: Bitmap) : this(bitmap, Rect(0f, 0f, 1f, 1f), SKTextureGpuState())
 
     /**
+     * Loads the image [imageNamed] from the host app's `assets/` folder — Android's stand-in for
+     * the main bundle Apple's `SKTexture(imageNamed:)` reads from — at its pixel size. The name
+     * may leave out the extension (`"hero"` finds `hero.png`, `.jpg`, `.jpeg` or `.webp`) and may
+     * include a subfolder (`"sprites/hero"`).
+     *
+     * As on Apple, a missing image doesn't fail: it logs a warning and gives a 128×128
+     * placeholder. Deviation: Apple's `@2x`/`@3x` variants and asset catalogs have no
+     * counterpart; the file is used at its own pixel size. Each call decodes the file again —
+     * share the texture to share the bitmap.
+     */
+    public constructor(imageNamed: String) : this(loadNamedImage(imageNamed))
+
+    /**
      * A sub-region of [texture], expressed as [rect] — normalized `0..1` coordinates within
      * [texture]'s own underlying bitmap — mirrors Apple's `SKTexture(rect:in:)`. Shares
      * [texture]'s GPU state, so both reference the same uploaded GL texture (this is how

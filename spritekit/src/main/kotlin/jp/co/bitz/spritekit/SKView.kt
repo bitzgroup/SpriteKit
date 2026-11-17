@@ -82,6 +82,20 @@ public class SKView
         private var density = context.resources.displayMetrics.density
 
         /**
+         * Apple's `ignoresSiblingOrder`, `false` by default as on Apple. Nodes always draw in
+         * order of their effective [SKNode.zPosition] (their own plus every ancestor's). With
+         * this `false`, nodes at an equal effective `zPosition` then draw in tree order: a parent
+         * before its children, earlier siblings before later ones (verified on iOS/tvOS
+         * simulators).
+         *
+         * Setting it `true` tells Apple that equal-`zPosition` nodes may draw in any order, which
+         * it uses to batch draws. This renderer keeps drawing them in tree order either way —
+         * one of the orders Apple allows — so the flag is accepted for source compatibility and
+         * changes nothing.
+         */
+        public var ignoresSiblingOrder: Boolean = false
+
+        /**
          * Whether the view renders transparently where the scene doesn't cover it, so whatever is
          * behind the view shows through — Apple's `SKView.allowsTransparency`. `false` (the default,
          * as on Apple) renders opaquely: the scene's [SKScene.backgroundColor] is drawn at full
@@ -126,6 +140,7 @@ public class SKView
             setRenderer(SceneRenderer())
             renderMode = RENDERMODE_CONTINUOUSLY
             audioPlaybackFactory = realAudioPlaybackFactory(context.applicationContext)
+            SKBundle.context = context.applicationContext
         }
 
         /**

@@ -79,7 +79,7 @@ public open class SKNode {
      */
     public var isPaused: Boolean = false
 
-    /** An optional name used to find this node via [SKNode.childNode]/[SKNode.enumerateChildNodes]. */
+    /** An optional name used to find this node via [SKNode.childNode]/[SKNode.enumerateChildNodes]/[get]. */
     public var name: String? = null
 
     /** Arbitrary user data, `null` until the caller sets it — this library's `NSMutableDictionary` stand-in. */
@@ -87,6 +87,16 @@ public open class SKNode {
 
     /** This node's rigid-body simulation, or `null` (the default) to opt out of physics entirely. */
     public var physicsBody: SKPhysicsBody? = null
+        set(value) {
+            if (field === value) return
+            field?.let { old ->
+                old.node = null
+                old.contactedBodies = emptyList()
+            }
+            value?.node?.physicsBody = null // a body belongs to one node at a time
+            value?.node = this
+            field = value
+        }
 
     /**
      * Whether this node can receive touches at all — only a node with this `true` is ever a
@@ -121,6 +131,26 @@ public open class SKNode {
         mutableChildren.add(node)
     }
 
+    /**
+     * Inserts [node] as a child at [index] in [children] — Apple's `insertChild(_:at:)`. [index]
+     * may equal the number of children (appending).
+     *
+     * @throws IllegalStateException if [node] already has a parent, as for [addChild].
+     * @throws IndexOutOfBoundsException if [index] is past the end — Apple raises too.
+     */
+    public fun insertChild(
+        node: SKNode,
+        index: Int,
+    ) {
+        if (index !in 0..mutableChildren.size) {
+            throw IndexOutOfBoundsException("index $index is out of bounds for ${mutableChildren.size} children")
+        }
+        check(node.parent == null) { "node is already the child of another node" }
+        node.parent = this
+        node.transformStamp++
+        mutableChildren.add(index, node)
+    }
+
     /** Removes this node from its parent. No-op if it has none. */
     public fun removeFromParent() {
         parent?.mutableChildren?.remove(this)
@@ -135,20 +165,35 @@ public open class SKNode {
     }
 
     /**
-     * Returns the first direct child whose [name] equals [name], or `null` if none matches.
+     * The first node [name] finds, or `null` — Apple's `childNode(withName:)`, including its
+     * search syntax (verified on iOS/tvOS simulators):
      *
-     * Only searches direct children with an exact name match — Apple's `childNode(withName:)`
-     * additionally supports a `/`/`//`/`*` search-pattern mini-language for recursive/wildcard
-     * search, which isn't implemented; see `docs/API_COMPATIBILITY.md`.
+     * - `"enemy"` — a direct child named `enemy`.
+     * - `"//enemy"` — any node named `enemy` in this node's whole tree, searched from its root.
+     * - `"/hud"` — a direct child of the tree's root.
+     * - `"hud/score"`, `"hud//icon"` — step through children (`/`) or whole subtrees (`//`).
+     * - `"enemy*"`, `"[ab]"`, `"*"` — wildcards and character sets; `*` also matches unnamed nodes.
+     * - `"."`, `".."` — this node and its parent.
+     *
+     * Where several nodes match, the order is Apple's: each node's matching children come before
+     * matches deeper down.
+     *
+     * @throws IllegalArgumentException if [name] is empty, as Apple raises for it.
      */
-    public fun childNode(name: String): SKNode? = mutableChildren.firstOrNull { it.name == name }
+    public fun childNode(name: String): SKNode? = searchNodes(name).firstOrNull()
 
-    /** Calls [action] for every direct child whose [name] equals [name]. See [childNode]'s docs on search scope. */
+    /**
+     * Calls [action] for every node [name] finds, in the order [childNode] describes — Apple's
+     * `enumerateChildNodes(withName:using:)`.
+     *
+     * Deviation: there's no `stop` flag. To stop early, loop over [get] (`node["//enemy"]`)
+     * and `break`.
+     */
     public fun enumerateChildNodes(
         name: String,
         action: (SKNode) -> Unit,
     ) {
-        mutableChildren.filter { it.name == name }.forEach(action)
+        searchNodes(name).forEach(action)
     }
 
     /**
@@ -215,6 +260,15 @@ public open class SKNode {
         return calculateAccumulatedFrame().intersects(boundingRectOf(otherCornersInMySpace))
     }
 
+    /**
+     * How fast this node's actions run: `2` runs them twice as fast, `0` stops them (they stay
+     * attached, as [hasActions] reports). Like Apple's `speed`, it applies to the whole subtree —
+     * a node's actions run at the product of its own and every ancestor's speed (verified on
+     * iOS/tvOS simulators). A negative speed stops actions too; Apple's doesn't run them backwards
+     * either.
+     */
+    public var speed: Float = 1f
+
     private val runningActions = mutableListOf<SKRunningAction>()
 
     /** Runs [action] on this node. */
@@ -261,10 +315,13 @@ public open class SKNode {
     /**
      * Advances this node's own running actions by [deltaTime], then recurses into its children —
      * called once per frame by [SKScene]'s presenting [SKView]. A [isPaused] node (and its whole
-     * subtree) is skipped entirely, matching Apple's documented per-node pause semantics.
+     * subtree) is skipped entirely, matching Apple's documented per-node pause semantics, and so is
+     * one whose [speed] isn't positive; otherwise [deltaTime] is scaled by [speed] for this node
+     * and everything below it.
      */
-    internal fun stepActions(deltaTime: Duration) {
-        if (isPaused) return
+    internal fun stepActions(parentDeltaTime: Duration) {
+        if (isPaused || speed <= 0f) return
+        val deltaTime = if (speed == 1f) parentDeltaTime else parentDeltaTime * speed.toDouble()
         if (runningActions.isNotEmpty()) {
             val finished = mutableListOf<SKRunningAction>()
             for (running in runningActions.toList()) { // snapshot: a running action's own effects may mutate this list
@@ -397,7 +454,7 @@ public open class SKNode {
      * Transforms [point] from this node's local space into its parent's space, applying
      * position/rotation/scale.
      */
-    private fun localToParent(point: Vector2): Vector2 {
+    internal fun localToParent(point: Vector2): Vector2 {
         val scaledX = point.x * xScale
         val scaledY = point.y * yScale
         val cos = cos(zRotation)
@@ -412,7 +469,7 @@ public open class SKNode {
      * Transforms [point] from this node's parent's space into this node's local space; the
      * inverse of [localToParent].
      */
-    private fun parentToLocal(point: Vector2): Vector2 {
+    internal fun parentToLocal(point: Vector2): Vector2 {
         val translated = Vector2(point.x - position.x, point.y - position.y)
         val cos = cos(zRotation)
         val sin = sin(zRotation)

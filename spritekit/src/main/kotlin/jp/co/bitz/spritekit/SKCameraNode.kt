@@ -21,16 +21,48 @@ public open class SKCameraNode : SKNode() {
      * part of a presented scene.
      */
     public fun containsNode(node: SKNode): Boolean {
-        val scene = scene ?: return false
-        val visibleRect =
-            Rect(
-                left = -scene.size.x / 2f,
-                top = -scene.size.y / 2f,
-                right = scene.size.x / 2f,
-                bottom = scene.size.y / 2f,
-            )
+        val visibleRect = visibleRect() ?: return false
         val nodeReferenceSpace = node.parent ?: node
         val nodeCorners = corners(node.calculateAccumulatedFrame()).map { convertFrom(it, nodeReferenceSpace) }
         return visibleRect.intersects(boundingRectOf(nodeCorners))
+    }
+
+    /**
+     * Every node in this camera's scene whose own content is within its viewport (approximated as
+     * in [containsNode]) — Apple's `containedNodeSet()`. Like Apple's (verified on iOS/tvOS
+     * simulators): descendants at any depth count; hidden nodes count too; a node with no content of
+     * its own (a plain [SKNode], whose [frame] is empty) doesn't, nor do the scene and this camera.
+     * A node counts when its own [frame] — not including its children — overlaps the viewport.
+     * Empty if this camera isn't part of a presented scene.
+     */
+    public fun containedNodeSet(): Set<SKNode> {
+        val scene = scene
+        val visibleRect = visibleRect()
+        if (scene == null || visibleRect == null) return emptySet()
+        val result = linkedSetOf<SKNode>()
+
+        fun visit(node: SKNode) {
+            for (child in node.children) {
+                val frame = child.frame
+                if (child !== this && frame.width > 0f && frame.height > 0f) {
+                    val corners = corners(frame).map { convertFrom(it, node) }
+                    if (visibleRect.intersects(boundingRectOf(corners))) result += child
+                }
+                visit(child)
+            }
+        }
+        visit(scene)
+        return result
+    }
+
+    /** The viewport in this camera's own space, or `null` outside a scene; see [containsNode]. */
+    private fun visibleRect(): Rect? {
+        val scene = scene ?: return null
+        return Rect(
+            left = -scene.size.x / 2f,
+            top = -scene.size.y / 2f,
+            right = scene.size.x / 2f,
+            bottom = scene.size.y / 2f,
+        )
     }
 }

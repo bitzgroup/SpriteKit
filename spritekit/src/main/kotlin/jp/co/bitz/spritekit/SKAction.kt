@@ -19,9 +19,18 @@ import kotlin.time.Duration.Companion.seconds
  * constraints — see `docs/ARCHITECTURE.md`.
  */
 public class SKAction internal constructor(
-    internal val duration: Duration,
+    duration: Duration,
     internal val kind: SKActionKind,
 ) {
+    /**
+     * How long this action takes to run, at a [speed] of `1`. A [sequence]'s, [group]'s or
+     * [repeat]'s is derived from its actions when it's created. Assigning it changes how long a
+     * single action runs, as on Apple; assigning it on a [sequence]/[group]/[repeat] changes only
+     * the reported value, not how long it runs — Apple's does the same (verified on iOS/tvOS
+     * simulators).
+     */
+    public var duration: Duration = duration
+
     /** How this action's progress eases over [duration]. Ignored if [timingFunction] is set. */
     public var timingMode: SKActionTimingMode = SKActionTimingMode.Linear
 
@@ -46,6 +55,18 @@ public class SKAction internal constructor(
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.MoveTo(position))
 
+        /** Moves this node's x coordinate to [x], leaving y alone — Apple's `moveTo(x:duration:)`. */
+        public fun moveToX(
+            x: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.MoveToAxis(x = x, y = null))
+
+        /** Moves this node's y coordinate to [y], leaving x alone — Apple's `moveTo(y:duration:)`. */
+        public fun moveToY(
+            y: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.MoveToAxis(x = null, y = y))
+
         /** Moves this node by [delta], relative to wherever it is when this action starts, over [duration]. */
         public fun moveBy(
             delta: Vector2,
@@ -65,24 +86,61 @@ public class SKAction internal constructor(
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.ScaleTo(xScale, yScale))
 
-        /** Scales this node uniformly by [scale] (relative to its current scale) on both axes over [duration]. */
+        /** Scales [SKNode.xScale] to [xScale], leaving `yScale` alone — Apple's `scaleX(to:duration:)`. */
+        public fun scaleXTo(
+            xScale: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ScaleToAxis(xScale = xScale, yScale = null))
+
+        /** Scales [SKNode.yScale] to [yScale], leaving `xScale` alone — Apple's `scaleY(to:duration:)`. */
+        public fun scaleYTo(
+            yScale: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ScaleToAxis(xScale = null, yScale = yScale))
+
+        /**
+         * Scales an [SKSpriteNode] to whatever `xScale`/`yScale` give it [size] — Apple's
+         * `scale(to: CGSize, duration:)`, the animated form of [SKSpriteNode.scale]. The target scale
+         * is worked out from the sprite's unscaled size, so its current scale doesn't matter. No-op
+         * on nodes other than [SKSpriteNode], as on Apple (verified on iOS/tvOS simulators).
+         */
+        public fun scaleTo(
+            size: Vector2,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ScaleToSize(size))
+
+        /**
+         * Multiplies this node's scale by [scale] on both axes over [duration] — Apple's
+         * `scale(by:duration:)`, which is multiplicative (verified on iOS/tvOS simulators).
+         */
         public fun scaleBy(
             scale: Float,
             duration: Duration,
         ): SKAction = scaleBy(scale, scale, duration)
 
-        /** Scales this node by [dx]/[dy] (relative to its current scale) independently over [duration]. */
+        /**
+         * Multiplies [SKNode.xScale] by [dx] and [SKNode.yScale] by [dy] over [duration] — Apple's
+         * `scaleX(by:y:duration:)`. [reversed] divides by the same factors.
+         */
         public fun scaleBy(
             dx: Float,
             dy: Float,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.ScaleBy(dx, dy))
 
-        /** Rotates to [angle] (radians) by the shortest angular path. */
+        /**
+         * Rotates to [angle] (radians), ending exactly on it — Apple's
+         * `rotate(toAngle:duration:shortestUnitArc:)`. By default (as on Apple) the rotation is
+         * interpolated straight from the current [SKNode.zRotation] to [angle], so going from `0.1`
+         * to `6` turns almost a full circle. With [shortestUnitArc] it turns whichever way is
+         * shorter instead — still ending on [angle] itself, not an equivalent angle. Verified on
+         * iOS/tvOS simulators.
+         */
         public fun rotateTo(
             angle: Float,
             duration: Duration,
-        ): SKAction = SKAction(duration, SKActionKind.RotateTo(angle))
+            shortestUnitArc: Boolean = false,
+        ): SKAction = SKAction(duration, SKActionKind.RotateTo(angle, shortestUnitArc))
 
         /** Rotates by [delta] radians, relative to this node's current rotation, over [duration]. */
         public fun rotateBy(
@@ -95,6 +153,18 @@ public class SKAction internal constructor(
             size: Vector2,
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.ResizeTo(size))
+
+        /** Resizes an [SKSpriteNode]'s width to [width], leaving its height — Apple's `resize(toWidth:duration:)`. */
+        public fun resizeToWidth(
+            width: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ResizeToAxis(width = width, height = null))
+
+        /** Resizes an [SKSpriteNode]'s height to [height], leaving its width — Apple's `resize(toHeight:duration:)`. */
+        public fun resizeToHeight(
+            height: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ResizeToAxis(width = null, height = height))
 
         /** No-op on nodes other than [SKSpriteNode]. */
         public fun resizeBy(
@@ -205,13 +275,39 @@ public class SKAction internal constructor(
             return SKAction(resolvedNanos.nanoseconds, SKActionKind.Wait)
         }
 
+        /**
+         * Sets an [SKSpriteNode]'s [SKSpriteNode.texture] to [texture], instantly — Apple's
+         * `setTexture(_:resize:)`. The sprite keeps its size unless [resize] is `true`, which sets
+         * [SKSpriteNode.size] to the texture's [SKTexture.size]. No-op on other nodes.
+         */
+        public fun setTexture(
+            texture: SKTexture,
+            resize: Boolean = false,
+        ): SKAction = SKAction(Duration.ZERO, SKActionKind.SetTexture(texture, resize))
+
+        /** Sets [SKNode.speed] to [speed] over [duration] — Apple's `speed(to:duration:)`. */
+        public fun speedTo(
+            speed: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.SpeedTo(speed))
+
+        /**
+         * Multiplies [SKNode.speed] by [factor] over [duration] — Apple's `speed(by:duration:)`,
+         * which is multiplicative (verified on iOS/tvOS simulators). [reversed] divides by it.
+         */
+        public fun speedBy(
+            factor: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.SpeedBy(factor))
+
         /** Runs [block] once, taking no time. */
         public fun run(block: () -> Unit): SKAction = SKAction(Duration.ZERO, SKActionKind.RunBlock(block))
 
         /**
-         * Starts [action] on the running node's direct child named [onChildWithName] (the first
-         * match, as [SKNode.childNode] finds it), taking no time itself — the child's action keeps
-         * running on its own afterwards. Does nothing if there's no such child. Mirrors Apple's
+         * Starts [action] on the first node [onChildWithName] finds from the running node — the
+         * full search syntax [SKNode.childNode] describes, so `"//enemy"` works — taking no time
+         * itself; the found node's action keeps running on its own afterwards. Only the first
+         * match runs it, and nothing happens if there's none. Mirrors Apple's
          * `run(_:onChildWithName:)`.
          */
         public fun run(
