@@ -187,6 +187,7 @@ public class SKView
             // Apple un-pauses a scene when it's presented, even into a paused view.
             scene.isPaused = false
             scene.view = this
+            scene.loadIfNeeded()
             scene.didMove(this)
             // Apple resizes a `.resizeFill` scene after `didMove(to:)`, on the next layout pass.
             syncResizeFillSize(scene)
@@ -444,18 +445,18 @@ public class SKView
                 // Also covers a scene whose scaleMode was switched to `.resizeFill` after presenting.
                 scene?.let { syncResizeFillSize(it) }
                 if (scene != null && !isPaused && !scene.isPaused) {
-                    scene.update(deltaTime)
+                    scene.dispatchUpdate(deltaTime)
                     scene.stepActions(deltaTime)
-                    scene.didEvaluateActions()
+                    scene.dispatchDidEvaluateActions()
                     simulatePhysics(scene, deltaTime)
-                    scene.didSimulatePhysics()
+                    scene.dispatchDidSimulatePhysics()
                     scene.applyConstraints()
-                    scene.didApplyConstraints()
+                    scene.dispatchDidApplyConstraints()
                     stepEmitters(scene, deltaTime)
                     stepTileMaps(scene, deltaTime)
                     stepAudioNodes(scene)
                     renderTransitionFrame(deltaTime)
-                    scene.didFinishUpdate()
+                    scene.dispatchDidFinishUpdate()
                 } else {
                     renderTransitionFrame(deltaTime)
                 }
