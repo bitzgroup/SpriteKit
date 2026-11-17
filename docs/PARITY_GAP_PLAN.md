@@ -56,7 +56,7 @@ Priorities:
 | I2 | `SKNode.focusBehavior` (`SKNodeFocusBehavior`) | tvOS focus-engine participation. Android's focus system is `View`-based, so node-level focus needs its own design; do only if a host app needs in-scene focus. | P3 |
 | ~~I3~~ | ~~`SKNode.atPoint(_:)`, `nodes(at:)`, `contains(_:)`, `frame`~~ | **Done**, with Apple's semantics probed on macOS (accumulated-frame test with closed edges, hidden/`alpha == 0` subtrees skipped, frontmost first, falls back to `self`). `nodes`/`atPoint` are extensions for the `TooManyFunctions` budget. | P0 |
 | ~~I4~~ | ~~`SKScene.convertPoint(fromView:)` / `convertPoint(toView:)`, `SKView.convert(_:to:)` / `convert(_:from:)`~~ | **Done** as `convertPointFromView`/`convertPointToView` and `SKView.convertTo`/`convertFrom`, sharing the touch-dispatch projection math. | P1 |
-| I5 | `SKTouch.tapCount`, `timestamp`, `force` | Already noted as absent in `API_COMPATIBILITY.md`; `tapCount` is the one ports commonly need (double-tap). | P2 |
+| ~~I5~~ | ~~`SKTouch.tapCount`, `timestamp`, `force`~~ | **Done**, verified on an iOS simulator: quick nearby taps count up per finger, and a drag or long press ends with `tapCount` 0. Android's tap limits stand in for Apple's undocumented ones; `force` is 0, as on Apple without force-sensing hardware. | P2 |
 
 ### 2.2 Scene and view lifecycle
 

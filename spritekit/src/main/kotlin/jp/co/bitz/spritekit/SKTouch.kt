@@ -21,6 +21,35 @@ public class SKTouch internal constructor(
     public var phase: SKTouchPhase = SKTouchPhase.Began
         internal set
 
+    /**
+     * How many quick taps in one place this touch is part of — Apple's `tapCount`: 1 for a single
+     * tap, 2 for the second of a double tap, and so on, kept while the touch moves. As on Apple
+     * (verified on an iOS simulator), a touch that was dragged away or held too long ends with 0,
+     * and each finger of a multi-finger tap counts on its own. The time and distance limits are
+     * Android's (`ViewConfiguration`'s double-tap timeout and slop, touch slop, long-press timeout),
+     * as Apple doesn't document its own.
+     */
+    public var tapCount: Int = 1
+        internal set
+
+    /**
+     * When this touch last changed, in seconds since boot — Apple's `timestamp`, on the same clock
+     * as Apple's (`systemUptime`, here `SystemClock.uptimeMillis`): taken from the Android
+     * `MotionEvent`, not from when the render thread delivered it.
+     */
+    public var timestamp: Double = 0.0
+        internal set
+
+    /**
+     * Always 0, as Apple's `force` is on devices without force-sensing hardware (every iPhone without
+     * 3D Touch, and the simulator). Android's touch pressure isn't the same measure, so it isn't
+     * passed through.
+     */
+    public val force: Float = 0f
+
+    /** Always 0, as Apple's `maximumPossibleForce` is without force-sensing hardware; see [force]. */
+    public val maximumPossibleForce: Float = 0f
+
     internal var referencePoint: Vector2 = referencePoint
         private set
 

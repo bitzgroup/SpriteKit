@@ -410,6 +410,9 @@ algorithms (steering, noise, Gaussian sampling).
       `Cancelled` for that pointer regardless of where it travels afterward (tracked per pointer ID
       in `SKScene.activeTouchTargets`), matching Apple's tracking behavior — not re-hit-tested
       every frame
+- [x] `SKTouch.tapCount`/`timestamp`/`force`/`maximumPossibleForce` — added later
+      (`PARITY_GAP_PLAN.md` I5): Apple's observed tap-count rules with Android's `ViewConfiguration`
+      tap limits, uptime-clock timestamps, and the zero force Apple reports without force sensing
 - [x] Hit-testing via `SKNode.containsLocalPoint` against each candidate's own `localBounds`
       (reusing the same protected property `SKSpriteNode`/`SKTileMapNode`/etc. already override for
       rendering) rather than the full `calculateAccumulatedFrame` (which would also count a node's

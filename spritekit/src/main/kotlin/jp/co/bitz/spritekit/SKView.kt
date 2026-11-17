@@ -9,6 +9,7 @@ import android.os.Looper
 import android.util.AttributeSet
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.time.Duration
@@ -77,6 +78,17 @@ public class SKView
         private val sceneRenderer = SKSceneRenderer()
         private var viewWidth = 0
         private var viewHeight = 0
+
+        // UITouch.tapCount for each pointer, worked out on the UI thread with Android's tap limits.
+        private val tapCounter =
+            ViewConfiguration.get(context).let { config ->
+                SKTapCounter(
+                    doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout().toLong(),
+                    doubleTapSlopPx = config.scaledDoubleTapSlop.toFloat(),
+                    touchSlopPx = config.scaledTouchSlop.toFloat(),
+                    longPressTimeoutMs = ViewConfiguration.getLongPressTimeout().toLong(),
+                )
+            }
 
         /** Pixels per density-independent pixel; refreshed with the surface size. */
         private var density = context.resources.displayMetrics.density
@@ -316,11 +328,16 @@ public class SKView
                     }
                 val snapshots =
                     indices.map { index ->
+                        val pointerId = event.getPointerId(index)
+                        val x = event.getX(index)
+                        val y = event.getY(index)
                         SKTouchEvent(
-                            pointerId = event.getPointerId(index),
-                            x = event.getX(index),
-                            y = event.getY(index),
+                            pointerId = pointerId,
+                            x = x,
+                            y = y,
                             phase = phase,
+                            tapCount = tapCount(phase, pointerId, x, y, event.eventTime),
+                            timestamp = event.eventTime / MILLIS_PER_SECOND,
                         )
                     }
                 runOnGLThread {
@@ -330,6 +347,20 @@ public class SKView
             }
             return true
         }
+
+        private fun tapCount(
+            phase: SKTouchPhase,
+            pointerId: Int,
+            x: Float,
+            y: Float,
+            timeMs: Long,
+        ): Int =
+            when (phase) {
+                SKTouchPhase.Began -> tapCounter.began(pointerId, x, y, timeMs)
+                SKTouchPhase.Moved -> tapCounter.moved(pointerId, x, y)
+                SKTouchPhase.Ended -> tapCounter.ended(pointerId, x, y, timeMs)
+                SKTouchPhase.Cancelled -> tapCounter.cancelled(pointerId)
+            }
 
         /**
          * Renders the current scene's state via [sceneRenderer] — clears to
@@ -466,5 +497,7 @@ public class SKView
         private companion object {
             /** Matches `GLSurfaceView`'s default config chooser (the renderer itself uses no depth test). */
             const val DEPTH_BITS = 16
+
+            const val MILLIS_PER_SECOND = 1000.0
         }
     }
