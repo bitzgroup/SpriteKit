@@ -79,22 +79,20 @@ internal fun SKWorldShape.rayHits(
 ): List<SKRayHit> =
     when (this) {
         is SKWorldShape.Circle -> listOfNotNull(circleEntry(body, start, end))
-        is SKWorldShape.Polygon ->
-            if (contains(
-                    start,
-                )
-            ) {
-                emptyList()
-            } else {
-                listOfNotNull(
-                    segmentHits(body, closedSegments(vertices), start, end).minByOrNull {
-                        it.fraction
-                    },
-                )
-            }
+        is SKWorldShape.Polygon -> polygonEntry(body, start, end)
         is SKWorldShape.EdgeChain ->
             segmentHits(body, if (closed) closedSegments(vertices) else vertices.zipWithNext(), start, end)
     }
+
+private fun SKWorldShape.Polygon.polygonEntry(
+    body: SKPhysicsBody,
+    start: Vector2,
+    end: Vector2,
+): List<SKRayHit> {
+    if (contains(start)) return emptyList()
+    val entry = segmentHits(body, closedSegments(vertices), start, end).minByOrNull { it.fraction }
+    return listOfNotNull(entry)
+}
 
 private fun closedSegments(vertices: List<Vector2>): List<Pair<Vector2, Vector2>> =
     vertices.indices.map {
