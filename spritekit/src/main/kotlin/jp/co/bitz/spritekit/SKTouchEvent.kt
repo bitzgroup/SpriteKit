@@ -27,6 +27,10 @@ public data class SKTouchEvent(
     public val x: Float,
     public val y: Float,
     public val phase: SKTouchPhase,
+    /** The touch's `UITouch.tapCount` as of this phase; see [SKTouch.tapCount]. */
+    public val tapCount: Int = 1,
+    /** When this happened, in seconds on the uptime clock; see [SKTouch.timestamp]. */
+    public val timestamp: Double = 0.0,
 )
 
 /**

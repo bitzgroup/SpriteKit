@@ -526,8 +526,16 @@ categories recur throughout and are called out once here rather than per item:
   position is queried with `location(node)`/`previousLocation(node)` — Apple's
   `location(in:)`/`previousLocation(in:)`, renamed only because `in` is a Kotlin keyword. A
   pointer Android reports as moved without actually moving is left out of `touchesMoved`, like a
-  stationary `UITouch`. Only `SKEvent.allTouches` is mirrored from `UIEvent`; `UITouch`'s
-  `tapCount`/`force`/`timestamp` aren't. There is no `.stationary` phase.
+  stationary `UITouch`. Only `SKEvent.allTouches` is mirrored from `UIEvent`. There is no
+  `.stationary` phase.
+- **`SKTouch.tapCount` follows Apple's observed rules** (verified on an iOS simulator): quick taps
+  close together count up, a pause or a tap far away starts over, each finger of a multi-finger tap
+  counts on its own, and a touch that was dragged away or held too long ends with 0. The time and
+  distance limits are Android's `ViewConfiguration` values (double-tap timeout and slop, touch
+  slop, long-press timeout), since Apple doesn't document its own. `timestamp` is seconds on the
+  uptime clock, as Apple's is, taken from the `MotionEvent`. `force` and `maximumPossibleForce` are
+  always 0 — what Apple reports without force-sensing hardware (the simulator, every iPhone without
+  3D Touch); Android's touch pressure is a different measure and isn't passed through.
 - **Hit-testing uses each candidate node's own `localBounds`** (axis-aligned, un-rotated
   bounding-box containment in that node's local space) rather than Apple's (undocumented, possibly
   per-node-type/shape-aware) precise hit-testing — e.g. `SKShapeNode`'s actual path isn't tested,

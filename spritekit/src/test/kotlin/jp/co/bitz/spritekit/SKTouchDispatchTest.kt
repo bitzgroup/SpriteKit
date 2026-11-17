@@ -439,4 +439,33 @@ class SKTouchDispatchTest {
 
         assertTrue(node.moved.isEmpty())
     }
+
+    @Test
+    fun `each delivered touch carries its event's tap count and timestamp, and no force`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val node = sprite().apply { position = Vector2(50f, 50f) }
+        scene.addChild(node)
+
+        dispatchTouches(
+            scene,
+            listOf(SKTouchEvent(0, 100f, 100f, SKTouchPhase.Began, tapCount = 2, timestamp = 12.5)),
+            viewWidth = 200,
+            viewHeight = 200,
+        )
+        val touch = node.began.single()
+        assertEquals(2, touch.tapCount)
+        assertEquals(12.5, touch.timestamp)
+        assertEquals(0f, touch.force)
+        assertEquals(0f, touch.maximumPossibleForce)
+
+        dispatchTouches(
+            scene,
+            listOf(SKTouchEvent(0, 100f, 100f, SKTouchPhase.Ended, tapCount = 0, timestamp = 13.0)),
+            viewWidth = 200,
+            viewHeight = 200,
+        )
+        assertSame(touch, node.ended.single())
+        assertEquals(0, touch.tapCount)
+        assertEquals(13.0, touch.timestamp)
+    }
 }

@@ -93,21 +93,23 @@ private fun trackTouch(
     point: Vector2,
 ): Pair<SKNode, SKTouch>? =
     if (event.phase == SKTouchPhase.Began) {
-        beginTouch(scene, event.pointerId, referenceNode, point)
+        beginTouch(scene, event, referenceNode, point)
     } else {
         continueTouch(scene, event, point)
     }
 
 private fun beginTouch(
     scene: SKScene,
-    pointerId: Int,
+    event: SKTouchEvent,
     referenceNode: SKNode,
     point: Vector2,
 ): Pair<SKNode, SKTouch>? =
     hitTestInteractiveNode(scene, referenceNode, point)?.let { target ->
-        val touch = SKTouch(pointerId, referenceNode, point)
-        scene.activeTouchTargets[pointerId] = target
-        scene.activeTouches[pointerId] = touch
+        val touch = SKTouch(event.pointerId, referenceNode, point)
+        touch.tapCount = event.tapCount
+        touch.timestamp = event.timestamp
+        scene.activeTouchTargets[event.pointerId] = target
+        scene.activeTouches[event.pointerId] = touch
         target to touch
     }
 
@@ -122,6 +124,8 @@ private fun continueTouch(
     if (target == null || touch == null || stationary) return null
     touch.moveTo(point)
     touch.phase = event.phase
+    touch.tapCount = event.tapCount
+    touch.timestamp = event.timestamp
     return target to touch
 }
 
