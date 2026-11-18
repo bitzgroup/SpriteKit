@@ -151,6 +151,17 @@ categories recur throughout and are called out once here rather than per item:
   even if the app had paused it through `scene.isPaused` — Apple's `SKView` does the same — but
   leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
   on the render thread.
+- **`SKView.preferredFramesPerSecond`** defaults to 60 and reads back whatever was set, as Apple's
+  does. The view runs at a whole fraction of the display's refresh rate (60, 30, 20, 15, ... at
+  60 Hz), the one nearest the requested rate, the higher on a tie; a negative rate or one at or
+  above the display's runs every refresh, and 0 runs once a second. On iOS/tvOS simulators at 60 Hz
+  that matches Apple's choice for every rate from 11 to 60 except two: Apple runs 24 and 45 at 30,
+  where this library runs 24 at 20 and 45 at 60. Apple's rule isn't documented and no simple rule
+  fits all fifty. The display rate is rounded to whole hertz first, so 59.94 Hz counts as 60. **On a
+  90/120 Hz display the default caps the view at 60 frames a second** — as on Apple, but unlike
+  before this property existed, when the view drew every refresh; set a higher value to keep that.
+  Below the display's rate the view stops rendering continuously and draws on request from a
+  `Choreographer` callback every few refreshes.
 
 - **`SKNode.nodes(point)`/`atPoint(point)`** are Apple's `nodes(at:)`/`atPoint(_:)` with the
   argument label dropped, and are top-level extension functions rather than members (call sites

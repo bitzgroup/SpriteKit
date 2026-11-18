@@ -99,6 +99,8 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       Phase 3)
 - [x] Classic-View lifecycle: `SKView.onPause()`/`onResume()`, callable from `Activity`/`Fragment`
       callbacks (plain `GLSurfaceView.onPause`/`onResume` + `scene.isPaused`)
+- [x] `SKView.preferredFramesPerSecond` — added later (`PARITY_GAP_PLAN.md` V3): the nearest
+      whole fraction of the display rate, driven by a `Choreographer` callback below full rate
 - [x] `:spritekit-compose` module — `@Composable fun SKView(scene, modifier, state)` via
       `AndroidView(factory = { context -> SKView(context) })`, `rememberSKViewState()` delegating
       to the wrapped `SKView`'s bridge utilities, and a `DisposableEffect` on `LocalLifecycleOwner`

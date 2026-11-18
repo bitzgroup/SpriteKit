@@ -7,6 +7,7 @@ import android.opengl.GLSurfaceView
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
+import android.view.Choreographer
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewConfiguration
@@ -139,6 +140,39 @@ public class SKView
         /** Render-thread copy of [allowsTransparency]. */
         private var renderTransparently = false
 
+        /**
+         * The frame rate this view aims for — Apple's `preferredFramesPerSecond`, 60 by default as on
+         * Apple. Only whole fractions of the display's refresh rate are possible (60, 30, 20, 15, ...
+         * on a 60 Hz display), and the view runs at the one nearest this value, as Apple's does
+         * (verified on iOS/tvOS simulators; see `docs/API_COMPATIBILITY.md` for the two rates where
+         * the choice differs). A negative value or one at or above the display's rate runs every
+         * refresh, and 0 runs once a second, as on Apple. Reads back whatever was set. On a 90/120 Hz
+         * display the default caps the view at 60 frames a second, as on Apple; set a higher value to
+         * run faster.
+         */
+        public var preferredFramesPerSecond: Int = DEFAULT_PREFERRED_FRAMES_PER_SECOND
+            set(value) {
+                field = value
+                applyFrameRate()
+            }
+
+        // Display refreshes per frame for preferredFramesPerSecond; above 1, a Choreographer callback
+        // requests each frame instead of rendering continuously.
+        private var frameInterval = 1
+        private var refreshesSinceFrame = 0
+        private var isRenderThreadRunning = true
+        private val frameCallback =
+            Choreographer.FrameCallback {
+                if (frameInterval > 1 && isRenderThreadRunning) {
+                    refreshesSinceFrame++
+                    if (refreshesSinceFrame >= frameInterval) {
+                        refreshesSinceFrame = 0
+                        requestRender()
+                    }
+                    postFrameCallback()
+                }
+            }
+
         private var transitionFromScene: SKScene? = null
         private var transitionSpec: SKTransition? = null
         private var transitionElapsed: Duration = Duration.ZERO
@@ -150,7 +184,7 @@ public class SKView
             // surface simply ignores the alpha.
             setEGLConfigChooser(8, 8, 8, 8, DEPTH_BITS, 0)
             setRenderer(SceneRenderer())
-            renderMode = RENDERMODE_CONTINUOUSLY
+            applyFrameRate()
             audioPlaybackFactory = realAudioPlaybackFactory(context.applicationContext)
             SKBundle.context = context.applicationContext
         }
@@ -264,6 +298,7 @@ public class SKView
          */
         override fun onPause() {
             runOnGLThread { currentScene?.isPaused = true }
+            isRenderThreadRunning = false
             super.onPause()
         }
 
@@ -276,7 +311,39 @@ public class SKView
          */
         override fun onResume() {
             super.onResume()
+            isRenderThreadRunning = true
+            applyFrameRate()
             runOnGLThread { currentScene?.isPaused = isPaused }
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            applyFrameRate() // the display, and so its refresh rate, is known from here on
+        }
+
+        override fun onDetachedFromWindow() {
+            mainHandler.post { Choreographer.getInstance().removeFrameCallback(frameCallback) }
+            super.onDetachedFromWindow()
+        }
+
+        private fun applyFrameRate() {
+            val refreshRate = display?.refreshRate ?: DEFAULT_DISPLAY_REFRESH_RATE
+            frameInterval = skFrameInterval(preferredFramesPerSecond, refreshRate)
+            if (frameInterval <= 1) {
+                renderMode = RENDERMODE_CONTINUOUSLY
+            } else {
+                renderMode = RENDERMODE_WHEN_DIRTY
+                refreshesSinceFrame = 0
+                postFrameCallback()
+            }
+        }
+
+        private fun postFrameCallback() {
+            // Choreographer is per-looper: always go through the main thread, and never post twice.
+            mainHandler.post {
+                Choreographer.getInstance().removeFrameCallback(frameCallback)
+                Choreographer.getInstance().postFrameCallback(frameCallback)
+            }
         }
 
         /**
