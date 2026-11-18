@@ -265,7 +265,22 @@ categories recur throughout and are called out once here rather than per item:
   itself, and `splinePoints` — a Catmull-Rom spline drawn as cubic Béziers — starts with a
   zero-length curve from the first point to itself.
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
-  blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13).
+  blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13). It does
+  widen the frame, as on Apple.
+- **`SKShapeNode` outlines aren't antialiased.** `isAntialiased` (default `true`) is accepted, and
+  as on Apple it widens a drawn outline's frame by 0.85 points a side, but the renderer draws
+  outlines with hard edges either way. Apple antialiases outlines only — never fills — when it's
+  `true` (recorded on iOS/tvOS simulators), so fills already match.
+- **`SKShapeNode`'s frame includes a drawn outline**, as on Apple (since 0.5.0; before that it was
+  the path's bounds only): when `lineWidth` is above `0` and `strokeColor` isn't fully
+  transparent, the outline's segments and caps at `lineWidth + 2 × glowWidth` (plus the
+  antialiasing padding) are added. Like Apple's, it leaves out sharp corners' miters. A round
+  cap is counted as an exact half circle, where Apple's frame reaches about 13% further.
+- **`SKShapeNode.lineWidth` defaults to `1`**, as on Apple (since 0.5.0; it was `0`, so an
+  unstyled shape drew no outline). `blendMode` applies to both fill and outline, as on Apple.
+- **`SKShapeNode.lineLength` is the path's real length.** Apple's iOS/tvOS simulators report `0`
+  for every path, rendered or not, with or without a stroke shader; this library returns the
+  documented value instead, measured on the flattened path.
 - **`SKShapeNode.fillTexture`** is stretched across the bounding box of the shape's (flattened,
   triangulated) fill geometry and multiplied by `fillColor` — so, as on Apple, `fillColor` must be
   set to something visible (typically white) for the texture to show. Texture coordinates are
