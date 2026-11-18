@@ -160,8 +160,12 @@ public open class SKShapeNode(
      */
     public var fillTexture: SKTexture? = null
 
-    /** The outline's width, in points. `0` (the default) draws no outline regardless of [strokeColor]. */
-    public var lineWidth: Float = 0f
+    /**
+     * The outline's width, in points. Defaults to `1`, matching Apple (verified on iOS/tvOS
+     * simulators): a shape draws a thin white outline unless [strokeColor] or this is changed.
+     * `0` draws no outline regardless of [strokeColor].
+     */
+    public var lineWidth: Float = 1f
 
     /** How the ends of an open stroke are drawn. Defaults to [LineCap.Butt], matching Apple. */
     public var lineCap: LineCap = LineCap.Butt
@@ -175,8 +179,31 @@ public open class SKShapeNode(
      */
     public var miterLimit: Float = DEFAULT_MITER_LIMIT
 
-    /** Stored for API parity; not implemented — see this class's KDoc. */
+    /**
+     * Stored for API parity; not drawn — see this class's KDoc. As on Apple, it does widen the
+     * shape's frame by this much on each side of a drawn outline.
+     */
     public var glowWidth: Float = 0f
+
+    /**
+     * Apple's `isAntialiased`, defaulting to `true`. On Apple it smooths the outline's edges (a
+     * fill's edges never are) and widens a drawn outline's frame by 0.85 points on each side
+     * (verified on iOS/tvOS simulators); here it does the latter, but outlines are drawn without
+     * antialiasing either way — see `docs/API_COMPATIBILITY.md`.
+     */
+    public var isAntialiased: Boolean = true
+
+    /** How this shape's fill and outline combine with what's already drawn. Defaults to [SKBlendMode.Alpha]. */
+    public var blendMode: SKBlendMode = SKBlendMode.Alpha
+
+    /**
+     * The length of [path]'s outline, in points — Apple's `lineLength`: the sum of every
+     * contour's length (a closed contour's closing segment included), with curves measured on the
+     * flattened path. Apple's iOS/tvOS simulators report `0` for every path; this follows the
+     * documented meaning instead.
+     */
+    public val lineLength: Float
+        get() = path?.let { flattenPath(it).sumOf { contour -> contourLength(contour).toDouble() }.toFloat() } ?: 0f
 
     /**
      * Render-thread-confined cache of this shape's flattened-and-triangulated geometry, keyed by
@@ -193,11 +220,47 @@ public open class SKShapeNode(
      */
     internal var worldVerticesCache: SKShapeWorldVerticesCache? = null
 
+    /**
+     * The path's bounds, plus — when an outline is drawn ([lineWidth] above `0` and a
+     * [strokeColor] that isn't fully transparent) — the outline itself, widened by [glowWidth] and
+     * by [isAntialiased]'s padding, as Apple's frame is (verified on iOS/tvOS simulators). See
+     * [strokedBounds].
+     */
     override val localBounds: Rect
         get() {
             val currentPath = path ?: return Rect.Zero
             val bounds = RectF()
             currentPath.computeBounds(bounds, true)
-            return Rect(bounds.left, bounds.top, bounds.right, bounds.bottom)
+            val pathBounds = Rect(bounds.left, bounds.top, bounds.right, bounds.bottom)
+            if (lineWidth <= 0f || alphaOf(strokeColor) <= 0f) return pathBounds
+            val width = lineWidth + 2f * glowWidth + if (isAntialiased) ANTIALIASING_FRAME_PADDING * 2f else 0f
+            val stroke = strokedBounds(triangulatedShape(this, currentPath).contours, width, lineCap)
+            return if (stroke == null) pathBounds else pathBounds.union(stroke)
         }
+}
+
+/** How far Apple widens a drawn, antialiased outline's frame on each side, in points. */
+internal const val ANTIALIASING_FRAME_PADDING: Float = 0.85f
+
+/**
+ * The bounds of [contours] stroked at [width] with [lineCap], the way Apple's `SKShapeNode.frame`
+ * counts an outline: each segment's ribbon and the caps, but not the corners' miters — Apple's
+ * frame of a sharp `^` stops at the segments' own corners (verified on iOS/tvOS simulators), so
+ * joins are taken as bevels. `null` if nothing would be stroked.
+ */
+internal fun strokedBounds(
+    contours: List<SKFlattenedContour>,
+    width: Float,
+    lineCap: LineCap,
+): Rect? {
+    val vertices = contours.flatMap { triangulateStroke(it.points, width, it.closed, lineCap, LineJoin.Bevel) }
+    return if (vertices.isEmpty()) null else boundingRectOf(vertices)
+}
+
+/** [contour]'s length: its segments, plus the closing one back to the start when it's closed. */
+internal fun contourLength(contour: SKFlattenedContour): Float {
+    val points = contour.points
+    if (points.size < 2) return 0f
+    val open = points.zipWithNext { a, b -> (b - a).length() }.sum()
+    return if (contour.closed) open + (points.first() - points.last()).length() else open
 }

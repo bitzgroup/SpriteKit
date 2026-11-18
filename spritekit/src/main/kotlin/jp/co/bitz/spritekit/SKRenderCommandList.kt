@@ -296,7 +296,7 @@ private fun addShapeCommands(
             if (!range.isEmpty()) {
                 val vertices = fillVertices(node, shape, worldVertices.slice(range), range)
                 context.add(
-                    shapeCommand(vertices, node.fillColor, fillAlpha, context.clipRect, node.fillTexture),
+                    shapeCommand(node, vertices, node.fillColor, fillAlpha, context.clipRect, node.fillTexture),
                     context.zPosition,
                 )
             }
@@ -305,7 +305,7 @@ private fun addShapeCommands(
             val range = shape.strokeRanges[index]
             if (!range.isEmpty()) {
                 context.add(
-                    shapeCommand(worldVertices.slice(range), node.strokeColor, strokeAlpha, context.clipRect),
+                    shapeCommand(node, worldVertices.slice(range), node.strokeColor, strokeAlpha, context.clipRect),
                     context.zPosition,
                 )
             }
@@ -361,7 +361,10 @@ private fun SKShapeWorldVerticesCache.isFresh(
 /** [range]'s slice of this list — a view ([List.subList]), not a copy. */
 private fun <T> List<T>.slice(range: IntRange): List<T> = subList(range.first, range.last + 1)
 
+/** One of [node]'s fill or stroke commands, drawn with its [SKShapeNode.blendMode]. */
+@Suppress("LongParameterList")
 private fun shapeCommand(
+    node: SKShapeNode,
     vertices: List<SKRenderVertex>,
     colorInt: Int,
     alpha: Float,
@@ -370,7 +373,7 @@ private fun shapeCommand(
 ): SKRenderCommand =
     SKRenderCommand(
         texture = texture,
-        blendMode = SKBlendMode.Alpha,
+        blendMode = node.blendMode,
         vertices = vertices,
         color = SKVertexColor(redOf(colorInt), greenOf(colorInt), blueOf(colorInt), alpha),
         clipRect = clipRect,
