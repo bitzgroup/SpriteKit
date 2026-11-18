@@ -92,7 +92,7 @@ Priorities:
 | ~~T5~~ | ~~`SKSpriteNode.scale(to:)`~~ | **Done** as `scale(to)`. Recording it showed Apple's `SKSpriteNode.size` *includes* the scale, which this library's didn't — fixed along with it. | P1 |
 | ~~H1~~ | ~~Remaining `SKShapeNode` convenience initializers: `init(rect:)` / `init(rect:cornerRadius:)` (an arbitrary, non-centered rect), `init(ellipseIn:)`, `init(path:centered:)`, `init(points:count:)`, `init(splinePoints:count:)`~~ | **Done** as companion factories, matching Apple's paths element for element (verified on iOS/tvOS simulators). | P1 |
 | H2 | `SKShapeNode.isAntialiased`, `blendMode`, `lineLength` | `lineCap`/`lineJoin`/`miterLimit` exist. No antialiasing switch or MSAA configuration exists in the renderer; Apple's default is `isAntialiased = true`, so check how shape edges compare. | P2 |
-| L1 | `SKLabelNode.color`/`colorBlendFactor`, `blendMode` | | P2 |
+| ~~L1~~ | ~~`SKLabelNode.color`/`colorBlendFactor`, `blendMode`~~ | **Done**, verified by pixel probes on iOS/tvOS simulators: `color` tints the text exactly as a sprite's tints its texture, and `colorize` animates it. Apple ignores a label's `blendMode` (it always alpha-blends), so this library keeps it for API parity only. Recording it also fixed two sprite bugs: an untextured sprite drew white unless `colorBlendFactor` was raised, and `color`'s alpha was ignored. | P2 |
 | ~~L2~~ | ~~`SKLabelNode.numberOfLines`, `preferredMaxLayoutWidth`, `lineBreakMode`~~ | **Done** with `StaticLayout`, following Apple's layout rules as recorded on iOS/tvOS simulators (one line ignores the width; a multi-line block aligns `.baseline` like `.bottom`). | P1 |
 | L3 | `SKLabelNode.attributedText` | Map to `android.text.Spanned`. | P2 |
 

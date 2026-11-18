@@ -399,12 +399,28 @@ private fun applyColorize(
     node: SKNode,
     progress: Float,
 ) {
-    val sprite = node as? SKSpriteNode ?: return
-    val from = state.captureOnce { sprite.color to sprite.colorBlendFactor }
+    val from =
+        state.captureOnce {
+            when (node) {
+                is SKSpriteNode -> node.color to node.colorBlendFactor
+                is SKLabelNode -> node.color to node.colorBlendFactor
+                else -> null
+            }
+        } ?: return
     val (fromColor, fromBlend) = from
-    sprite.color = lerpColor(fromColor, kind.color ?: fromColor, progress)
+    val color = lerpColor(fromColor, kind.color ?: fromColor, progress)
     val targetBlend = kind.colorBlendFactor ?: fromBlend
-    sprite.colorBlendFactor = fromBlend + (targetBlend - fromBlend) * progress
+    val blend = fromBlend + (targetBlend - fromBlend) * progress
+    when (node) {
+        is SKSpriteNode -> {
+            node.color = color
+            node.colorBlendFactor = blend
+        }
+        is SKLabelNode -> {
+            node.color = color
+            node.colorBlendFactor = blend
+        }
+    }
 }
 
 private fun applyAnimate(

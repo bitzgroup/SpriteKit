@@ -231,7 +231,14 @@ private fun addSpriteCommand(
             texture = texture,
             blendMode = node.blendMode,
             vertices = vertices,
-            color = tintedVertexColor(node.color, node.colorBlendFactor, alpha),
+            // Apple draws an untextured sprite in its color whatever colorBlendFactor is
+            color =
+                tintedVertexColor(
+                    node.color,
+                    if (texture == null) 1f else node.colorBlendFactor,
+                    alpha,
+                    tintsAlpha = true,
+                ),
             clipRect = context.clipRect,
             shader = node.shader,
         ),
@@ -253,10 +260,11 @@ private fun addLabelCommand(
     context.add(
         SKRenderCommand(
             texture = texture,
+            // Apple draws a label with alpha blending whatever its blendMode is (verified on iOS/tvOS)
             blendMode = SKBlendMode.Alpha,
             vertices = quadVertices(corners, texture.textureRect),
-            // fontColor is already baked into the rendered texture
-            color = SKVertexColor(1f, 1f, 1f, alpha),
+            // fontColor is already baked into the rendered texture; color tints it like a sprite's
+            color = tintedVertexColor(node.color, node.colorBlendFactor, alpha, tintsAlpha = true),
             clipRect = context.clipRect,
         ),
         context.zPosition,
@@ -506,20 +514,24 @@ private fun quadVertices(
 }
 
 /**
- * The vertex color for a sprite whose own [colorInt] (ARGB) is mixed in by [colorBlendFactor]
- * (`0` = texture's colors show through unmodified, `1` = fully replaced by [colorInt]) and scaled
- * by the node's accumulated [alpha]. Computed on the CPU per sprite (these are per-node scalars,
- * not textures) so the fragment shader stays a simple `sample * vertexColor` — see
+ * The vertex color for a sprite or label whose own [colorInt] (ARGB) is mixed in by
+ * [colorBlendFactor] (clamped to `0..1`: `0` = the texture's colors show through unmodified,
+ * `1` = multiplied by [colorInt]) and scaled by the node's accumulated [alpha]. With [tintsAlpha],
+ * [colorInt]'s own alpha is mixed in the same way, as Apple does for sprites and labels (verified
+ * on iOS/tvOS simulators). Computed on the CPU per node (these are per-node scalars, not
+ * textures) so the fragment shader stays a simple `sample * vertexColor` — see
  * `docs/ARCHITECTURE.md`.
  */
-private fun tintedVertexColor(
+internal fun tintedVertexColor(
     colorInt: Int,
     colorBlendFactor: Float,
     alpha: Float,
+    tintsAlpha: Boolean = false,
 ): SKVertexColor {
     val blend = colorBlendFactor.coerceIn(0f, 1f)
     val r = 1f + (redOf(colorInt) - 1f) * blend
     val g = 1f + (greenOf(colorInt) - 1f) * blend
     val b = 1f + (blueOf(colorInt) - 1f) * blend
-    return SKVertexColor(r, g, b, alpha)
+    val tint = if (tintsAlpha) 1f + (alphaOf(colorInt) - 1f) * blend else 1f
+    return SKVertexColor(r, g, b, alpha * tint)
 }

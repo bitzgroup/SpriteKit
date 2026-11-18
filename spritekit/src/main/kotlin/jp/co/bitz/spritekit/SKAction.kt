@@ -238,7 +238,10 @@ public class SKAction internal constructor(
         /** Sets [SKNode.isHidden] to `false`, instantly. */
         public fun unhide(): SKAction = SKAction(Duration.ZERO, SKActionKind.Unhide)
 
-        /** No-op on nodes other than [SKSpriteNode]. */
+        /**
+         * Animates the `color` and `colorBlendFactor` of an [SKSpriteNode] or [SKLabelNode]
+         * (Apple colorizes both). No-op on other nodes.
+         */
         public fun colorize(
             color: Int,
             colorBlendFactor: Float,
@@ -246,8 +249,8 @@ public class SKAction internal constructor(
         ): SKAction = SKAction(duration, SKActionKind.Colorize(color, colorBlendFactor))
 
         /**
-         * Animates [SKSpriteNode.colorBlendFactor] only, leaving [SKSpriteNode.color] unchanged.
-         * No-op on other nodes.
+         * Animates `colorBlendFactor` only, leaving `color` unchanged, on an [SKSpriteNode] or
+         * [SKLabelNode]. No-op on other nodes.
          */
         public fun colorize(
             colorBlendFactor: Float,

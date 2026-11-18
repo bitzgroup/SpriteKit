@@ -27,6 +27,28 @@ public open class SKLabelNode(
     public var fontColor: Int = Color.WHITE
 
     /**
+     * The color [colorBlendFactor] tints the text with — Apple's `SKLabelNode.color`. Defaults to
+     * opaque white. Tints exactly as [SKSpriteNode.color] tints a texture: each pixel of the
+     * [fontColor] text is multiplied by this color (its alpha included), mixed in by
+     * [colorBlendFactor] — so white text with a red [color] at `1` draws red, but blue text draws
+     * black (verified on iOS/tvOS simulators). [SKAction.colorize] animates it.
+     */
+    public var color: Int = Color.WHITE
+
+    /**
+     * How much [color] tints the text, from `0` (the default: [fontColor] shows unmodified) to `1`;
+     * values outside `0..1` are clamped. See [color].
+     */
+    public var colorBlendFactor: Float = 0f
+
+    /**
+     * Apple's `SKLabelNode.blendMode`, defaulting to [SKBlendMode.Alpha]. Kept for API parity only:
+     * Apple draws labels with alpha blending whatever this is set to (verified on iOS/tvOS
+     * simulators, tinted or not), and so does this library.
+     */
+    public var blendMode: SKBlendMode = SKBlendMode.Alpha
+
+    /**
      * Where the text sits horizontally relative to [SKNode.position]. Defaults to
      * [SKLabelHorizontalAlignmentMode.Center].
      */

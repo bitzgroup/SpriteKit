@@ -352,6 +352,28 @@ class SKActionExecutionTest {
     }
 
     @Test
+    fun `colorize animates an SKLabelNode, as on Apple`() {
+        val label = SKLabelNode("M").apply { color = 0xFF000000.toInt() }
+        val state = SKActionState(SKAction.colorize(0xFFFFFFFF.toInt(), 1f, 2.seconds))
+
+        stepAction(state, label, 1.seconds)
+        assertEquals(0.5f, label.colorBlendFactor)
+        stepAction(state, label, 1.seconds)
+
+        assertEquals(0xFFFFFFFF.toInt(), label.color)
+        assertEquals(1f, label.colorBlendFactor)
+    }
+
+    @Test
+    fun `an SKLabelNode's color, colorBlendFactor and blendMode default as on Apple`() {
+        val label = SKLabelNode("M")
+
+        assertEquals(0xFFFFFFFF.toInt(), label.color)
+        assertEquals(0f, label.colorBlendFactor)
+        assertEquals(SKBlendMode.Alpha, label.blendMode)
+    }
+
+    @Test
     fun `customAction receives the raw elapsed time, not the eased progress`() {
         val node = SKNode()
         val observed = mutableListOf<Duration>()
