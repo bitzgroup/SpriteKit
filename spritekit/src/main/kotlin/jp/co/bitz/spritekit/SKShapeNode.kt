@@ -10,7 +10,7 @@ import android.graphics.RectF
  * fits the role well — see `docs/API_COMPATIBILITY.md`), triangulated for rendering via
  * [triangulateFill]/[triangulateStroke] once flattened by [flattenPath]. That triangulation is
  * cached per [triangulationCache] and only redone when [path] is reassigned to a new instance (or
- * the stroke style — [lineWidth], [lineCap], [lineJoin], [miterLimit] — changes) — see
+ * the stroke style — [lineWidth], [lineCap], [lineJoin], [miterLimit], [isAntialiased] — changes) — see
  * [triangulatedShape]'s KDoc for why this matters. Reassign [path] to
  * change a shape's geometry (`shape.path = newPath`); mutating the existing `Path` object in
  * place and keeping the same instance defeats this cache and renders stale geometry.
@@ -186,10 +186,12 @@ public open class SKShapeNode(
     public var glowWidth: Float = 0f
 
     /**
-     * Apple's `isAntialiased`, defaulting to `true`. On Apple it smooths the outline's edges (a
-     * fill's edges never are) and widens a drawn outline's frame by 0.85 points on each side
-     * (verified on iOS/tvOS simulators); here it does the latter, but outlines are drawn without
-     * antialiasing either way — see `docs/API_COMPATIBILITY.md`.
+     * Apple's `isAntialiased`, defaulting to `true`: smooths the outline's edges (a fill's edges
+     * never are) and widens a drawn outline's frame by 0.85 points on each side. As on Apple, each
+     * edge fades linearly over 1.7 screen pixels — from opaque 1.12 pixels inside it to clear 0.58
+     * outside — measured at the node's own scale, so scaling the node scales the fade too, and
+     * outlines thinner than about 2.4 pixels are drawn fainter and that wide (verified on iOS/tvOS
+     * simulators). See [triangulateAntialiasedStroke] and `docs/API_COMPATIBILITY.md`.
      */
     public var isAntialiased: Boolean = true
 

@@ -267,10 +267,18 @@ categories recur throughout and are called out once here rather than per item:
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
   blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13). It does
   widen the frame, as on Apple.
-- **`SKShapeNode` outlines aren't antialiased.** `isAntialiased` (default `true`) is accepted, and
-  as on Apple it widens a drawn outline's frame by 0.85 points a side, but the renderer draws
-  outlines with hard edges either way. Apple antialiases outlines only — never fills — when it's
-  `true` (recorded on iOS/tvOS simulators), so fills already match.
+- **`SKShapeNode.isAntialiased` outlines are antialiased the way Apple's are** (since 0.5.0;
+  before that every outline was drawn hard-edged). Recorded on iOS/tvOS simulators: each edge of
+  an outline fades linearly over 1.7 screen pixels, from opaque 1.12 pixels inside the edge to
+  clear 0.58 outside, around joins and caps too; fills are never antialiased. The fade is built
+  into the outline's geometry (a fringe with per-vertex alpha, no MSAA), sized in pixels at the
+  node's own scale of `1` (one pixel being `1 / density` points, Apple's `1 / contentScaleFactor`)
+  — so, as on Apple, scaling the node or the scene (its `scaleMode`) scales the fade with it, and a
+  scene drawn smaller than its size draws nearly hard edges. Outlines thinner than about 2.4
+  pixels are drawn fainter and that wide, approximating Apple's (whose thin-line profile differs
+  by up to about 0.2 in alpha per pixel). A bevel join's fade is slightly steeper across the
+  bevel than along the sides. `isAntialiased` also widens a drawn outline's frame by 0.85 points a
+  side, as on Apple.
 - **`SKShapeNode`'s frame includes a drawn outline**, as on Apple (since 0.5.0; before that it was
   the path's bounds only): when `lineWidth` is above `0` and `strokeColor` isn't fully
   transparent, the outline's segments and caps at `lineWidth + 2 × glowWidth` (plus the
