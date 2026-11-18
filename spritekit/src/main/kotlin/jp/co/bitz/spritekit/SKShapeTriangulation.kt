@@ -1,12 +1,6 @@
 package jp.co.bitz.spritekit
 
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.ceil
-import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.sin
 
 /**
  * Triangulates [contour] (a simple, non-self-intersecting polygon, either winding order) via
@@ -96,10 +90,10 @@ internal fun triangulateStroke(
 internal const val DEFAULT_MITER_LIMIT: Float = 10f
 
 /** Segments used to approximate a half circle for round caps/joins. */
-private const val ROUND_SEGMENTS_PER_HALF_CIRCLE = 8
+internal const val ROUND_SEGMENTS_PER_HALF_CIRCLE = 8
 
 /** The unit vector 90° counter-clockwise from [direction] (zero if [direction] is zero). */
-private fun leftNormal(direction: Vector2): Vector2 {
+internal fun leftNormal(direction: Vector2): Vector2 {
     val length = hypot(direction.x, direction.y)
     return if (length == 0f) Vector2.Zero else Vector2(-direction.y / length, direction.x / length)
 }
@@ -170,8 +164,7 @@ private fun addCap(
 
 /**
  * A triangle fan around [center] covering the arc of radius [radius] from unit direction [from]
- * to [to] — the shorter way round, or (for a half circle, where both ways are equally short) the
- * way passing [through].
+ * to [to] — see [arcDirections] for which way round.
  */
 @Suppress("LongParameterList")
 private fun addArcFan(
@@ -182,28 +175,13 @@ private fun addArcFan(
     radius: Float,
     through: Vector2? = null,
 ) {
-    val start = atan2(from.y, from.x)
-    var sweep = atan2(to.y, to.x) - start
-    if (through != null) {
-        // Pick the direction whose midpoint lies along [through].
-        val ccw = if (sweep > 0f) sweep else sweep + 2f * PI.toFloat()
-        val mid = start + ccw / 2f
-        sweep = if (Vector2(cos(mid), sin(mid)) dot through >= 0f) ccw else ccw - 2f * PI.toFloat()
-    } else {
-        while (sweep > PI.toFloat()) sweep -= 2f * PI.toFloat()
-        while (sweep < -PI.toFloat()) sweep += 2f * PI.toFloat()
-    }
-    val steps = maxOf(1, ceil(abs(sweep) / PI.toFloat() * ROUND_SEGMENTS_PER_HALF_CIRCLE).toInt())
-    var previous = center + Vector2(cos(start), sin(start)) * radius
-    for (step in 1..steps) {
-        val angle = start + sweep * step / steps
-        val point = center + Vector2(cos(angle), sin(angle)) * radius
-        triangles += listOf(center, previous, point)
-        previous = point
+    val directions = arcDirections(from, to, through)
+    for (i in 0 until directions.size - 1) {
+        triangles += listOf(center, center + directions[i] * radius, center + directions[i + 1] * radius)
     }
 }
 
-private fun dedupeConsecutivePoints(points: List<Vector2>): List<Vector2> =
+internal fun dedupeConsecutivePoints(points: List<Vector2>): List<Vector2> =
     points.filterIndexed { i, point -> i == 0 || point != points[i - 1] }
 
 private fun findEar(polygon: List<Vector2>): Int {
@@ -243,7 +221,7 @@ private fun pointInTriangle(
     return !(hasNegative && hasPositive)
 }
 
-private fun cross(
+internal fun cross(
     a: Vector2,
     b: Vector2,
 ): Float = a.x * b.y - a.y * b.x
@@ -258,5 +236,5 @@ private fun signedArea(polygon: List<Vector2>): Float {
     return sum / 2f
 }
 
-private fun dedupeClosingPoint(contour: List<Vector2>): List<Vector2> =
+internal fun dedupeClosingPoint(contour: List<Vector2>): List<Vector2> =
     if (contour.size > 1 && contour.first() == contour.last()) contour.dropLast(1) else contour

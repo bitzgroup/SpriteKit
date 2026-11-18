@@ -5,12 +5,14 @@ import kotlin.math.sin
 
 /**
  * A single rendered vertex: [position] already in the presenting [SKScene]'s (or, if one is set,
- * [SKScene.camera]'s) coordinate space, plus texture coordinates.
+ * [SKScene.camera]'s) coordinate space, plus texture coordinates and an [alpha] multiplier on top
+ * of its command's color (below `1` only across an antialiased [SKShapeNode] outline's fringe).
  */
 internal data class SKRenderVertex(
     val position: Vector2,
     val u: Float,
     val v: Float,
+    val alpha: Float = 1f,
 )
 
 /** A vertex color multiplier, each channel normalized `0..1`. Not part of the public API. */
@@ -62,9 +64,14 @@ internal data class SKRenderCommand(
  * non-empty [SKLabelNode.text] or an [SKShapeNode] with a non-null [SKShapeNode.path] — both
  * touch Android APIs ([renderLabelBitmap]'s `Paint`/`Canvas`, [flattenPath]'s `PathMeasure`) that
  * aren't safe to call from plain JVM unit tests; see `docs/ROADMAP.md`'s testing notes.
+ *
+ * [pixelSize] is one screen pixel in points (`1 / density`), which antialiased [SKShapeNode]
+ * outlines size their fade by; `0` draws every outline hard-edged.
  */
-internal fun buildRenderCommands(scene: SKScene): List<SKRenderCommand> =
-    SKRenderCommandCollector(scene.camera ?: scene).collect(scene)
+internal fun buildRenderCommands(
+    scene: SKScene,
+    pixelSize: Float = 0f,
+): List<SKRenderCommand> = SKRenderCommandCollector(scene.camera ?: scene, pixelSize).collect(scene)
 
 /**
  * Everything a leaf node needs to build its [SKRenderCommand]: where it's drawn relative to,
@@ -72,6 +79,7 @@ internal fun buildRenderCommands(scene: SKScene): List<SKRenderCommand> =
  * [SKNode.zPosition] plus every ancestor's), used as the sort key instead of the node's own raw
  * value so a container's zPosition lifts its whole subtree, matching Apple.
  */
+@Suppress("LongParameterList")
 private class RenderContext(
     val referenceNode: SKNode,
     val clipRect: Rect?,
@@ -79,6 +87,7 @@ private class RenderContext(
     val zPosition: Float,
     val worldVersion: Long,
     val referenceVersion: Long,
+    val pixelSize: Float,
 )
 
 /**
@@ -87,6 +96,7 @@ private class RenderContext(
  */
 private class SKRenderCommandCollector(
     private val referenceNode: SKNode,
+    private val pixelSize: Float,
 ) {
     private val commands = mutableListOf<Pair<SKRenderCommand, Pair<Float, Int>>>()
     private var order = 0
@@ -147,7 +157,8 @@ private class SKRenderCommandCollector(
         // rendered a second time as ordinary content.
         val isCropMask = (node.parent as? SKCropNode)?.maskNode === node
         if (!isCropMask && !hidden && alpha > 0f) {
-            val context = RenderContext(referenceNode, clip.rect, ::add, zPosition, worldVersion, referenceVersion)
+            val context =
+                RenderContext(referenceNode, clip.rect, ::add, zPosition, worldVersion, referenceVersion, pixelSize)
             addCommand(node, context, alpha)
         }
         for (child in node.children) visit(child, alpha, hidden, clip.rect, zPosition, worldVersion)
@@ -288,7 +299,7 @@ private fun addShapeCommands(
     // is cached the same way (`worldVertices`): most shapes on a mostly-static scene haven't
     // actually moved on any given frame, and `SKNode.worldTransformVersion` tells us so without
     // redoing the conversion to find out.
-    val shape = triangulatedShape(node, path)
+    val shape = triangulatedShape(node, path, context.pixelSize)
     val worldVertices = worldVertices(node, shape, context)
     for (index in shape.fillRanges.indices) {
         if (fillAlpha > 0f) {
@@ -342,7 +353,10 @@ private fun worldVertices(
     val cached = node.worldVerticesCache
     if (cached != null && cached.isFresh(shape, context)) return cached.vertices
 
-    val fresh = node.convertAllTo(shape.allLocalVertices, context.referenceNode).map { SKRenderVertex(it, 0f, 0f) }
+    val fresh =
+        node.convertAllTo(shape.allLocalVertices, context.referenceNode).mapIndexed { index, position ->
+            SKRenderVertex(position, 0f, 0f, shape.vertexAlphas[index])
+        }
     node.worldVerticesCache =
         SKShapeWorldVerticesCache(shape, context.referenceNode, context.referenceVersion, context.worldVersion, fresh)
     return fresh

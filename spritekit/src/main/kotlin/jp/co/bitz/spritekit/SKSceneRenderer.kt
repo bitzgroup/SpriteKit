@@ -81,7 +81,8 @@ internal class SKSceneRenderer {
      * [viewHeight]) at [viewportOffset], each vertex's alpha additionally scaled by [globalAlpha],
      * and — if set — every command further clipped to [outerClip] (in the same space as
      * [SKRenderCommand.clipRect], intersected with each command's own). [allowsTransparency] keeps
-     * the background's alpha (see [SKView.allowsTransparency]).
+     * the background's alpha (see [SKView.allowsTransparency]). [pixelSize] is passed to
+     * [buildRenderCommands].
      */
     @Suppress("LongParameterList")
     fun draw(
@@ -95,6 +96,7 @@ internal class SKSceneRenderer {
         clearFirst: Boolean = true,
         outerClip: Rect? = null,
         allowsTransparency: Boolean = false,
+        pixelSize: Float = 0f,
     ) {
         val projection =
             computeSceneProjection(
@@ -116,7 +118,7 @@ internal class SKSceneRenderer {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         }
 
-        val commands = buildRenderCommands(scene)
+        val commands = buildRenderCommands(scene, pixelSize)
         if (commands.isEmpty()) return
 
         GLES20.glEnable(GLES20.GL_BLEND)
@@ -398,7 +400,9 @@ private fun appendCommand(
     for (vertex in command.vertices) {
         buffer.put(vertex.position.x).put(vertex.position.y)
         buffer.put(vertex.u).put(vertex.v)
-        buffer.put(command.color.r).put(command.color.g).put(command.color.b).put(command.color.a * globalAlpha)
+        buffer.put(
+            command.color.r,
+        ).put(command.color.g).put(command.color.b).put(command.color.a * vertex.alpha * globalAlpha)
     }
 }
 

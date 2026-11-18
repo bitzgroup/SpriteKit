@@ -443,6 +443,7 @@ public class SKView
                     viewHeight,
                     resourceRegistry,
                     allowsTransparency = renderTransparently,
+                    pixelSize = 1f / density,
                 )
             } else {
                 GLES20.glClearColor(0f, 0f, 0f, if (renderTransparently) 0f else 1f)
@@ -483,6 +484,7 @@ public class SKView
                     clearFirst = layer.clearFirst,
                     outerClip = splitClip(layer.split, fromScene),
                     allowsTransparency = renderTransparently,
+                    pixelSize = 1f / density,
                 )
             }
         }
