@@ -88,24 +88,51 @@ class SKRenderCommandListTest {
     }
 
     @Test
-    fun `colorBlendFactor of zero leaves the vertex color multiplier at white`() {
+    fun `an untextured sprite draws in its color whatever its colorBlendFactor`() {
         val scene = SKScene(size = Vector2(100f, 100f))
-        scene.addChild(SKSpriteNode(size = Vector2(4f, 2f), color = 0xFF00FF00.toInt()).apply { colorBlendFactor = 0f })
+        scene.addChild(SKSpriteNode(size = Vector2(4f, 2f), color = 0x8000FF00.toInt()).apply { colorBlendFactor = 0f })
 
         val color = buildRenderCommands(scene).single().color
 
-        assertEquals(SKVertexColor(1f, 1f, 1f, 1f), color)
+        assertEquals(SKVertexColor(0f, 1f, 0f, 128f / 255f), color)
     }
 
     @Test
-    fun `colorBlendFactor of one fully replaces the vertex color multiplier with the sprite's color`() {
-        val scene = SKScene(size = Vector2(100f, 100f))
-        scene.addChild(SKSpriteNode(size = Vector2(4f, 2f), color = 0xFF00FF00.toInt()).apply { colorBlendFactor = 1f })
-
-        val color = buildRenderCommands(scene).single().color
-
-        assertEquals(SKVertexColor(0f, 1f, 0f, 1f), color)
+    fun `a colorBlendFactor of zero leaves the tint at white`() {
+        assertEquals(SKVertexColor(1f, 1f, 1f, 1f), tintedVertexColor(0x8000FF00.toInt(), 0f, 1f, tintsAlpha = true))
     }
+
+    @Test
+    fun `a colorBlendFactor of one multiplies by the color, its alpha included`() {
+        assertEquals(
+            SKVertexColor(0f, 1f, 0f, 0.25f),
+            tintedVertexColor(0x8000FF00.toInt(), 1f, 0.5f, tintsAlpha = true).let { it.copy(a = round2(it.a)) },
+        )
+    }
+
+    @Test
+    fun `a colorBlendFactor in between mixes the color in, as Apple does`() {
+        // Apple: white text, color (1, 0, 0, 0.5), factor 0.5 -> premultiplied (191, 95, 95, 191)
+        val tint = tintedVertexColor(0x80FF0000.toInt(), 0.5f, 1f, tintsAlpha = true)
+
+        assertEquals(1f, tint.r)
+        assertEquals(0.5f, tint.g)
+        assertEquals(0.5f, tint.b)
+        assertEquals(0.75f, round2(tint.a))
+    }
+
+    @Test
+    fun `a colorBlendFactor outside zero to one is clamped`() {
+        assertEquals(tintedVertexColor(0xFFFF0000.toInt(), 1f, 1f), tintedVertexColor(0xFFFF0000.toInt(), 2f, 1f))
+        assertEquals(SKVertexColor(1f, 1f, 1f, 1f), tintedVertexColor(0xFFFF0000.toInt(), -1f, 1f))
+    }
+
+    @Test
+    fun `without tintsAlpha the color's alpha is ignored, as for particles`() {
+        assertEquals(1f, tintedVertexColor(0x00FF0000, 1f, 1f).a)
+    }
+
+    private fun round2(value: Float): Float = kotlin.math.round(value * 100f) / 100f
 
     @Test
     fun `commands are sorted by zPosition ascending`() {

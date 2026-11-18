@@ -79,8 +79,9 @@ public open class SKSpriteNode(
 
     /**
      * How much [color] tints [texture]'s own colors, from `0` (texture shows through unmodified,
-     * the default) to `1` (fully replaced by [color]). Untextured sprites always render as a
-     * solid [color] rectangle regardless of this value.
+     * the default) to `1` (each pixel multiplied by [color], its alpha included); values outside
+     * `0..1` are clamped. An untextured sprite always draws as a solid [color] rectangle (alpha
+     * included) whatever this value is, as on Apple (verified on iOS/tvOS simulators).
      */
     public var colorBlendFactor: Float = 0f
 

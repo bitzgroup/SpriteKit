@@ -282,6 +282,9 @@ categories recur throughout and are called out once here rather than per item:
   (Android's closest match for Helvetica). Android family names (`"sans-serif-medium"`) also work.
   Exact weights need API 28; below that, weights of 600 and up render bold. (Previously the whole
   name went to `Typeface.create(name, NORMAL)`, so `"Helvetica-Bold"` silently rendered regular.)
+- **`SKLabelNode.blendMode` is accepted but has no effect**, as on Apple: recorded on iOS/tvOS
+  simulators, a label alpha-blends whatever its `blendMode` (even when `colorBlendFactor` tints
+  it). `color`/`colorBlendFactor` tint the text exactly as they tint a sprite's texture.
 - **Multi-line labels (`numberOfLines`, `preferredMaxLayoutWidth`, `lineBreakMode`) are laid out
   by `android.text.StaticLayout`** (since 0.4.0; before that, labels were single-line only). The
   rules match Apple's, as recorded on iOS/tvOS simulators: `numberOfLines = 1` (the default)
@@ -325,9 +328,9 @@ categories recur throughout and are called out once here rather than per item:
   `group` always hands zero leftover time to whatever runs next, even if its children actually
   finished partway through the available frame time — contract-conformant for "did the group
   finish," not bit-identical to Apple's own (undocumented) internal timing.
-- **`resizeTo`/`resizeBy`/`colorize`/`animate` are no-ops on any node that isn't an
-  `SKSpriteNode`** (the only node type with a mutable `size`/`color`/`colorBlendFactor`/
-  `texture`), same as their underlying properties.
+- **`resizeTo`/`resizeBy`/`animate` are no-ops on any node that isn't an `SKSpriteNode`**, and
+  `colorize` on any node that isn't an `SKSpriteNode` or `SKLabelNode` (the node types with a
+  mutable `size`/`texture`, or `color`/`colorBlendFactor`), same as their underlying properties.
 - **`customAction`'s block receives raw elapsed time** (`0` to the action's duration), not eased
   by `timingMode`/`timingFunction` — matches Apple's own documented behavior.
 - **`follow` only follows a path's first contour** (via `android.graphics.PathMeasure`); a
