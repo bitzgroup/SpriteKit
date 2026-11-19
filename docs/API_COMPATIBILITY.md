@@ -32,7 +32,8 @@ categories recur throughout and are called out once here rather than per item:
   for `SKShapeNode`'s `path`, rather than introducing a parallel path type).
 - **No `NSPredicate`/`NSCopying`/`NSCoding` equivalents.** Anywhere SpriteKit's API would take one
   of these, this library takes a plain Kotlin lambda or Kotlin-native replacement instead — same
-  approach as GameplayKit's `GKRule`/`GKGameModel.copy()`.
+  approach as GameplayKit's `GKRule`/`GKGameModel.copy()`. The one exception is nodes: `SKNode`
+  and every node class have an explicit `copy()` (see "Scene graph").
 - **Property syntax over getter/setter methods**, named/default arguments, data/sealed classes, and
   extension functions are used where they fit naturally; class/member names still follow
   SpriteKit's naming (`SKNode`, `SKAction`, `SKPhysicsBody`, ...) for discoverability.
@@ -61,6 +62,19 @@ categories recur throughout and are called out once here rather than per item:
   It must be set before the view is attached to a window. See `docs/PARITY_GAP_PLAN.md` section 2.9.
 
 ## Scene graph (`SKNode`, `SKScene`)
+
+- **`SKNode.copy()` is an `open fun` each node class overrides**, returning its own type, rather
+  than `NSCopying`. What it copies follows Apple's, as recorded on iOS/tvOS simulators: a deep copy
+  of the subtree with no parent; a new physics body (same settings and velocity) and a new
+  `userData` map holding the same values; constraints, textures and shaders shared; running
+  actions copied under their keys, starting over; a copied scene's camera and a crop node's mask
+  that is also a descendant pointing at their copies; a scene's delegate and contact delegate not
+  copied. An emitter's copy starts with no particles; a tile map's keeps its tiles. Apple archives
+  the node through `NSCoding`, which keeps a subclass's class but drops its own stored
+  properties; here **a subclass of your own is copied as the nearest library class unless it
+  overrides `copy()`**, which it does with `copyInto(MyNode())`, copying its own properties after —
+  so, unlike on Apple, it can keep them. A subclass that overrides `copyState` should check the
+  target's type, since a subclass of it that doesn't override `copy()` hands it a superclass instance.
 
 - **`convertTo`/`convertFrom` instead of `convert(_:to:)`/`convert(_:from:)`.** Swift argument
   labels aren't significant for Kotlin overload resolution, so both would collide as a single

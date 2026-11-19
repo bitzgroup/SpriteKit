@@ -14,7 +14,9 @@ complexity:
     # Apple's SKNode inherits (touches* and presses*), which must stay overridable members, and
     # child-list members (addChild/insertChild/...) that need its private child list. Functions
     # that only use public API live in extension files (SKNodeHierarchy.kt, SKNodePointQueries.kt).
-    thresholdInClasses: 36
+    # copy()/copyInto/copyState are members too: every node class overrides them, and they copy
+    # SKNode's private running-action and child lists.
+    thresholdInClasses: 38
     # SKAction's companion mirrors SpriteKit's own SKAction factory API 1:1 (moves, scales,
     # rotations, resizes, fades, textures, speed, audio, path-following, composition, ...) — a
     # deliberate, cohesive API surface, not poor organization (same rationale GameplayKit-for-

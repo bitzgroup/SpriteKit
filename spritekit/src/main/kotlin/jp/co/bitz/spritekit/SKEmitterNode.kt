@@ -138,6 +138,48 @@ public class SKEmitterNode : SKNode() {
      */
     public var fieldBitMask: Int = 0
 
+    /**
+     * A copy with the same settings, starting with no particles — see [SKNode.copy].
+     */
+    override fun copy(): SKEmitterNode = copyInto(SKEmitterNode())
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKEmitterNode) return
+        target.particleTexture = particleTexture
+        target.particleSize = particleSize
+        target.particleBirthRate = particleBirthRate
+        target.numParticlesToEmit = numParticlesToEmit
+        target.particleLifetime = particleLifetime
+        target.particleLifetimeRange = particleLifetimeRange
+        target.particlePositionRange = particlePositionRange
+        target.particleSpeed = particleSpeed
+        target.particleSpeedRange = particleSpeedRange
+        target.emissionAngle = emissionAngle
+        target.emissionAngleRange = emissionAngleRange
+        target.xAcceleration = xAcceleration
+        target.yAcceleration = yAcceleration
+        target.particleAlpha = particleAlpha
+        target.particleAlphaRange = particleAlphaRange
+        target.particleAlphaSpeed = particleAlphaSpeed
+        target.particleScale = particleScale
+        target.particleScaleRange = particleScaleRange
+        target.particleScaleSpeed = particleScaleSpeed
+        target.particleRotation = particleRotation
+        target.particleRotationRange = particleRotationRange
+        target.particleRotationSpeed = particleRotationSpeed
+        target.particleColor = particleColor
+        target.particleColorBlendFactor = particleColorBlendFactor
+        target.particleColorBlendFactorRange = particleColorBlendFactorRange
+        target.particleColorBlendFactorSpeed = particleColorBlendFactorSpeed
+        target.particleColorSequence = particleColorSequence
+        target.particleBlendMode = particleBlendMode
+        target.particleZPosition = particleZPosition
+        target.particleZPositionRange = particleZPositionRange
+        target.particleZPositionSpeed = particleZPositionSpeed
+        target.fieldBitMask = fieldBitMask
+    }
+
     internal val particles: MutableList<SKParticle> = mutableListOf()
     internal var emissionAccumulator: Float = 0f
     internal var totalEmitted: Int = 0

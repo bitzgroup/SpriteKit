@@ -138,6 +138,18 @@ public class SKTileMapNode(
     /** This map's own animation clock, advanced by `stepTileMaps` -- see `SKTileMapSimulation.kt`. */
     internal var elapsedTime: Duration = Duration.ZERO
 
+    /** A copy with the same tiles — see [SKNode.copy]. */
+    override fun copy(): SKTileMapNode = copyInto(SKTileMapNode(tileSet, numberOfColumns, numberOfRows, tileSize))
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKTileMapNode) return
+        target.anchorPoint = anchorPoint
+        target.enableAutomapping = enableAutomapping
+        groups.copyInto(target.groups)
+        definitions.copyInto(target.definitions)
+    }
+
     init {
         if (fillWith != null) {
             for (row in 0 until numberOfRows) {

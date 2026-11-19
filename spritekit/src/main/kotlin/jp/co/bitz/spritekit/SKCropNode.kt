@@ -15,4 +15,13 @@ package jp.co.bitz.spritekit
  */
 public open class SKCropNode(
     public var maskNode: SKNode? = null,
-) : SKNode()
+) : SKNode() {
+    /** A copy whose [maskNode] is copied too — see [SKNode.copy]. */
+    override fun copy(): SKCropNode = copyInto(SKCropNode())
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKCropNode) return
+        target.maskNode = maskNode?.copy()
+    }
+}

@@ -207,6 +207,25 @@ public open class SKShapeNode(
     public val lineLength: Float
         get() = path?.let { flattenPath(it).sumOf { contour -> contourLength(contour).toDouble() }.toFloat() } ?: 0f
 
+    /** A copy with its own copy of [path] — see [SKNode.copy]. */
+    override fun copy(): SKShapeNode = copyInto(SKShapeNode())
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKShapeNode) return
+        target.path = path?.let(::Path)
+        target.strokeColor = strokeColor
+        target.fillColor = fillColor
+        target.fillTexture = fillTexture
+        target.lineWidth = lineWidth
+        target.lineCap = lineCap
+        target.lineJoin = lineJoin
+        target.miterLimit = miterLimit
+        target.glowWidth = glowWidth
+        target.isAntialiased = isAntialiased
+        target.blendMode = blendMode
+    }
+
     /**
      * Render-thread-confined cache of this shape's flattened-and-triangulated geometry, keyed by
      * the exact [path] instance and stroke style it was computed from — see

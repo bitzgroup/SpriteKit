@@ -23,7 +23,8 @@ rather than a literal Obj-C/Swift-to-Kotlin transliteration — the same princip
   `kotlin.time.Duration` where the API takes a duration rather than an absolute timestamp.
 - Prefer Kotlin constructs where they fit naturally: data classes, sealed classes/interfaces,
   extension functions, named/default arguments, property syntax over getter/setter methods.
-- No `NSPredicate`/`NSCopying`/`NSCoding` equivalents — see `docs/API_COMPATIBILITY.md`.
+- No `NSPredicate`/`NSCopying`/`NSCoding` equivalents (nodes alone have an explicit `copy()`) — see
+  `docs/API_COMPATIBILITY.md`.
 - Class/member names follow SpriteKit naming (e.g. `SKNode`, `SKAction`, `SKPhysicsBody`) for
   discoverability by developers coming from Apple's docs; internals and supporting APIs use
   standard Kotlin conventions.

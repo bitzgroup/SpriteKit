@@ -11,6 +11,8 @@ package jp.co.bitz.spritekit
  * that the camera be part of the presented scene.
  */
 public open class SKCameraNode : SKNode() {
+    override fun copy(): SKCameraNode = copyInto(SKCameraNode())
+
     /**
      * Whether [node] is within this camera's current viewport (approximated as [SKScene.size]
      * centered on this camera's own position — [SKScene.anchorPoint] plays no role once a camera

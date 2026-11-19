@@ -78,7 +78,7 @@ Priorities:
 | ~~N1~~ | ~~`insertChild(_:at:)`, `removeChildren(in:)`, `move(toParent:)`, `inParentHierarchy(_:)`~~ | **Done**, verified on iOS/tvOS simulators. Apple's `move(toParent:)` keeps only the *position* in place — rotation and scale keep their local values — so that is what `moveToParent` does. | P1 |
 | ~~N2~~ | ~~`SKNode.speed`~~ | **Done**, verified on iOS/tvOS simulators (inherited multiplicatively; `0` stops actions without removing them). | P1 |
 | ~~N3~~ | ~~`childNode(withName:)` search syntax (`//`, `/`, `..`, `*`, `[a-z]`), `subscript(_:)`~~ | **Done**, including Apple's result order (`//` lists a node's children before searching deeper), verified on iOS/tvOS simulators. `subscript` is the `get` operator. | P1 |
-| N4 | `copy()` | Deliberately excluded with `NSCopying`, but node copying (stamping out configured prototypes) is common SpriteKit usage. Reconsider as an explicit `open fun copy(): SKNode` per node class. | P2 |
+| ~~N4~~ | ~~`copy()`~~ | **Done** as an `open fun copy()` per node class (no general `NSCopying`), verified on iOS/tvOS simulators: a deep copy, detached; a new physics body and `userData` map, shared constraints and textures; running actions start over; references within the copy (a scene's camera, a crop node's mask) point at the copies. A subclass of your own overrides `copy()` via `copyInto` to keep its class. | P2 |
 | N5 | `SKReachConstraints`, `SKNode.reachConstraints`, `SKAction.reach(to:…)` | Inverse kinematics. | P3 |
 
 ### 2.4 Sprites, textures, shapes, labels
@@ -214,7 +214,8 @@ ordinary SpriteKit port will reach for next.
 
 - `SKAction.run(_:onChildWithName:)` is implemented but still listed under ROADMAP's "Explicitly
   Out of Scope"; remove it from that list.
-- `SKNode.copy()`: revisit the blanket "no `NSCopying`" rule for nodes specifically (N4).
+- ~~`SKNode.copy()`: revisit the blanket "no `NSCopying`" rule for nodes specifically (N4).~~ Done:
+  nodes have `copy()`; the general rule stays.
 - Add `SKTransformNode`, `SK3DNode`, `SKRenderer`, `SKMutableTexture`, `SKReachConstraints` to
   `API_COMPATIBILITY.md`'s "Not implemented" list so that their absence is at least recorded.
 
