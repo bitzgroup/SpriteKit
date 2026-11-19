@@ -114,6 +114,26 @@ public open class SKLabelNode(
         this.attributedText = attributedText
     }
 
+    override fun copy(): SKLabelNode = copyInto(SKLabelNode())
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKLabelNode) return
+        target.text = text
+        target.attributedText = attributedText
+        target.fontName = fontName
+        target.fontSize = fontSize
+        target.fontColor = fontColor
+        target.color = color
+        target.colorBlendFactor = colorBlendFactor
+        target.blendMode = blendMode
+        target.horizontalAlignmentMode = horizontalAlignmentMode
+        target.verticalAlignmentMode = verticalAlignmentMode
+        target.numberOfLines = numberOfLines
+        target.preferredMaxLayoutWidth = preferredMaxLayoutWidth
+        target.lineBreakMode = lineBreakMode
+    }
+
     private var cacheKey: SKLabelCacheKey? = null
     private var cachedTexture: SKTexture? = null
     private var cachedMetrics: SKLabelMetrics? = null

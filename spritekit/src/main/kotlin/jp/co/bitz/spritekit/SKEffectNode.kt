@@ -12,6 +12,16 @@ package jp.co.bitz.spritekit
  * isn't worth the churn unless a real filter/offscreen-rendering pipeline lands later.
  */
 public open class SKEffectNode : SKNode() {
+    override fun copy(): SKEffectNode = copyInto(SKEffectNode())
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKEffectNode) return
+        target.shouldEnableEffects = shouldEnableEffects
+        target.shouldRasterize = shouldRasterize
+        target.shouldCenterFilter = shouldCenterFilter
+    }
+
     /** Stored for API parity; no observable effect without a filter — see this class's KDoc. */
     public var shouldEnableEffects: Boolean = true
 

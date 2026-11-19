@@ -60,6 +60,20 @@ public class SKFieldNode private constructor(
      */
     public var direction: Vector2 = Vector2.Zero
 
+    override fun copy(): SKFieldNode = copyInto(SKFieldNode(kind))
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKFieldNode) return
+        target.strength = strength
+        target.falloff = falloff
+        target.minimumRadius = minimumRadius
+        target.isEnabled = isEnabled
+        target.isExclusive = isExclusive
+        target.categoryBitMask = categoryBitMask
+        target.direction = direction
+    }
+
     public companion object {
         /** A field that accelerates bodies towards (or, with negative [strength], away from) this node's position. */
         public fun radialGravityField(): SKFieldNode = SKFieldNode(SKFieldKind.RadialGravity)

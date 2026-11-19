@@ -24,6 +24,21 @@ public open class SKSpriteNode(
      */
     public constructor(imageNamed: String) : this(SKTexture(imageNamed))
 
+    override fun copy(): SKSpriteNode = copyInto(SKSpriteNode())
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKSpriteNode) return
+        target.texture = texture
+        target.color = color
+        target.unscaledSize = unscaledSize
+        target.centerRect = centerRect
+        target.colorBlendFactor = colorBlendFactor
+        target.blendMode = blendMode
+        target.shader = shader
+        target.anchorPoint = anchorPoint
+    }
+
     /** The sprite's size before [xScale]/[yScale] apply — what it draws in its own local space. */
     internal var unscaledSize: Vector2 = size
 

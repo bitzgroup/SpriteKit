@@ -296,6 +296,65 @@ public open class SKNode {
         runningActions += SKRunningAction(withKey, SKActionState(action), null)
     }
 
+    /**
+     * A copy of this node and everything below it, detached from any parent — Apple's `copy()`, the
+     * way to stamp out a configured prototype. As on Apple (verified on iOS/tvOS simulators):
+     * - every property is copied, and every child is copied the same way, all the way down;
+     * - the [physicsBody] is a new body with the same settings and velocity, attached to the copy;
+     * - [userData] is a new map holding the same values;
+     * - running actions are copied under their keys but start over, from the copy's current state;
+     * - [constraints], textures and shaders are shared, not copied;
+     * - references within the copied subtree point at the copies: a copied scene's
+     *   [SKScene.camera] is the copy of its camera node, a crop node's mask that is also one of its
+     *   descendants is that descendant's copy.
+     *
+     * Each node class overrides this to return its own type. **A subclass of your own** isn't
+     * copied as itself unless it overrides this too (Apple keeps the class, but still drops the
+     * subclass's own stored properties). Override it with [copyInto], passing a new instance, and
+     * copy your own properties after it:
+     *
+     * ```
+     * override fun copy(): Enemy = copyInto(Enemy()).also { it.hitPoints = hitPoints }
+     * ```
+     */
+    public open fun copy(): SKNode = copyInto(SKNode())
+
+    /**
+     * Copies this node's state into [target] — a new instance of this node's own class, from a
+     * [copy] override — then copies this node's children into it, and returns [target]. See [copy].
+     */
+    protected fun <T : SKNode> copyInto(target: T): T {
+        copyState(target)
+        for (child in mutableChildren) target.addChild(child.copy())
+        linkCopiedReferences(this, target)
+        return target
+    }
+
+    /**
+     * Copies this class's own properties (not children) into [target]; each node class overrides
+     * it, calling `super` first. [target] is normally an instance of the same class, but can be of
+     * a superclass when a subclass didn't override [copy], so check its type before casting.
+     */
+    protected open fun copyState(target: SKNode) {
+        target.position = position
+        target.zPosition = zPosition
+        target.zRotation = zRotation
+        target.xScale = xScale
+        target.yScale = yScale
+        target.alpha = alpha
+        target.isHidden = isHidden
+        target.isPaused = isPaused
+        target.speed = speed
+        target.name = name
+        target.isUserInteractionEnabled = isUserInteractionEnabled
+        target.userData = userData?.toMutableMap()
+        target.physicsBody = physicsBody?.copyBody()
+        target.constraints = constraints?.toList()
+        runningActions.mapTo(
+            target.runningActions,
+        ) { SKRunningAction(it.key, SKActionState(it.state.action), it.completion) }
+    }
+
     /** The action currently running under [forKey], or `null` if none is. */
     public fun action(forKey: String): SKAction? = runningActions.firstOrNull { it.key == forKey }?.state?.action
 

@@ -52,6 +52,26 @@ public open class SKScene(
      */
     public var delegate: SKSceneDelegate? = null
 
+    /**
+     * A copy of this scene — see [SKNode.copy]. As on Apple (verified on iOS/tvOS simulators), it
+     * keeps [size], [scaleMode], [anchorPoint], [backgroundColor] and the physics world's gravity and
+     * speed, its [camera] is the copy of the camera node, and neither [delegate] nor the physics
+     * world's contact delegate is copied. A scene subclass is copied as itself only if it overrides
+     * this (see [SKNode.copy]).
+     */
+    override fun copy(): SKScene = copyInto(SKScene(size))
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKScene) return
+        target.size = size
+        target.scaleMode = scaleMode
+        target.anchorPoint = anchorPoint
+        target.backgroundColor = backgroundColor
+        target.physicsWorld.gravity = physicsWorld.gravity
+        target.physicsWorld.speed = physicsWorld.speed
+    }
+
     /** Whether [sceneDidLoad] has run — see [loadIfNeeded]. */
     private var loaded = false
 

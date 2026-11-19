@@ -35,6 +35,17 @@ public class SKAudioNode(
             handle?.setPlaybackRate(field)
         }
 
+    /** A copy of the same clip and settings, not yet playing — see [SKNode.copy]. */
+    override fun copy(): SKAudioNode = copyInto(SKAudioNode(fileNamed))
+
+    override fun copyState(target: SKNode) {
+        super.copyState(target)
+        if (target !is SKAudioNode) return
+        target.autoplayLooped = autoplayLooped
+        target.volume = volume
+        target.playbackRate = playbackRate
+    }
+
     /** Whether this clip is currently playing. */
     public val isPlaying: Boolean get() = handle?.isPlaying ?: false
 
