@@ -9,7 +9,7 @@ import android.util.Log
 import java.io.IOException
 
 /** The extensions tried, in order, for an image name given without one. */
-private val imageExtensions = listOf("png", "jpg", "jpeg", "webp")
+internal val imageExtensions: List<String> = listOf("png", "jpg", "jpeg", "webp")
 
 /** Apple's placeholder for a missing image is 128×128 points (verified on iOS/tvOS simulators). */
 internal const val MISSING_IMAGE_SIZE: Int = 128
@@ -45,7 +45,7 @@ internal fun loadNamedImage(name: String): Bitmap {
     return missingImagePlaceholder()
 }
 
-private fun missingImagePlaceholder(): Bitmap {
+internal fun missingImagePlaceholder(): Bitmap {
     val size = MISSING_IMAGE_SIZE.toFloat()
     val bitmap = Bitmap.createBitmap(MISSING_IMAGE_SIZE, MISSING_IMAGE_SIZE, Bitmap.Config.ARGB_8888)
     val paint =

@@ -86,7 +86,7 @@ Priorities:
 | # | Missing | Notes | Pri |
 | --- | --- | --- | --- |
 | ~~T1~~ | ~~`SKTexture(imageNamed:)`, `SKSpriteNode(imageNamed:)`~~ | **Done**, from `assets/`; a missing image gives Apple's 128×128 placeholder. The `Context` is captured at start-up by a manifest-merged `ContentProvider`, so textures load before any view exists. Drawable resources aren't searched. | P1 |
-| T2 | `SKTextureAtlas(named:)`, `SKTextureAtlas(dictionary:)`, `preload` / `SKTexture.preload` | `named:` can map to an `assets/<name>.atlas/` folder packed by the existing runtime packer. | P2 |
+| ~~T2~~ | ~~`SKTextureAtlas(named:)`, `SKTextureAtlas(dictionary:)`, `preload` / `SKTexture.preload`~~ | **Done**, verified on iOS/tvOS simulators: `named` packs an `assets/<name>.atlas/` folder at runtime; names keep their extensions and are found with or without one; an unknown name gives the 128×128 placeholder and a missing atlas is empty; preloads call back on a background thread. Recording it also fixed packed textures bleeding into each other when stretched: each image now gets a one-pixel border of its own edge pixels. `textureNamed` no longer returns `null`. | P2 |
 | T3 | `SKTexture.usesMipmaps`, `SKTexture(data:size:)`, `SKMutableTexture`, `SKTexture.generatingNormalMap`, noise-texture initializers | Normal maps only matter once lighting exists. | P3 |
 | ~~T4~~ | ~~`SKSpriteNode.centerRect`~~ | **Done**, verified by pixel probes on iOS/tvOS simulators: the border keeps its texture size on screen through `size` or scale. | P1 |
 | ~~T5~~ | ~~`SKSpriteNode.scale(to:)`~~ | **Done** as `scale(to)`. Recording it showed Apple's `SKSpriteNode.size` *includes* the scale, which this library's didn't — fixed along with it. | P1 |
