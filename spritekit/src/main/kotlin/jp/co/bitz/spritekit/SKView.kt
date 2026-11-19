@@ -156,6 +156,64 @@ public class SKView
                 applyFrameRate()
             }
 
+        /**
+         * Whether the view shows the frame rate at its bottom right — Apple's `showsFPS`, `false` by
+         * default. Like Apple's (verified on iOS/tvOS simulators), the statistics `showsFPS`,
+         * [showsNodeCount], [showsDrawCount] and [showsQuadCount] turn on share one line, in white
+         * 10-point monospaced text over a box of black at 30% opacity, 5 points in from the right
+         * edge and 2 points up from the bottom: `nodes:7 draws:3 quads:334  58.9 fps`. The rate is
+         * measured over half-second windows. Safe to set from any thread.
+         */
+        @Volatile
+        public var showsFPS: Boolean = false
+
+        /**
+         * Whether the view shows how many nodes its scene has — Apple's `showsNodeCount`, `false` by
+         * default: the scene itself and every node below it, hidden ones and plain [SKNode]s included
+         * (verified on iOS/tvOS simulators). See [showsFPS] for where it's drawn.
+         */
+        @Volatile
+        public var showsNodeCount: Boolean = false
+
+        /**
+         * Whether the view shows how many draw calls the last frame took — Apple's `showsDrawCount`,
+         * `false` by default. Counts this renderer's own OpenGL draw calls, which batch differently
+         * from Apple's Metal ones, so the number can differ from Apple's for the same scene. See
+         * [showsFPS] for where it's drawn.
+         */
+        @Volatile
+        public var showsDrawCount: Boolean = false
+
+        /**
+         * Whether the view shows how many quads the last frame drew — Apple's `showsQuadCount`,
+         * `false` by default. Counts this renderer's triangles in pairs, which tessellates shapes
+         * differently from Apple's, so the number can differ from Apple's for the same scene. See
+         * [showsFPS] for where it's drawn.
+         */
+        @Volatile
+        public var showsQuadCount: Boolean = false
+
+        /**
+         * Whether the view outlines every physics body — Apple's `showsPhysics`, `false` by default.
+         * Like Apple's (verified on iOS/tvOS simulators), each outline is a hard-edged line one screen
+         * pixel wide, whatever the scene's scale, in opaque (0.4, 0.8, 0.8), drawn above all of the
+         * scene's content. Safe to set from any thread.
+         */
+        @Volatile
+        public var showsPhysics: Boolean = false
+
+        /**
+         * Apple's `showsFields`, `false` by default. Accepted for source compatibility, but draws
+         * nothing yet: Apple's own field visualization draws broken on iOS/tvOS simulators, so there
+         * was no behavior to record and mirror (see `docs/API_COMPATIBILITY.md`).
+         */
+        @Volatile
+        public var showsFields: Boolean = false
+
+        /** Render-thread-confined: the statistics line's glyphs, and the frame-rate measurement. */
+        private val statisticsOverlay = SKStatisticsOverlay()
+        private val frameRateMeter = SKFrameRateMeter()
+
         // Display refreshes per frame for preferredFramesPerSecond; above 1, a Choreographer callback
         // requests each frame instead of rendering continuously.
         private var frameInterval = 1
@@ -434,9 +492,9 @@ public class SKView
          * [SKScene.backgroundColor] and draws its sprites (Phase 3). Falls back to a plain black
          * clear when no scene is presented yet.
          */
-        private fun renderFrame() {
+        private fun renderFrame(): SKRenderStatistics {
             val scene = currentScene
-            if (scene != null) {
+            return if (scene != null) {
                 sceneRenderer.draw(
                     scene,
                     viewWidth,
@@ -444,10 +502,12 @@ public class SKView
                     resourceRegistry,
                     allowsTransparency = renderTransparently,
                     pixelSize = 1f / density,
+                    showsPhysics = showsPhysics,
                 )
             } else {
                 GLES20.glClearColor(0f, 0f, 0f, if (renderTransparently) 0f else 1f)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                SKRenderStatistics.Zero
             }
         }
 
@@ -456,37 +516,54 @@ public class SKView
          * [renderFrame] once it's finished (or none is active). See `SKTransitionLayers.kt` for
          * the actual per-layer offset/alpha/clip math.
          */
-        private fun renderTransitionFrame(deltaTime: Duration) {
+        @Suppress("ReturnCount") // two fall-backs to a plain frame, then the transition itself
+        private fun renderTransitionFrame(deltaTime: Duration): SKRenderStatistics {
             val transition = transitionSpec
             val fromScene = transitionFromScene
             val toScene = currentScene
             if (transition == null || fromScene == null || toScene == null) {
-                renderFrame()
-                return
+                return renderFrame()
             }
             transitionElapsed += deltaTime
             if (transitionElapsed >= transition.duration) {
                 transitionSpec = null
                 transitionFromScene = null
-                renderFrame()
-                return
+                return renderFrame()
             }
             val progress = (transitionElapsed / transition.duration).toFloat()
+            var statistics = SKRenderStatistics.Zero
             for (layer in transitionLayers(transition, progress, viewWidth, viewHeight)) {
-                sceneRenderer.draw(
-                    scene = if (layer.useToScene) toScene else fromScene,
-                    viewWidth = viewWidth,
-                    viewHeight = viewHeight,
-                    resourceRegistry = resourceRegistry,
-                    viewportOffset = layer.viewportOffset,
-                    viewportSize = layer.viewportSize,
-                    globalAlpha = layer.alpha,
-                    clearFirst = layer.clearFirst,
-                    outerClip = splitClip(layer.split, fromScene),
-                    allowsTransparency = renderTransparently,
-                    pixelSize = 1f / density,
-                )
+                statistics +=
+                    sceneRenderer.draw(
+                        scene = if (layer.useToScene) toScene else fromScene,
+                        viewWidth = viewWidth,
+                        viewHeight = viewHeight,
+                        resourceRegistry = resourceRegistry,
+                        viewportOffset = layer.viewportOffset,
+                        viewportSize = layer.viewportSize,
+                        globalAlpha = layer.alpha,
+                        clearFirst = layer.clearFirst,
+                        outerClip = splitClip(layer.split, fromScene),
+                        allowsTransparency = renderTransparently,
+                        pixelSize = 1f / density,
+                        showsPhysics = showsPhysics,
+                    )
             }
+            return statistics
+        }
+
+        /** Draws the statistics line over the frame, if any statistic is shown. */
+        private fun renderStatistics(statistics: SKRenderStatistics) {
+            val selection = SKStatisticsSelection(showsFPS, showsNodeCount, showsDrawCount, showsQuadCount)
+            if (selection.isEmpty) return
+            val nodeCount = currentScene?.let(::skNodeCount) ?: 0
+            val text = skStatisticsText(selection, nodeCount, statistics, frameRateMeter.framesPerSecond) ?: return
+            sceneRenderer.drawOverlay(
+                statisticsOverlay.commands(text, viewWidth, density),
+                viewWidth,
+                viewHeight,
+                resourceRegistry,
+            )
         }
 
         /**
@@ -523,6 +600,7 @@ public class SKView
                 config: EGLConfig,
             ) {
                 clock.reset()
+                frameRateMeter.reset()
                 sceneRenderer.onSurfaceCreated()
                 resourceRegistry.reloadAll()
             }
@@ -540,7 +618,9 @@ public class SKView
             }
 
             override fun onDrawFrame(gl: GL10) {
-                val deltaTime = clock.tick(System.nanoTime())
+                val now = System.nanoTime()
+                val deltaTime = clock.tick(now)
+                frameRateMeter.tick(now)
                 val scene = currentScene
                 // Also covers a scene whose scaleMode was switched to `.resizeFill` after presenting.
                 scene?.let { syncResizeFillSize(it) }
@@ -555,10 +635,10 @@ public class SKView
                     stepEmitters(scene, deltaTime)
                     stepTileMaps(scene, deltaTime)
                     stepAudioNodes(scene)
-                    renderTransitionFrame(deltaTime)
+                    renderStatistics(renderTransitionFrame(deltaTime))
                     scene.dispatchDidFinishUpdate()
                 } else {
-                    renderTransitionFrame(deltaTime)
+                    renderStatistics(renderTransitionFrame(deltaTime))
                 }
             }
         }

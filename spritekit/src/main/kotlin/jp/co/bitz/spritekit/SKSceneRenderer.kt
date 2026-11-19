@@ -33,6 +33,7 @@ private const val FRAGMENT_SHADER_SOURCE = """
 
 private const val FLOATS_PER_VERTEX = 8 // position(2) + texCoord(2) + color(4)
 private const val BYTES_PER_FLOAT = 4
+private const val VERTICES_PER_QUAD = 6
 
 /**
  * Which linked GL program a run draws with, plus its attribute/uniform locations — the renderer's
@@ -82,7 +83,9 @@ internal class SKSceneRenderer {
      * and — if set — every command further clipped to [outerClip] (in the same space as
      * [SKRenderCommand.clipRect], intersected with each command's own). [allowsTransparency] keeps
      * the background's alpha (see [SKView.allowsTransparency]). [pixelSize] is passed to
-     * [buildRenderCommands].
+     * [buildRenderCommands]. [showsPhysics] draws every physics body's outline on top, one view
+     * pixel wide (see [physicsOutlineCommands]). Returns what the frame cost, for [SKView]'s
+     * statistics overlay.
      */
     @Suppress("LongParameterList")
     fun draw(
@@ -97,7 +100,8 @@ internal class SKSceneRenderer {
         outerClip: Rect? = null,
         allowsTransparency: Boolean = false,
         pixelSize: Float = 0f,
-    ) {
+        showsPhysics: Boolean = false,
+    ): SKRenderStatistics {
         val projection =
             computeSceneProjection(
                 scene.size,
@@ -118,20 +122,58 @@ internal class SKSceneRenderer {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         }
 
-        val commands = buildRenderCommands(scene, pixelSize)
-        if (commands.isEmpty()) return
+        var commands = buildRenderCommands(scene, pixelSize)
+        if (showsPhysics) {
+            val unitsPerPixel = (projection.right - projection.left) / size.x
+            commands = commands + physicsOutlineCommands(scene, scene.camera ?: scene, unitsPerPixel)
+        }
+        val statistics =
+            drawCommands(commands, resourceRegistry, projection, viewWidth, viewHeight, globalAlpha, outerClip)
+        GLES20.glViewport(0, 0, viewWidth, viewHeight)
+        return statistics
+    }
 
+    /**
+     * Draws [commands], whose vertices are in view pixels (origin bottom-left, y up), over the
+     * whole view: [SKView]'s statistics overlay.
+     */
+    fun drawOverlay(
+        commands: List<SKRenderCommand>,
+        viewWidth: Int,
+        viewHeight: Int,
+        resourceRegistry: SKResourceRegistry,
+    ) {
+        val width = viewWidth.toFloat()
+        val height = viewHeight.toFloat()
+        Matrix.orthoM(mvpMatrix, 0, 0f, width, 0f, height, -1f, 1f)
+        GLES20.glViewport(0, 0, viewWidth, viewHeight)
+        val projection = SKSceneProjection(left = 0f, right = width, bottom = 0f, top = height)
+        drawCommands(commands, resourceRegistry, projection, viewWidth, viewHeight, globalAlpha = 1f, outerClip = null)
+    }
+
+    @Suppress("LongParameterList")
+    private fun drawCommands(
+        commands: List<SKRenderCommand>,
+        resourceRegistry: SKResourceRegistry,
+        projection: SKSceneProjection,
+        viewWidth: Int,
+        viewHeight: Int,
+        globalAlpha: Float,
+        outerClip: Rect?,
+    ): SKRenderStatistics {
+        if (commands.isEmpty()) return SKRenderStatistics.Zero
         GLES20.glEnable(GLES20.GL_BLEND)
-
+        var statistics = SKRenderStatistics.Zero
         var index = 0
         while (index < commands.size) {
             val run = takeRun(commands, index)
             drawRun(run, resourceRegistry, projection, viewWidth, viewHeight, globalAlpha, outerClip)
+            val quads = run.sumOf { it.vertices.size } / VERTICES_PER_QUAD
+            statistics += SKRenderStatistics(drawCount = 1, quadCount = quads)
             index += run.size
         }
-
         GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
-        GLES20.glViewport(0, 0, viewWidth, viewHeight)
+        return statistics
     }
 
     @Suppress("LongParameterList")
