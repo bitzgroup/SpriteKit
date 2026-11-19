@@ -1,23 +1,44 @@
 package jp.co.bitz.spritekit
 
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sign
+import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
 
 /** Sequential-impulse passes per step -- more passes converge stacked/resting contacts better, at linear cost. */
 private const val VELOCITY_ITERATIONS = 8
 
-/** Penetration allowed to remain uncorrected each step, avoiding jitter from correcting to exactly zero. */
-private const val PENETRATION_SLOP = 0.01f
+/**
+ * Physics substeps per second: Apple advances its simulation in steps of 1/120 of a second, however
+ * long the frame (verified on iOS/tvOS simulators -- a body falling at 20 frames a second lands
+ * where six 1/120-second steps a frame put it).
+ */
+private const val SUBSTEPS_PER_SECOND = 120f
 
-/** Fraction of remaining penetration corrected per step (Baumgarte stabilization), not all at once, to stay stable. */
-private const val POSITION_CORRECTION_PERCENT = 0.2f
+/** The most a body turns in one substep, in radians -- Box2D's limit, which Apple's matches. */
+private const val MAX_ROTATION_PER_STEP = (PI / 2).toFloat()
+
+/** The farthest a body moves in one substep, in points (2 meters) -- Box2D's limit, which Apple's matches. */
+private const val MAX_TRANSLATION_PER_STEP = 2f * POINTS_PER_METER
+
+/**
+ * How many substeps [simulatePhysics] splits a frame of [dt] seconds into: the nearest whole
+ * number of 1/120-second steps, at least one, so each lasts about 1/120 of a second and together
+ * they cover the frame exactly.
+ */
+internal fun physicsSubsteps(dt: Float): Int = maxOf(1, kotlin.math.round(dt * SUBSTEPS_PER_SECOND).toInt())
 
 /**
  * Advances [scene]'s [SKScene.physicsWorld] simulation by [deltaTime] -- called once per frame by
- * [SKView], between action evaluation and [SKScene.didSimulatePhysics]. Semi-implicit Euler
- * integration, an O(n²) AABB broad phase, [narrowPhase] for shape-pair detection, a linear-only
- * sequential-impulse solver (contact-point torque -- i.e. spin from an off-center hit -- is
- * deferred; see `docs/API_COMPATIBILITY.md`), [SKPhysicsContactDelegate] notifications for
+ * [SKView], between action evaluation and [SKScene.didSimulatePhysics] -- in [physicsSubsteps]
+ * steps of about 1/120 of a second, as Apple does. Forces and torques applied before the frame act
+ * through all of them, then clear. Semi-implicit Euler
+ * integration, an O(n²) AABB broad phase, [narrowPhase] for shape-pair detection, a
+ * sequential-impulse solver pushing at each contact point (so an off-center hit turns a body, as
+ * on Apple), [SKPhysicsContactDelegate] notifications for
  * whichever touching pairs opt in via [SKPhysicsBody.contactTestBitMask], [SKPhysicsJoint]
  * constraint solving (see `SKPhysicsJointSimulation.kt`), and [SKFieldNode] force/velocity fields
  * (see `SKFieldSimulation.kt`).
@@ -35,6 +56,19 @@ internal fun simulatePhysics(
     val nodeByBody = bodies.associate { it.body to it.node }
     bindJoints(world.joints, nodeByBody, scene)
 
+    val steps = physicsSubsteps(dt)
+    repeat(steps) { step(scene, bodies, nodeByBody, dt / steps) }
+    for (entry in bodies) entry.body.clearAccumulators()
+}
+
+/** One substep of [simulatePhysics], [dt] seconds long. */
+private fun step(
+    scene: SKScene,
+    bodies: List<SKPhysicsEntry>,
+    nodeByBody: Map<SKPhysicsBody, SKNode>,
+    dt: Float,
+) {
+    val world = scene.physicsWorld
     for (entry in bodies) {
         entry.body.wake()
         integrateForces(entry.body, world.gravity, dt)
@@ -46,7 +80,7 @@ internal fun simulatePhysics(
     val observations = findContactObservations(bodies, shapes)
     recordContactedBodies(bodies, observations)
 
-    val physicalContacts = observations.mapNotNull(::toResolvedContact)
+    val physicalContacts = observations.mapNotNull { toResolvedContact(it, scene) }
     repeat(VELOCITY_ITERATIONS) {
         physicalContacts.forEach(::resolveVelocity)
         resolveJointVelocities(world.joints, nodeByBody, scene)
@@ -105,18 +139,15 @@ private fun dampingFactor(
 ): Float = 1f / (1f + dt * damping)
 
 /**
- * Integrates [body]'s accumulated forces/torque and [gravity] into its velocity, applies
- * damping, then clears the accumulators.
+ * Integrates [body]'s accumulated forces/torque and [gravity] into its velocity and applies
+ * damping. The accumulators stay until the frame's last substep is done.
  */
 private fun integrateForces(
     body: SKPhysicsBody,
     gravity: Vector2,
     dt: Float,
 ) {
-    if (!body.isDynamic) {
-        body.clearAccumulators()
-        return
-    }
+    if (!body.isDynamic) return
     // Forces accelerate at force/mass points per second squared, but gravity is in meters per
     // second squared -- both as Apple applies them (verified on iOS/tvOS simulators).
     val gravityAcceleration = if (body.affectedByGravity) gravity * POINTS_PER_METER else Vector2.Zero
@@ -128,30 +159,41 @@ private fun integrateForces(
     body.velocity *= dampingFactor(body.linearDamping, dt)
     body.angularVelocity *= dampingFactor(body.angularDamping, dt)
     if (body.pinned) body.velocity = Vector2.Zero // translation is locked; don't let velocity build up unused
-    body.clearAccumulators()
 }
 
-/** Applies [body]'s (now-resolved) velocity to [node]'s position/rotation. A no-op for a non-dynamic body. */
+/**
+ * Applies [body]'s (now-resolved) velocity to [node]'s position/rotation. A no-op for a
+ * non-dynamic body. The body turns about its center of mass, so a node whose body's shape is off
+ * its origin swings around that point; [SKPhysicsBody.velocity] is the center of mass's.
+ */
 private fun integrateVelocity(
     node: SKNode,
     body: SKPhysicsBody,
     dt: Float,
 ) {
     if (!body.isDynamic) return
+    // Apple caps how far a body moves and turns in one substep (verified on iOS/tvOS simulators:
+    // 36,000 points and 60π radians a second at most).
+    val travel = body.velocity.length() * dt
+    if (travel > MAX_TRANSLATION_PER_STEP) body.velocity *= MAX_TRANSLATION_PER_STEP / travel
+    if (abs(body.angularVelocity * dt) > MAX_ROTATION_PER_STEP) {
+        body.angularVelocity = sign(body.angularVelocity) * MAX_ROTATION_PER_STEP / dt
+    }
+    val oldRotation = node.zRotation
     if (!body.pinned) node.position += body.velocity * dt
     if (body.allowsRotation) node.zRotation += body.angularVelocity * dt
+    val center = body.centerOfMass
+    if (!body.pinned && center != Vector2.Zero && node.zRotation != oldRotation) {
+        val scaled = Vector2(center.x * node.xScale, center.y * node.yScale)
+        node.position += scaled.rotated(oldRotation) - scaled.rotated(node.zRotation)
+    }
 }
 
-private data class SKResolvedContact(
-    val nodeA: SKNode,
-    val bodyA: SKPhysicsBody,
-    val nodeB: SKNode,
-    val bodyB: SKPhysicsBody,
-    val normal: Vector2,
-    val penetration: Float,
-    val restitution: Float,
-    val friction: Float,
-)
+private fun Vector2.rotated(angle: Float): Vector2 {
+    val c = cos(angle)
+    val s = sin(angle)
+    return Vector2(x * c - y * s, x * s + y * c)
+}
 
 /**
  * Apple's documented category/collision-mask contract: two bodies collide only if each one's
@@ -212,73 +254,40 @@ private fun observeContact(
  * otherwise (e.g. a sensor-only pair).
  */
 @Suppress("ReturnCount")
-private fun toResolvedContact(observation: SKContactObservation): SKResolvedContact? {
+private fun toResolvedContact(
+    observation: SKContactObservation,
+    scene: SKScene,
+): SKResolvedContact? {
     val a = observation.bodyA
     val b = observation.bodyB
     if (a.inverseMass == 0f && b.inverseMass == 0f) return null // both immovable
     if (!shouldCollide(a, b)) return null
+    val normal = observation.manifold.normal
+    val tangent = Vector2(normal.y, -normal.x)
+    val restitution = maxOf(a.restitution, b.restitution)
+    val centerA = observation.nodeA.convertTo(a.centerOfMass, scene)
+    val centerB = observation.nodeB.convertTo(b.centerOfMass, scene)
+    val points =
+        observation.manifold.points.map { point ->
+            val rA = point - centerA
+            val rB = point - centerB
+            val approach = relativeVelocity(a, rA, b, rB) dot normal
+            SKContactPointSolver(
+                rA,
+                rB,
+                effectiveMass(a, rA, b, rB, normal),
+                effectiveMass(a, rA, b, rB, tangent),
+                if (approach < 0f) -restitution * approach else 0f,
+            )
+        }
     return SKResolvedContact(
-        observation.nodeA,
-        a,
-        observation.nodeB,
-        b,
-        observation.manifold.normal,
+        SKPhysicsEntry(observation.nodeA, a),
+        SKPhysicsEntry(observation.nodeB, b),
+        normal,
         observation.manifold.penetration,
-        maxOf(a.restitution, b.restitution),
         kotlin.math.sqrt(a.friction * b.friction),
+        points,
     )
-}
-
-/**
- * One sequential-impulse pass: resolves [contact]'s normal (restitution) and tangential (Coulomb
- * friction) velocity, linear-only. Early returns cover the "nothing to resolve" cases (both
- * immovable, already separating, no tangential motion) before the actual impulse math.
- */
-@Suppress("ReturnCount")
-private fun resolveVelocity(contact: SKResolvedContact) {
-    val a = contact.bodyA
-    val b = contact.bodyB
-    val invMassSum = a.inverseMass + b.inverseMass
-    if (invMassSum == 0f) return
-
-    val relativeVelocity = b.velocity - a.velocity
-    val velocityAlongNormal = relativeVelocity dot contact.normal
-    if (velocityAlongNormal > 0f) return // already separating
-
-    val normalImpulseMagnitude = -(1f + contact.restitution) * velocityAlongNormal / invMassSum
-    val normalImpulse = contact.normal * normalImpulseMagnitude
-    a.velocity -= normalImpulse * a.inverseMass
-    b.velocity += normalImpulse * b.inverseMass
-
-    val relativeVelocityAfterNormal = b.velocity - a.velocity
-    val normalComponent = contact.normal * (relativeVelocityAfterNormal dot contact.normal)
-    val tangentComponent = relativeVelocityAfterNormal - normalComponent
-    val tangent = if (tangentComponent.lengthSquared() > 0f) tangentComponent.normalized() else return
-    val velocityAlongTangent = relativeVelocityAfterNormal dot tangent
-
-    val maxFrictionImpulse = normalImpulseMagnitude * contact.friction
-    val frictionImpulseMagnitude =
-        (-velocityAlongTangent / invMassSum).coerceIn(
-            -maxFrictionImpulse,
-            maxFrictionImpulse,
-        )
-    val frictionImpulse = tangent * frictionImpulseMagnitude
-    a.velocity -= frictionImpulse * a.inverseMass
-    b.velocity += frictionImpulse * b.inverseMass
-}
-
-/**
- * Nudges [contact]'s two nodes apart along its normal to correct leftover penetration --
- * Baumgarte stabilization, not a velocity change.
- */
-private fun correctPosition(contact: SKResolvedContact) {
-    val invMassSum = contact.bodyA.inverseMass + contact.bodyB.inverseMass
-    if (invMassSum == 0f) return
-    val depth = maxOf(contact.penetration - PENETRATION_SLOP, 0f)
-    if (depth == 0f) return
-    val correction = contact.normal * (depth / invMassSum * POSITION_CORRECTION_PERCENT)
-    if (!contact.bodyA.pinned) contact.nodeA.position -= correction * contact.bodyA.inverseMass
-    if (!contact.bodyB.pinned) contact.nodeB.position += correction * contact.bodyB.inverseMass
 }
 
 /**

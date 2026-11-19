@@ -35,16 +35,26 @@ class SKPhysicsShapeTest {
     }
 
     @Test
-    fun `an off-center circle's inertia is shifted by the parallel axis theorem`() {
-        val onCenter = SKPhysicsShape.Circle(radius = 150f) // 1 m
-        val offCenter = SKPhysicsShape.Circle(radius = 150f, center = Vector2(450f, 600f)) // 5 m from origin
-        val density = 1f
+    fun `an off-center circle's inertia is about its own center, which is its center of mass`() {
+        val onCenter = SKPhysicsShape.Circle(radius = 150f)
+        val offCenter = SKPhysicsShape.Circle(radius = 150f, center = Vector2(450f, 600f))
 
-        val onCenterInertia = onCenter.massProperties(density).inertia
-        val offCenterInertia = offCenter.massProperties(density).inertia
-        val mass = offCenter.massProperties(density).mass
+        assertEquals(onCenter.massProperties(1f).inertia, offCenter.massProperties(1f).inertia, 1e-5f)
+        assertEquals(Vector2(450f, 600f), offCenter.massProperties(1f).centroid)
+    }
 
-        assertEquals(onCenterInertia + mass * 25f, offCenterInertia, 1e-3f) // + mass * d^2
+    @Test
+    fun `an off-center polygon's inertia is about its centroid`() {
+        fun square(at: Vector2) =
+            SKPhysicsShape.Polygon(
+                listOf(Vector2(-75f, -75f), Vector2(75f, -75f), Vector2(75f, 75f), Vector2(-75f, 75f)).map { it + at },
+            )
+        val centered = square(Vector2.Zero).massProperties(1f)
+        val moved = square(Vector2(300f, -150f)).massProperties(1f)
+
+        assertEquals(centered.inertia, moved.inertia, 1e-4f)
+        assertEquals(300f, moved.centroid.x, 1e-2f)
+        assertEquals(-150f, moved.centroid.y, 1e-2f)
     }
 
     @Test

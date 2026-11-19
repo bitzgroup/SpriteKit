@@ -41,8 +41,11 @@ private fun SKPhysicsShape.inMeters(): SKPhysicsShape {
     }
 }
 
-/** [SKPhysicsBody.mass]/[SKPhysicsBody.inertia] for a given [SKPhysicsShape.area] and density. */
-internal data class SKMassProperties(val mass: Float, val inertia: Float)
+/**
+ * [SKPhysicsBody.mass] and [SKPhysicsBody.inertia] for a given [SKPhysicsShape.area] and density,
+ * plus the shape's [centroid] — its center of mass, in the node's local space, in points.
+ */
+internal data class SKMassProperties(val mass: Float, val inertia: Float, val centroid: Vector2 = Vector2.Zero)
 
 /**
  * This shape's area in square meters (see [POINTS_PER_METER]); `0` for
@@ -58,26 +61,27 @@ private fun SKPhysicsShape.rawArea(): Float =
     }
 
 /**
- * [mass] and [SKMassProperties.inertia] (the moment of inertia about the *body's own origin* —
- * in kilograms and kg·m², lengths in meters as Apple measures them, see [POINTS_PER_METER] —
- * i.e. [SKNode.position]/[SKNode.zRotation], not necessarily this shape's own centroid, since
- * that's what a node's transform actually rotates about) for this shape at [density].
+ * [SKMassProperties.mass] and [SKMassProperties.inertia] — the moment of inertia about the shape's
+ * own center of mass, [SKMassProperties.centroid], in kilograms and kg·m² with lengths in meters
+ * as Apple measures them (see [POINTS_PER_METER]) — for this shape at [density]. A body turns
+ * about its center of mass, as Apple's does (verified on iOS/tvOS simulators), so that's the axis
+ * its inertia is measured about.
  *
  * *Contract-conformant, not bit-identical* with Apple's own (undocumented) mass computation —
  * standard formulas (a solid disk's inertia for [SKPhysicsShape.Circle], the classic polygon
  * second-moment-of-area sum for [SKPhysicsShape.Polygon]) — see `docs/API_COMPATIBILITY.md`.
  */
-internal fun SKPhysicsShape.massProperties(density: Float): SKMassProperties = inMeters().rawMassProperties(density)
+internal fun SKPhysicsShape.massProperties(density: Float): SKMassProperties {
+    val inMeters = inMeters().rawMassProperties(density)
+    return inMeters.copy(centroid = inMeters.centroid * POINTS_PER_METER)
+}
 
 private fun SKPhysicsShape.rawMassProperties(density: Float): SKMassProperties =
     when (this) {
         is SKPhysicsShape.EdgeChain -> SKMassProperties(mass = 0f, inertia = 0f)
         is SKPhysicsShape.Circle -> {
             val mass = density * rawArea()
-            // Solid-disk inertia about its own center, shifted to the body origin via the
-            // parallel axis theorem if `center` isn't the origin.
-            val inertia = mass * radius * radius / 2f + mass * center.lengthSquared()
-            SKMassProperties(mass, inertia)
+            SKMassProperties(mass, mass * radius * radius / 2f, center)
         }
         is SKPhysicsShape.Polygon -> polygonMassProperties(vertices, density)
     }
@@ -92,21 +96,28 @@ private fun signedPolygonArea(vertices: List<Vector2>): Float {
     return area / 2f
 }
 
+/**
+ * A polygon's mass, centroid and inertia about that centroid: the second moment of area about the
+ * origin, moved to the centroid with the parallel axis theorem.
+ */
 private fun polygonMassProperties(
     vertices: List<Vector2>,
     density: Float,
 ): SKMassProperties {
     var doubleArea = 0f
     var inertiaSum = 0f
+    var centroidSum = Vector2.Zero
     for (i in vertices.indices) {
         val p1 = vertices[i]
         val p2 = vertices[(i + 1) % vertices.size]
         val cross = p1 cross p2
         doubleArea += cross
-        val term = (p1 dot p1) + (p1 dot p2) + (p2 dot p2)
-        inertiaSum += cross * term
+        inertiaSum += cross * ((p1 dot p1) + (p1 dot p2) + (p2 dot p2))
+        centroidSum += (p1 + p2) * cross
     }
+    if (doubleArea == 0f) return SKMassProperties(0f, 0f)
+    val centroid = centroidSum * (1f / (3f * doubleArea))
     val mass = density * abs(doubleArea) / 2f
-    val inertia = density * abs(inertiaSum) / 12f
-    return SKMassProperties(mass, inertia)
+    val inertiaAboutOrigin = density * abs(inertiaSum) / 12f
+    return SKMassProperties(mass, inertiaAboutOrigin - mass * centroid.lengthSquared(), centroid)
 }

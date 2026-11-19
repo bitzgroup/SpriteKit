@@ -33,10 +33,20 @@ public class SKPhysicsBody internal constructor(
         }
 
     /**
-     * This body's moment of inertia about its own origin (i.e. [SKNode.position]), derived from
-     * [density] like [mass].
+     * This body's moment of inertia about its center of mass, in kg·m² with lengths in meters of
+     * 150 points (as Apple measures it), derived from [density] like [mass]. Not part of Apple's
+     * API, which keeps it internal; [applyTorque] and [applyAngularImpulse] change
+     * [angularVelocity] by the torque or impulse divided by it. Before 0.5.0 it was measured about
+     * the node's origin.
      */
     public val inertia: Float get() = massProperties.inertia
+
+    /**
+     * Where this body's center of mass sits in its node's local space, in points: the shape's
+     * centroid. The body turns about it, as Apple's does — a body whose shape is off its node's
+     * origin swings the node around it.
+     */
+    internal val centerOfMass: Vector2 get() = massProperties.centroid
 
     private val massProperties: SKMassProperties get() = shape.massProperties(density)
 
@@ -144,8 +154,8 @@ public class SKPhysicsBody internal constructor(
     public var affectedByGravity: Boolean = true
 
     /**
-     * Whether collision response and [applyTorque]/[applyAngularImpulse] can change this body's
-     * rotation. Defaults to `true`.
+     * Whether collisions, joints, forces and impulses can change this body's rotation. Defaults
+     * to `true`.
      */
     public var allowsRotation: Boolean = true
 
@@ -200,21 +210,59 @@ public class SKPhysicsBody internal constructor(
     internal val inverseInertia: Float get() = if (!isDynamic || !allowsRotation || inertia <= 0f) 0f else 1f / inertia
 
     /**
+     * [inverseInertia] for lever arms and impulses measured in points rather than meters — what a
+     * linear impulse applied off the center of mass turns into angular velocity by:
+     * `Δω = (r × J) · inverseInertiaInPoints`.
+     */
+    internal val inverseInertiaInPoints: Float get() = inverseInertia / (POINTS_PER_METER * POINTS_PER_METER)
+
+    /** [centerOfMass] in the coordinates of its node's scene (or topmost ancestor), where velocities live. */
+    internal fun worldCenterOfMass(): Vector2 {
+        val node = node ?: return centerOfMass
+        var root = node
+        while (true) root = root.parent ?: break
+        return node.convertTo(centerOfMass, root)
+    }
+
+    /**
      * Accumulates [force] to be applied continuously over the next physics step (cleared
-     * afterward) — Apple's `applyForce(_:)`. The position-offset `applyForce(_:at:)` overload
-     * (which would also impart torque) isn't implemented; see `docs/API_COMPATIBILITY.md`.
+     * afterward) at the center of mass — Apple's `applyForce(_:)`.
      */
     public fun applyForce(force: Vector2) {
         forceAccumulator += force
     }
 
     /**
-     * Immediately changes [velocity] by `impulse / mass` — Apple's `applyImpulse(_:)`. The
-     * position-offset `applyImpulse(_:at:)` overload isn't implemented; see
-     * `docs/API_COMPATIBILITY.md`.
+     * Accumulates [force] applied at [at], a point in scene coordinates, for the next physics step
+     * — Apple's `applyForce(_:at:)`. Besides pushing the body as [applyForce] does, a point off
+     * the center of mass turns it, by the torque `(at − center of mass) × force` with lengths in
+     * meters of 150 points (verified on iOS/tvOS simulators).
      */
+    public fun applyForce(
+        force: Vector2,
+        at: Vector2,
+    ) {
+        forceAccumulator += force
+        torqueAccumulator += ((at - worldCenterOfMass()) cross force) / (POINTS_PER_METER * POINTS_PER_METER)
+    }
+
+    /** Immediately changes [velocity] by `impulse / mass` — Apple's `applyImpulse(_:)`. */
     public fun applyImpulse(impulse: Vector2) {
         velocity += impulse * inverseMass
+    }
+
+    /**
+     * Applies [impulse] at [at], a point in scene coordinates — Apple's `applyImpulse(_:at:)`.
+     * [velocity] changes as for [applyImpulse]; a point off the center of mass also changes
+     * [angularVelocity], by the angular impulse `(at − center of mass) × impulse` with lengths in
+     * meters of 150 points (verified on iOS/tvOS simulators).
+     */
+    public fun applyImpulse(
+        impulse: Vector2,
+        at: Vector2,
+    ) {
+        velocity += impulse * inverseMass
+        angularVelocity += ((at - worldCenterOfMass()) cross impulse) * inverseInertiaInPoints
     }
 
     /**

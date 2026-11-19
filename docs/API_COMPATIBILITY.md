@@ -470,6 +470,27 @@ categories recur throughout and are called out once here rather than per item:
   per second squared, as on Apple. Before 0.4.0 lengths for mass were in points and gravity was
   applied as points/s², so mass was 22,500 times Apple's and bodies fell 150 times slower; host apps
   tuned to that need retuning.
+- **Bodies turn as Apple's do** (since 0.5.0, verified on iOS/tvOS simulators):
+  - A body turns about its **center of mass**, the shape's centroid. A node whose body's shape is
+    off its origin (`circleOfRadius(r, center)`, an off-center rectangle or polygon) swings around
+    that point, and `velocity` is the center of mass's.
+  - `applyForce(force, at)` and `applyImpulse(impulse, at)` take the point in scene coordinates.
+    A point off the center of mass turns the body by `(point − center of mass) × force` (or
+    `× impulse`), with lengths in meters of 150 points, divided by the inertia.
+  - `applyTorque` changes `angularVelocity` by `torque × dt / inertia`, and `applyAngularImpulse`
+    by `impulse / inertia`, the inertia measured about the center of mass in kg·m². The public
+    `inertia` (not part of Apple's API) is measured there too; before 0.5.0 it was measured about
+    the node's origin, which differs only for an off-center shape.
+- **The simulation runs in steps of 1/120 of a second** (since 0.5.0, verified on iOS/tvOS
+  simulators), as Apple's does whatever the frame rate: each frame is split into the nearest whole
+  number of such steps (two at 60 frames a second, six at 20, one at 90 or above), so a scene
+  settles the same way at any frame rate. Forces and torques applied before a frame act through
+  all of its steps, then clear. In each step a body moves at most 2 meters (300 points) and turns
+  at most a quarter turn (π/2), so `velocity` reads 36,000 points a second and `angularVelocity`
+  60π radians a second at most — Apple's (and Box2D's) limits. Before 0.5.0 a frame was one
+  step, so a slow frame could let a falling body pass through a floor.
+- **Restitution applies at any speed**, as on Apple (verified on iOS/tvOS simulators): a perfectly
+  elastic ball bounces back at 50 points a second as at 400.
 - **Mass/inertia formulas** are standard, well-known ones (a solid disk for circles, the classic
   polygon second-moment-of-area sum for convex polygons — hand-verified against the known
   `I = mass*(w²+h²)/12` square formula before implementation), not necessarily Apple's own
@@ -477,12 +498,13 @@ categories recur throughout and are called out once here rather than per item:
 - **`polygonFrom(_:)`** takes a `List<Vector2>` rather than a `CGPath` — this library has no path
   type. Concave input isn't validated or corrected, matching Apple's own "must be convex" contract.
 - **`bodies(fromTexture:...)`** (texture-alpha-mask bodies) is not implemented.
-- **The narrow phase's contact point is approximate** for polygon-polygon and polygon-vs-edge-chain
-  cases: an edge midpoint rather than a true Sutherland-Hodgman-clipped contact point/manifold.
-- **Collision response is linear-only**: sequential impulses resolve normal (restitution) and
-  tangential (Coulomb friction) velocity, but don't derive torque from an off-center contact
-  point, so a collision alone never imparts spin (`applyTorque`/`applyAngularImpulse` still do).
-  Apple doesn't document its own solver's exact behavior here either.
+- **Collisions turn bodies** (since 0.5.0, verified on iOS/tvOS simulators): polygons, and a
+  polygon against an edge, touch at up to two points clipped as Box2D clips them, and the
+  sequential-impulse solver pushes at each point — restitution along the normal, Coulomb friction
+  along the tangent — so a box landing on a corner turns flat and settles, and a ball sliding along
+  the floor starts rolling. `SKPhysicsContact.contactPoint` is the average of a contact's points.
+  Before 0.5.0 the solver was linear-only and a collision alone never turned a body. The solver
+  itself is this library's own, so the motion matches Apple's closely but not exactly.
 - **Broad phase is O(n²)** (every body pair's AABBs are tested each step) — not scoped to scale to
   very large body counts; a spatial partition (grid/quadtree) is a possible future optimization.
 - **A body's world-space shape ignores non-uniform scale for circles**: the world radius is
@@ -519,9 +541,9 @@ categories recur throughout and are called out once here rather than per item:
   A joint added before that is bound on the first simulation step that finds both in the scene.
 - **`SKPhysicsJointSpring` is a classic soft spring**: it oscillates at `frequency` hertz with
   `damping` as its damping ratio, whatever the bodies' masses. Apple doesn't document its formula.
-- **The joint solver is linear-only**, the same simplification collision response makes: joints
-  correct relative *position*/*velocity* to satisfy their constraint but don't exchange torque, so
-  a body's rotation is otherwise still driven only by its own `angularVelocity`/`applyTorque`.
+- **The joint solver is linear-only**: joints correct relative *position*/*velocity* to satisfy
+  their constraint but don't exchange torque, so a joint alone never turns a body (collisions,
+  forces and impulses do).
   `SKPhysicsJointFixed` is the one exception — it kinematically re-syncs `bodyB`'s rotation to
   `bodyA`'s each step (a direct rotation overwrite, not a torque-based coupling).
 - **`SKPhysicsJointPin`'s `shouldEnableLimits`/`lowerAngleLimit`/`upperAngleLimit`/

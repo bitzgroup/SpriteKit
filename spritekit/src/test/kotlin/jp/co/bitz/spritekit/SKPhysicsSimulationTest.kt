@@ -29,9 +29,11 @@ class SKPhysicsSimulationTest {
         simulatePhysics(scene, 1.seconds)
 
         // Gravity is in meters per second squared, 150 points each (Apple, verified on iOS/tvOS
-        // simulators). Semi-implicit Euler: velocity integrates first, then position uses it.
+        // simulators). The second runs as 120 substeps of semi-implicit Euler, as on Apple: each
+        // adds 12.5 points/s, then moves by the new velocity, so the body falls
+        // 12.5 × (1 + 2 + … + 120) / 120 = 756.25 points.
         assertEquals(-1500f, node.physicsBody!!.velocity.y)
-        assertEquals(500f, node.position.y)
+        assertEquals(1243.75f, node.position.y)
     }
 
     @Test
