@@ -210,6 +210,28 @@ public class SKView
         @Volatile
         public var showsFields: Boolean = false
 
+        /**
+         * Decides frame by frame whether the scene runs — Apple's `SKView.delegate`; see
+         * [SKViewDelegate]. `null` (the default) runs every frame. Called on the render thread; safe
+         * to set from any thread.
+         */
+        @Volatile
+        public var delegate: SKViewDelegate? = null
+
+        /**
+         * Apple's `shouldCullNonVisibleNodes`, `true` by default as on Apple. Accepted for source
+         * compatibility: culling only saves drawing work, never changes what is seen, and this
+         * renderer always draws every node, as if it were `false`.
+         */
+        public var shouldCullNonVisibleNodes: Boolean = true
+
+        /**
+         * Apple's `isAsynchronous`, `true` by default as on Apple, where it chooses whether the view
+         * renders in step with Core Animation's transactions. Accepted for source compatibility; it
+         * has no Android counterpart, and the view always renders on its own render thread.
+         */
+        public var isAsynchronous: Boolean = true
+
         /** Render-thread-confined: the statistics line's glyphs, and the frame-rate measurement. */
         private val statisticsOverlay = SKStatisticsOverlay()
         private val frameRateMeter = SKFrameRateMeter()
@@ -619,8 +641,14 @@ public class SKView
 
             override fun onDrawFrame(gl: GL10) {
                 val now = System.nanoTime()
-                val deltaTime = clock.tick(now)
                 frameRateMeter.tick(now)
+                val delegate = delegate
+                val shouldRender = delegate?.let { { it.shouldRenderAtTime(this@SKView, now / NANOS_PER_SECOND) } }
+                if (skFrameStep(isPaused, shouldRender) == SKFrameStep.Hold) {
+                    renderStatistics(renderTransitionFrame(Duration.ZERO))
+                    return
+                }
+                val deltaTime = clock.tick(now)
                 val scene = currentScene
                 // Also covers a scene whose scaleMode was switched to `.resizeFill` after presenting.
                 scene?.let { syncResizeFillSize(it) }
@@ -648,5 +676,7 @@ public class SKView
             const val DEPTH_BITS = 16
 
             const val MILLIS_PER_SECOND = 1000.0
+
+            const val NANOS_PER_SECOND = 1_000_000_000.0
         }
     }
