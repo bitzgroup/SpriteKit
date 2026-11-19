@@ -165,6 +165,15 @@ categories recur throughout and are called out once here rather than per item:
   even if the app had paused it through `scene.isPaused` — Apple's `SKView` does the same — but
   leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
   on the render thread.
+- **`SKViewDelegate.shouldRenderAtTime(view, time)`** is Apple's `view(_:shouldRenderAtTime:)`,
+  renamed since Swift argument labels don't name Kotlin functions. As recorded on iOS/tvOS
+  simulators, it is asked once a frame before `update` (never while the view is paused), and
+  `false` skips the frame's `update`, actions and physics, the next frame that runs catching up on
+  the skipped time. `time` is seconds on a monotonic clock; Apple passes the same value its
+  `update(_:)` gets, which this library's `update(deltaTime)` has no counterpart for.
+  **`shouldCullNonVisibleNodes` and `isAsynchronous`** default to `true` as on Apple and are
+  accepted with no effect: culling only saves drawing work (this renderer draws every node), and
+  `isAsynchronous` concerns Core Animation, which Android doesn't have.
 - **`SKView` debug overlays** (`showsFPS`, `showsNodeCount`, `showsDrawCount`, `showsQuadCount`,
   `showsPhysics`) follow Apple's look as recorded on iOS/tvOS simulators: one statistics line at the
   bottom right, 5 points in from the right and 2 up from the bottom, in white 10-point monospaced
