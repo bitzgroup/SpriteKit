@@ -27,6 +27,11 @@ public class SKTexture internal constructor(
     /** This texture's region within [bitmap], normalized `0..1` on each axis — the full bitmap by default. */
     public val textureRect: Rect = Rect(0f, 0f, 1f, 1f),
     internal val gpuState: SKTextureGpuState = SKTextureGpuState(),
+    /**
+     * The exact pixel size of a region cut out by [SKTextureAtlas], which [textureRect] only
+     * approximates in floats.
+     */
+    private val regionPixelSize: Vector2? = null,
 ) {
     /** Wraps [bitmap] as a full (`0..1`) texture. */
     public constructor(bitmap: Bitmap) : this(bitmap, Rect(0f, 0f, 1f, 1f), SKTextureGpuState())
@@ -62,11 +67,32 @@ public class SKTexture internal constructor(
      * a `CGImage`, whose size is likewise its pixel dimensions).
      */
     public fun size(): Vector2 =
-        Vector2(
+        regionPixelSize ?: Vector2(
             bitmap.width * (textureRect.right - textureRect.left),
             bitmap.height * (textureRect.bottom - textureRect.top),
         )
 
     /** How this texture is sampled when scaled. Defaults to [SKTextureFilteringMode.Linear]. */
     public var filteringMode: SKTextureFilteringMode = SKTextureFilteringMode.Linear
+
+    /**
+     * Calls [completionHandler] once this texture is ready to draw — Apple's `preload`. As on
+     * Apple, it's called on a background thread. Deviation: the image is already decoded, and it
+     * reaches the GPU on the render thread the first time it's drawn, so there's nothing left to
+     * do first.
+     */
+    public fun preload(completionHandler: () -> Unit) {
+        skPreload(completionHandler)
+    }
+
+    public companion object {
+        /** Calls [completionHandler] once all of [textures] are ready, on a background thread — see [preload]. */
+        @Suppress("UnusedParameter") // Every texture is ready once created; see [preload].
+        public fun preload(
+            textures: List<SKTexture>,
+            completionHandler: () -> Unit,
+        ) {
+            skPreload(completionHandler)
+        }
+    }
 }

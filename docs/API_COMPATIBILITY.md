@@ -222,11 +222,32 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Textures & sprites (`SKTexture`, `SKTextureAtlas`, `SKSpriteNode`)
 
-- **`SKTextureAtlas.pack`** is a runtime atlas packer rather than Apple's build-time
+- **`SKTextureAtlas` packs at runtime** rather than through Apple's build-time
   (Xcode-integrated) atlas compiler — there is no equivalent Android build step to hook into. It
-  uses a classic shelf/next-fit bin-packing algorithm (simple, not space-optimal); Apple's own
-  atlas-packing algorithm isn't documented, so there's nothing to match even if this library could
-  hook into a build step.
+  uses a classic shelf/next-fit bin-packing algorithm (simple, not space-optimal), with a
+  one-pixel border of repeated edge pixels around each image so a stretched texture keeps clean
+  edges, as Apple's do; Apple's own packing algorithm isn't documented, so the layout (and so each
+  texture's `textureRect`) differs. Three ways in:
+  - `SKTextureAtlas(named = "Sprites")` reads the images in the host app's
+    `assets/Sprites.atlas/` folder (`.png`, `.jpg`, `.jpeg`, `.webp`; the `.atlas` extension may
+    be given or left out). As on Apple (verified on iOS/tvOS simulators), `textureNames` keep their
+    extensions (`"hero.png"`), and `textureNamed` finds a texture with or without one. A missing
+    folder gives an empty atlas with a logged warning. No `@2x`/`@3x` variants, no `.spriteatlas`
+    asset-catalog folders, and no trimming of transparent edges: every image is packed at its
+    pixel size.
+  - `SKTextureAtlas(dictionary = …)` keys are kept as given. Values may be a `Bitmap`, a `File`, a
+    `Uri` (opened through the `ContentResolver`) or a `String` path — Apple takes an image, a path
+    or a URL; a relative path is read from `assets/` here. Any other value type throws
+    `IllegalArgumentException`.
+  - `SKTextureAtlas.pack(images)` packs `Bitmap`s, with no Apple counterpart.
+- **`SKTextureAtlas.textureNamed` returns the 128×128 missing-image placeholder for an unknown
+  name**, as Apple's does, with a logged warning; before 0.5.0 it returned `null`.
+- **Preloading** (`SKTexture.preload`, `SKTexture.preload(textures)`, `SKTextureAtlas.preload`,
+  `preloadTextureAtlases`, `preloadTextureAtlasesNamed`) calls back on a background thread, as
+  Apple's does, so hop back to the thread you need (`SKView.runOnGLThread` for scene work). Images
+  are decoded when a texture or atlas is created and uploaded to the GPU the first time they're
+  drawn, so only `preloadTextureAtlasesNamed` does real work first: it loads the atlases on that
+  background thread. As on Apple, a missing atlas comes back empty rather than as an error.
 - **`SKTexture(imageNamed:)`/`SKSpriteNode(imageNamed:)` read the host app's `assets/` folder**,
   the same stand-in for Apple's main bundle the audio API uses (see "Audio"). The extension may be
   left out (`"hero"` tries `.png`, `.jpg`, `.jpeg`, `.webp`), and a missing image gives Apple's

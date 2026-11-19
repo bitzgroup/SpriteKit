@@ -7,7 +7,10 @@ internal data class SKAtlasEntry(
     val height: Int,
 )
 
-/** Where [name]'s image was placed within the packed atlas, in pixel coordinates from its top-left corner. */
+/**
+ * Where [name]'s image was placed within the packed atlas, in pixel coordinates from its top-left
+ * corner — the image itself, not counting the border [packTextureAtlas] leaves around it.
+ */
 internal data class SKAtlasPlacement(
     val name: String,
     val x: Int,
@@ -31,12 +34,18 @@ internal data class SKAtlasLayout(
  * library has no access to replicate, so this is a *contract-conformant, not bit-identical*
  * runtime alternative; see `docs/API_COMPATIBILITY.md`.
  *
+ * Each image gets a [border] of pixels on every side, which [SKTextureAtlas] fills by repeating
+ * the image's edge pixels: linear filtering then never blends in a neighbor's pixels at the edge
+ * of a stretched texture — Apple's atlas textures keep clean edges (verified on iOS/tvOS
+ * simulators).
+ *
  * Pure Kotlin — no [android.graphics.Bitmap] dependency — so it's unit-testable without an
  * Android runtime; [SKTextureAtlas] does the actual bitmap compositing this layout describes.
  */
 internal fun packTextureAtlas(
     entries: List<SKAtlasEntry>,
     maxWidth: Int = 2048,
+    border: Int = 0,
 ): SKAtlasLayout {
     val placements = mutableListOf<SKAtlasPlacement>()
     var cursorX = 0
@@ -45,14 +54,16 @@ internal fun packTextureAtlas(
     var atlasWidth = 0
 
     for (entry in entries.sortedByDescending { it.height }) {
-        if (cursorX > 0 && cursorX + entry.width > maxWidth) {
+        val cellWidth = entry.width + 2 * border
+        val cellHeight = entry.height + 2 * border
+        if (cursorX > 0 && cursorX + cellWidth > maxWidth) {
             shelfY += shelfHeight
             cursorX = 0
             shelfHeight = 0
         }
-        placements += SKAtlasPlacement(entry.name, cursorX, shelfY, entry.width, entry.height)
-        cursorX += entry.width
-        shelfHeight = maxOf(shelfHeight, entry.height)
+        placements += SKAtlasPlacement(entry.name, cursorX + border, shelfY + border, entry.width, entry.height)
+        cursorX += cellWidth
+        shelfHeight = maxOf(shelfHeight, cellHeight)
         atlasWidth = maxOf(atlasWidth, cursorX)
     }
 
