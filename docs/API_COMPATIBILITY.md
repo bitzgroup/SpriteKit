@@ -151,6 +151,17 @@ categories recur throughout and are called out once here rather than per item:
   even if the app had paused it through `scene.isPaused` — Apple's `SKView` does the same — but
   leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
   on the render thread.
+- **`SKView` debug overlays** (`showsFPS`, `showsNodeCount`, `showsDrawCount`, `showsQuadCount`,
+  `showsPhysics`) follow Apple's look as recorded on iOS/tvOS simulators: one statistics line at the
+  bottom right, 5 points in from the right and 2 up from the bottom, in white 10-point monospaced
+  text (Android's monospace font standing in for Menlo) over black at 30% opacity; physics outlines
+  are hard-edged 1-pixel lines in opaque (0.4, 0.8, 0.8) above the scene. Differences: Apple's box
+  hugs the glyphs' ink vertically, this one spans the font's ascent and descent; `draws` and `quads`
+  count this renderer's OpenGL draw calls and triangle pairs, which batch and tessellate differently
+  from Apple's Metal renderer, so they can read differently for the same scene; the frame rate is
+  measured over half-second windows. **`showsFields` is accepted but draws nothing**: Apple's field
+  visualization draws broken on iOS/tvOS simulators (a few lines at the scene's origin, wherever
+  the field is), so there was no behavior to record and mirror.
 - **`SKView.preferredFramesPerSecond`** defaults to 60 and reads back whatever was set, as Apple's
   does. The view runs at a whole fraction of the display's refresh rate (60, 30, 20, 15, ... at
   60 Hz), the one nearest the requested rate, the higher on a tie; a negative rate or one at or
