@@ -95,7 +95,7 @@ Priorities:
 | ~~H3~~ | ~~Antialiased `SKShapeNode` outlines~~ | **Done**, recorded on iOS/tvOS simulators: each outline edge fades linearly over 1.7 screen pixels (1.12 inside, 0.58 outside), scaling with the node and the scene; fills stay hard-edged. Built as a per-vertex-alpha fringe on the stroke geometry, no MSAA. | P2 |
 | ~~L1~~ | ~~`SKLabelNode.color`/`colorBlendFactor`, `blendMode`~~ | **Done**, verified by pixel probes on iOS/tvOS simulators: `color` tints the text exactly as a sprite's tints its texture, and `colorize` animates it. Apple ignores a label's `blendMode` (it always alpha-blends), so this library keeps it for API parity only. Recording it also fixed two sprite bugs: an untextured sprite drew white unless `colorBlendFactor` was raised, and `color`'s alpha was ignored. | P2 |
 | ~~L2~~ | ~~`SKLabelNode.numberOfLines`, `preferredMaxLayoutWidth`, `lineBreakMode`~~ | **Done** with `StaticLayout`, following Apple's layout rules as recorded on iOS/tvOS simulators (one line ignores the width; a multi-line block aligns `.baseline` like `.bottom`). | P1 |
-| L3 | `SKLabelNode.attributedText` | Map to `android.text.Spanned`. | P2 |
+| ~~L3~~ | ~~`SKLabelNode.attributedText`~~ | **Done**, as a `CharSequence` styled with Android spans, verified on iOS/tvOS simulators: while set it alone is drawn and sized (`text` and the font properties are ignored, setting `text` doesn't clear it); unstyled text is 12-point Helvetica in black; `color` still tints; line and alignment settings apply. | P2 |
 
 ### 2.5 Actions
 

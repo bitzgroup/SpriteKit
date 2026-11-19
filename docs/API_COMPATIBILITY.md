@@ -316,6 +316,15 @@ categories recur throughout and are called out once here rather than per item:
   (Android's closest match for Helvetica). Android family names (`"sans-serif-medium"`) also work.
   Exact weights need API 28; below that, weights of 600 and up render bold. (Previously the whole
   name went to `Typeface.create(name, NORMAL)`, so `"Helvetica-Bold"` silently rendered regular.)
+- **`SKLabelNode.attributedText` is a `CharSequence`, styled with Android spans** instead of an
+  `NSAttributedString` and its attributes: `ForegroundColorSpan` for `.foregroundColor`,
+  `AbsoluteSizeSpan` (its size read as points)/`RelativeSizeSpan`/`TypefaceSpan`/`StyleSpan` for
+  `.font`, and so on. The label keeps an immutable snapshot (`SpannedString`), as Apple copies the
+  string. Its behavior follows Apple's as recorded on iOS/tvOS simulators: while set, it alone is
+  drawn and sized, ignoring `text`/`fontName`/`fontSize`/`fontColor` (even when empty); setting
+  `text` doesn't clear it; unstyled text is 12-point Helvetica in black, an `NSAttributedString`'s
+  defaults; `color`/`colorBlendFactor`, the multi-line settings and the alignment modes apply as
+  they do to `text`. `SKLabelNode(attributedText)` leaves `text` empty, where Apple's is `nil`.
 - **`SKLabelNode.blendMode` is accepted but has no effect**, as on Apple: recorded on iOS/tvOS
   simulators, a label alpha-blends whatever its `blendMode` (even when `colorBlendFactor` tints
   it). `color`/`colorBlendFactor` tint the text exactly as they tint a sprite's texture.

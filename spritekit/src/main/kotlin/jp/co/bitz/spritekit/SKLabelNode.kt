@@ -1,6 +1,7 @@
 package jp.co.bitz.spritekit
 
 import android.graphics.Color
+import android.text.SpannedString
 
 /**
  * A node that draws text — mirrors Apple's `SKLabelNode`. Text is rendered into a cached
@@ -82,6 +83,37 @@ public open class SKLabelNode(
      */
     public var lineBreakMode: SKLineBreakMode = SKLineBreakMode.ByTruncatingTail
 
+    /**
+     * Styled text to draw instead of [text] — Apple's `attributedText`, `null` by default. Pass any
+     * `CharSequence`: a `SpannableString`/`SpannedString` styled with Android's spans
+     * (`ForegroundColorSpan`, `AbsoluteSizeSpan`, `RelativeSizeSpan`, `TypefaceSpan`, `StyleSpan`,
+     * `UnderlineSpan`, ...) stands in for an `NSAttributedString` and its attributes. An
+     * `AbsoluteSizeSpan`'s size is read as points (pass `dip = false`, its default).
+     *
+     * As on Apple (verified on iOS/tvOS simulators): while this is set, the label draws and sizes
+     * only this text, ignoring [text], [fontName], [fontSize] and [fontColor] — even when it is
+     * empty — and setting [text] doesn't clear it; set it back to `null` to draw [text] again.
+     * Text without a font or color span is drawn the way an `NSAttributedString` without those
+     * attributes is: 12-point Helvetica, in black. [color]/[colorBlendFactor] still tint it, and
+     * [numberOfLines], [preferredMaxLayoutWidth], [lineBreakMode] and the alignment modes apply as
+     * they do to [text].
+     *
+     * The label keeps a snapshot, as Apple copies the attributed string: changing a mutable
+     * `Spannable` after assigning it doesn't change the label; assign it again instead.
+     */
+    public var attributedText: CharSequence? = null
+        set(value) {
+            field = if (value == null || value is String) value else SpannedString(value)
+        }
+
+    /**
+     * A label that draws [attributedText] — Apple's `SKLabelNode(attributedText:)`. Its [text] is
+     * empty (Apple's is `nil`).
+     */
+    public constructor(attributedText: CharSequence) : this() {
+        this.attributedText = attributedText
+    }
+
     private var cacheKey: SKLabelCacheKey? = null
     private var cachedTexture: SKTexture? = null
     private var cachedMetrics: SKLabelMetrics? = null
@@ -97,7 +129,7 @@ public open class SKLabelNode(
             } else {
                 SKLabelLineLayout(numberOfLines, preferredMaxLayoutWidth, lineBreakMode, horizontalAlignmentMode)
             }
-        val key = SKLabelCacheKey(text, fontName, fontSize, fontColor, layout)
+        val key = labelCacheKey(text, fontName, fontSize, fontColor, layout, attributedText)
         if (key != cacheKey) {
             val rendered = renderLabelBitmap(key)
             cachedTexture = rendered?.let { (bitmap, _) -> SKTexture(bitmap) }
