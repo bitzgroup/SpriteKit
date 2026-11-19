@@ -8,7 +8,33 @@ internal data class SKLabelCacheKey(
     val fontColor: Int,
     /** `null` for a one-line label. */
     val lineLayout: SKLabelLineLayout? = null,
+    /**
+     * [SKLabelNode.attributedText], an immutable snapshot. When set, it alone is drawn: [text] and
+     * the font fields are left at fixed values so changing them doesn't re-render (see [labelCacheKey]).
+     */
+    val attributedText: CharSequence? = null,
 )
+
+/**
+ * The cache key for a label showing [text] in the given font — or, when [attributedText] isn't
+ * `null`, showing that instead: Apple draws and sizes a label from its `attributedText` alone while
+ * one is set, ignoring `text`, `fontName`, `fontSize` and `fontColor` (verified on iOS/tvOS
+ * simulators), so those don't take part in the key then.
+ */
+@Suppress("LongParameterList")
+internal fun labelCacheKey(
+    text: String,
+    fontName: String?,
+    fontSize: Float,
+    fontColor: Int,
+    lineLayout: SKLabelLineLayout?,
+    attributedText: CharSequence?,
+): SKLabelCacheKey =
+    if (attributedText == null) {
+        SKLabelCacheKey(text, fontName, fontSize, fontColor, lineLayout)
+    } else {
+        SKLabelCacheKey("", null, 0f, 0, lineLayout, attributedText)
+    }
 
 /**
  * A multi-line label's layout settings ([SKLabelNode.numberOfLines] other than `1`).

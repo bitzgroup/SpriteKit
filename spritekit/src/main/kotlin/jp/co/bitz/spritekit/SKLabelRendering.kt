@@ -2,8 +2,10 @@ package jp.co.bitz.spritekit
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.text.Layout
+import android.text.SpannableStringBuilder
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
@@ -24,7 +26,12 @@ internal fun renderLabelBitmap(key: SKLabelCacheKey): Pair<Bitmap, SKLabelMetric
     // Guards *before* touching Paint at all, so empty text never reaches it -- callers (e.g.
     // buildRenderCommands' unit tests) rely on being able to construct an empty-text SKLabelNode
     // without needing a real Android runtime.
-    if (key.text.isEmpty()) return null
+    val attributedText = key.attributedText
+    if (attributedText != null || key.text.isEmpty()) {
+        return attributedText?.let {
+            renderAttributedText(it, key.lineLayout)
+        }
+    }
 
     val paint =
         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -52,8 +59,53 @@ private fun renderOneLine(
     return bitmap to SKLabelMetrics(width, ascent, descent)
 }
 
+/**
+ * Renders [SKLabelNode.attributedText]: text without a font or color span gets an
+ * `NSAttributedString`'s defaults, 12-point Helvetica in black.
+ */
+private fun renderAttributedText(
+    text: CharSequence,
+    lineLayout: SKLabelLineLayout?,
+): Pair<Bitmap, SKLabelMetrics>? {
+    if (text.isEmpty()) return null
+    val paint =
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.textSize = ATTRIBUTED_TEXT_DEFAULT_FONT_SIZE
+            this.color = Color.BLACK
+            this.typeface = typefaceForFontName(ATTRIBUTED_TEXT_DEFAULT_FONT_NAME)
+        }
+    return if (lineLayout == null) renderAttributedLine(text, paint) else renderLines(text, paint, lineLayout)
+}
+
+/**
+ * One line of styled text, its baseline where the tallest span's ascent puts it. A newline is
+ * drawn in place, not broken at — as a one-line label does with plain text.
+ */
+private fun renderAttributedLine(
+    text: CharSequence,
+    paint: TextPaint,
+): Pair<Bitmap, SKLabelMetrics>? {
+    val oneLine = SpannableStringBuilder(text)
+    for (index in oneLine.indices) {
+        if (oneLine[index] == '\n' || oneLine[index] == '\r') oneLine.replace(index, index + 1, ZERO_WIDTH_SPACE)
+    }
+    val width = Layout.getDesiredWidth(oneLine, paint)
+    if (width <= 0f) return null
+    val layout =
+        StaticLayout.Builder
+            .obtain(oneLine, 0, oneLine.length, paint, ceil(width).toInt())
+            .setIncludePad(false)
+            .setMaxLines(1)
+            .build()
+    val ascent = layout.getLineBaseline(0).toFloat()
+    val descent = layout.height - ascent
+    val bitmap = blankBitmap(width, ascent + descent)
+    layout.draw(Canvas(bitmap))
+    return bitmap to SKLabelMetrics(width, ascent, descent)
+}
+
 private fun renderLines(
-    text: String,
+    text: CharSequence,
     paint: TextPaint,
     settings: SKLabelLineLayout,
 ): Pair<Bitmap, SKLabelMetrics>? {
@@ -73,7 +125,7 @@ private fun renderLines(
 }
 
 private fun buildLayout(
-    text: String,
+    text: CharSequence,
     paint: TextPaint,
     settings: SKLabelLineLayout,
     width: Int,
@@ -111,3 +163,8 @@ private fun blankBitmap(
         ceil(height).toInt().coerceAtLeast(1),
         Bitmap.Config.ARGB_8888,
     )
+
+/** An `NSAttributedString`'s font where no font attribute is set: 12-point Helvetica. */
+private const val ATTRIBUTED_TEXT_DEFAULT_FONT_NAME = "Helvetica"
+private const val ATTRIBUTED_TEXT_DEFAULT_FONT_SIZE = 12f
+private const val ZERO_WIDTH_SPACE = "\u200B"
