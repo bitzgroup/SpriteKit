@@ -31,11 +31,21 @@ internal fun broadPhaseOverlap(
 
 /**
  * A collision between two shapes: [normal] points from the first shape passed to [narrowPhase]
- * toward the second, [penetration] is how deep they overlap along it, and [point] is an
- * approximate world-space contact point (not exact for polygon-polygon/polygon-chain cases, which
- * use an edge midpoint rather than true clipped contact points — see `docs/API_COMPATIBILITY.md`).
+ * toward the second, [penetration] is how deep they overlap along it, and [points] are where they
+ * touch in world space — one for a contact involving a circle, up to two for two polygons (or a
+ * polygon and an edge) meeting face to face, clipped as Box2D clips them. The solver pushes at
+ * each of them, which is what turns a body landing on a corner. [point] is the one contact point
+ * reported to [SKPhysicsContactDelegate]: their average.
  */
-internal data class SKContactManifold(val normal: Vector2, val penetration: Float, val point: Vector2)
+internal data class SKContactManifold(
+    val normal: Vector2,
+    val penetration: Float,
+    val points: List<Vector2>,
+) {
+    constructor(normal: Vector2, penetration: Float, point: Vector2) : this(normal, penetration, listOf(point))
+
+    val point: Vector2 get() = points.reduce { sum, p -> sum + p } * (1f / points.size)
+}
 
 /**
  * Tests [a] against [b] for overlap, returning the contact manifold if they do — the narrow
@@ -68,7 +78,7 @@ private fun narrowPhaseFromPolygon(
 ): SKContactManifold? =
     when (b) {
         is SKWorldShape.Circle -> circlePolygon(b, a)?.flip()
-        is SKWorldShape.Polygon -> polygonPolygon(a, b)
+        is SKWorldShape.Polygon -> polygonPolygon(a.vertices, b.vertices)
         is SKWorldShape.EdgeChain -> polygonEdgeChain(a, b)
     }
 
@@ -97,7 +107,7 @@ private fun circleCircle(
 }
 
 /** The outward-facing normal of `vertices[edgeIndex] -> vertices[edgeIndex + 1]`, for a CCW-wound polygon. */
-private fun outwardNormal(
+internal fun outwardNormal(
     vertices: List<Vector2>,
     edgeIndex: Int,
 ): Vector2 {
@@ -126,13 +136,7 @@ private fun segmentNormal(
     return Vector2(edge.y, 0f - edge.x).normalized()
 }
 
-private fun List<Vector2>.centroid(): Vector2 {
-    var sum = Vector2.Zero
-    for (vertex in this) sum += vertex
-    return sum * (1f / size)
-}
-
-private fun midpoint(
+internal fun midpoint(
     a: Vector2,
     b: Vector2,
 ): Vector2 = (a + b) * 0.5f
@@ -193,30 +197,35 @@ private fun maxSeparation(
     return bestSeparation to bestEdge
 }
 
-// Early returns are the clearest way to express "no collision" at each stage of the SAT test.
+/**
+ * Two convex polygons (a segment counts, as a two-vertex polygon), tested on every edge normal of
+ * both (SAT), with Box2D's contact clipping: the edge of least penetration is the reference face,
+ * the other polygon's edge most facing it is clipped to the reference face's sides, and its ends
+ * still behind the face are the contact points. Early returns are the clearest way to express
+ * "no collision" at each stage of the SAT test.
+ */
 @Suppress("ReturnCount")
 private fun polygonPolygon(
-    polyA: SKWorldShape.Polygon,
-    polyB: SKWorldShape.Polygon,
+    a: List<Vector2>,
+    b: List<Vector2>,
 ): SKContactManifold? {
-    val (separationA, edgeA) = maxSeparation(polyA.vertices, polyB.vertices)
+    val (separationA, edgeA) = maxSeparation(a, b)
     if (separationA >= 0f) return null
-    val (separationB, edgeB) = maxSeparation(polyB.vertices, polyA.vertices)
+    val (separationB, edgeB) = maxSeparation(b, a)
     if (separationB >= 0f) return null
 
-    // The shallower-penetration axis is the more accurate contact normal, standard SAT practice.
-    return if (separationA > separationB) {
-        val a = polyA.vertices[edgeA]
-        val b = polyA.vertices[(edgeA + 1) % polyA.vertices.size]
-        SKContactManifold(outwardNormal(polyA.vertices, edgeA), 0f - separationA, midpoint(a, b))
+    // The shallower-penetration axis is the more accurate contact normal, standard SAT practice;
+    // a small preference for A's faces keeps a resting contact from flipping between the two.
+    return if (separationB > separationA + REFERENCE_FACE_TOLERANCE) {
+        clippedContact(reference = b, referenceEdge = edgeB, incident = a, penetration = -separationB)
+            .let { it.copy(normal = -it.normal) }
     } else {
-        val a = polyB.vertices[edgeB]
-        val b = polyB.vertices[(edgeB + 1) % polyB.vertices.size]
-        // outwardNormal here points away from B (i.e. from B towards A); this file's convention
-        // wants A-to-B, so it's flipped.
-        SKContactManifold(-outwardNormal(polyB.vertices, edgeB), 0f - separationB, midpoint(a, b))
+        clippedContact(reference = a, referenceEdge = edgeA, incident = b, penetration = -separationA)
     }
 }
+
+/** How much deeper B's best face must be than A's to be preferred as the reference face, in points. */
+private const val REFERENCE_FACE_TOLERANCE = 0.05f
 
 private fun segments(chain: SKWorldShape.EdgeChain): List<Pair<Vector2, Vector2>> {
     val vertices = chain.vertices
@@ -247,39 +256,12 @@ private fun circleEdgeChain(
         circleSegment(circle, a, b)
     }.maxByOrNull { it.penetration }
 
-// Early returns are the clearest way to express "no collision" at each stage of the SAT test.
-@Suppress("ReturnCount")
+/** [polygon] against the segment [a]–[b], as a two-vertex polygon whose two edges face both ways. */
 private fun polygonSegment(
     polygon: SKWorldShape.Polygon,
     a: Vector2,
     b: Vector2,
-): SKContactManifold? {
-    val candidateNormals = listOf(segmentNormal(a, b), -segmentNormal(a, b))
-    var segmentSeparation = Float.NEGATIVE_INFINITY
-    var segmentNormalOut = candidateNormals[0]
-    for (normal in candidateNormals) {
-        val separation = polygon.vertices.minOf { normal dot (it - a) }
-        if (separation > segmentSeparation) {
-            segmentSeparation = separation
-            segmentNormalOut = normal
-        }
-    }
-    if (segmentSeparation >= 0f) return null
-
-    val (polygonSeparation, polygonEdge) = maxSeparation(polygon.vertices, listOf(a, b))
-    if (polygonSeparation >= 0f) return null
-
-    return if (segmentSeparation > polygonSeparation) {
-        val closest = closestPointOnSegment(polygon.vertices.centroid(), a, b)
-        // segmentNormalOut points away from the segment (towards A); this file's convention wants
-        // A-to-B (polygon-to-chain), so it's flipped.
-        SKContactManifold(-segmentNormalOut, 0f - segmentSeparation, closest)
-    } else {
-        val edgeA = polygon.vertices[polygonEdge]
-        val edgeB = polygon.vertices[(polygonEdge + 1) % polygon.vertices.size]
-        SKContactManifold(outwardNormal(polygon.vertices, polygonEdge), 0f - polygonSeparation, midpoint(edgeA, edgeB))
-    }
-}
+): SKContactManifold? = if (a == b) null else polygonPolygon(polygon.vertices, listOf(a, b))
 
 private fun polygonEdgeChain(
     polygon: SKWorldShape.Polygon,

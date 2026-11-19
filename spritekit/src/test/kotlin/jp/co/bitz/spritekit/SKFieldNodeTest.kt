@@ -89,7 +89,9 @@ class SKFieldNodeTest {
 
         simulatePhysics(scene, 1.seconds)
 
-        assertEquals(5f, bodyNode.physicsBody!!.velocity.x) // halved by strength 0.5 over one second
+        // Strength 0.5 takes off half the velocity a second, applied over 120 substeps:
+        // 10 × (1 − 0.5/120)^120.
+        assertEquals(6.0590f, bodyNode.physicsBody!!.velocity.x, 1e-3f)
     }
 
     @Test
