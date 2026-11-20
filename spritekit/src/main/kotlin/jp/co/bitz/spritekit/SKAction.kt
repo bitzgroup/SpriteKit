@@ -303,6 +303,142 @@ public class SKAction internal constructor(
             duration: Duration,
         ): SKAction = SKAction(duration, SKActionKind.SpeedBy(factor))
 
+        /**
+         * Pushes the node's [SKNode.physicsBody] with [force], as [SKPhysicsBody.applyForce] would
+         * for [duration] — Apple's `applyForce(_:duration:)`. As Apple's does (verified on iOS/tvOS
+         * simulators), it changes the body's velocity as each frame's actions run, by the force
+         * times [duration] times how far the action's eased progress moved that frame, so a
+         * [timingMode] shapes how the push builds up. [reversed] pushes the same way again, as
+         * Apple's does. No-op on a node without a body.
+         */
+        public fun applyForce(
+            force: Vector2,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ApplyForce(force, null))
+
+        /**
+         * [applyForce] at [at], a point in scene coordinates — Apple's
+         * `applyForce(_:at:duration:)`. A point off the body's center of mass also turns it, as
+         * [SKPhysicsBody.applyForce] at a point does.
+         */
+        public fun applyForce(
+            force: Vector2,
+            at: Vector2,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ApplyForce(force, at))
+
+        /**
+         * Turns the node's [SKNode.physicsBody] with [torque] for [duration], applied frame by
+         * frame as [applyForce] applies a force — Apple's `applyTorque(_:duration:)`.
+         */
+        public fun applyTorque(
+            torque: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ApplyTorque(torque))
+
+        /**
+         * Applies [impulse] to the node's [SKNode.physicsBody], spread over [duration] by the
+         * action's eased progress — Apple's `applyImpulse(_:duration:)`. A zero [duration] applies
+         * nothing, as on Apple. [reversed] pushes the same way again, as Apple's does.
+         */
+        public fun applyImpulse(
+            impulse: Vector2,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ApplyImpulse(impulse, null))
+
+        /**
+         * [applyImpulse] at [at], a point in scene coordinates — Apple's
+         * `applyImpulse(_:at:duration:)`. A point off the body's center of mass also turns it.
+         */
+        public fun applyImpulse(
+            impulse: Vector2,
+            at: Vector2,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ApplyImpulse(impulse, at))
+
+        /**
+         * Applies the angular [impulse] to the node's [SKNode.physicsBody], spread over [duration]
+         * as [applyImpulse] spreads its own — Apple's `applyAngularImpulse(_:duration:)`.
+         */
+        public fun applyAngularImpulse(
+            impulse: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ApplyAngularImpulse(impulse))
+
+        /**
+         * Changes the node's [SKPhysicsBody.mass] to [mass] over [duration] — Apple's
+         * `changeMass(to:duration:)`. Like setting [SKPhysicsBody.mass], it changes the body's
+         * density. Renamed, like [fadeAlphaTo], so it doesn't collide with [changeMassBy]. Its
+         * [reversed] does nothing (Apple's traps). Apple traps on a mass of `0` or less, too.
+         */
+        public fun changeMassTo(
+            mass: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ChangeMass(mass, relative = false))
+
+        /** Adds [delta] to the node's [SKPhysicsBody.mass] over [duration] — Apple's `changeMass(by:duration:)`. */
+        public fun changeMassBy(
+            delta: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ChangeMass(delta, relative = true))
+
+        /**
+         * Changes the node's [SKPhysicsBody.charge] to [charge] over [duration] — Apple's
+         * `changeCharge(to:duration:)`. Its [reversed] does nothing, as Apple's does.
+         */
+        public fun changeChargeTo(
+            charge: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ChangeCharge(charge, relative = false))
+
+        /**
+         * Adds [delta] to the node's [SKPhysicsBody.charge] over [duration] — Apple's
+         * `changeCharge(by:duration:)`. Its [reversed] does nothing, as Apple's does.
+         */
+        public fun changeChargeBy(
+            delta: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.ChangeCharge(delta, relative = true))
+
+        /**
+         * Changes an [SKFieldNode]'s [SKFieldNode.strength] to [strength] over [duration] —
+         * Apple's `strength(to:duration:)`. Its [reversed] does nothing, as Apple's does. No-op on
+         * other nodes.
+         */
+        public fun strengthTo(
+            strength: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.StrengthTo(strength))
+
+        /**
+         * Multiplies an [SKFieldNode]'s [SKFieldNode.strength] by [factor] over [duration] —
+         * Apple's `strength(by:duration:)`, which is multiplicative (verified on iOS/tvOS
+         * simulators). [reversed] divides by it. No-op on other nodes.
+         */
+        public fun strengthBy(
+            factor: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.StrengthBy(factor))
+
+        /**
+         * Apple's `falloff(to:duration:)`, which leaves [SKFieldNode.falloff] as it is on every
+         * field kind and never finishes — even with a zero [duration], or on a node that isn't a
+         * field — so a [sequence] or [group] holding it never finishes either (verified on
+         * iOS/tvOS simulators). This one does the same. Set [SKFieldNode.falloff] directly instead.
+         */
+        @Suppress("UnusedParameter") // kept for Apple's signature; Apple ignores it too
+        public fun falloffTo(
+            falloff: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.Falloff)
+
+        /** Apple's `falloff(by:duration:)`, which, like [falloffTo], changes nothing and never finishes. */
+        @Suppress("UnusedParameter") // kept for Apple's signature; Apple ignores it too
+        public fun falloffBy(
+            factor: Float,
+            duration: Duration,
+        ): SKAction = SKAction(duration, SKActionKind.Falloff)
+
         /** Runs [block] once, taking no time. */
         public fun run(block: () -> Unit): SKAction = SKAction(Duration.ZERO, SKActionKind.RunBlock(block))
 

@@ -399,6 +399,8 @@ categories recur throughout and are called out once here rather than per item:
   they started from isn't known until run time. Actions with no natural inverse (`wait`, `run`,
   `removeFromParent`, `customAction`, `animate`) do the same.
 - **Single-axis and Kotlin-named factories.** Apple's label-only overloads get distinct names:
+  `changeMassTo`/`changeMassBy`, `changeChargeTo`/`changeChargeBy`, `strengthTo`/`strengthBy`,
+  `falloffTo`/`falloffBy`,
   `moveToX`/`moveToY` (`moveTo(x:)`/`moveTo(y:)`), `scaleXTo`/`scaleYTo` (`scaleX(to:)`/
   `scaleY(to:)`), `scaleTo(size)` (`scale(to: CGSize)`, sprites only, as on Apple),
   `resizeToWidth`/`resizeToHeight` (`resize(toWidth:)`/`resize(toHeight:)`; the two-dimension form
@@ -408,6 +410,22 @@ categories recur throughout and are called out once here rather than per item:
   `reversed()` divides). `rotateTo` interpolates straight to the target by default and turns the
   short way only with `shortestUnitArc = true` — either way ending exactly on the target angle.
   (Before 0.4.0, `scaleBy` added and `rotateTo` always took the short way.)
+- **Physics actions, as Apple's run (since 0.5.0, verified on iOS/tvOS simulators).**
+  `applyForce`/`applyImpulse` (each also with a scene-coordinate point `at`), `applyTorque`, and
+  `applyAngularImpulse` change the body's velocity as each frame's actions run, before physics:
+  each frame applies the impulse (for a force or torque, its amount times the duration) times how
+  far the action's eased progress moved that frame, so a `timingMode` shapes the push. An
+  impulse action with no duration applies nothing, and a reversed one pushes the same way again,
+  as Apple's do. `changeMassTo`/`changeMassBy` and `changeChargeTo`/`changeChargeBy` (Apple's
+  `changeMass(to:/by:)`/`changeCharge(to:/by:)`) interpolate linearly, adding for "by"; changing
+  the mass changes the density, as setting `mass` does. `strengthTo`/`strengthBy` animate an
+  `SKFieldNode`'s strength, and `strengthBy` multiplies. Apple's `falloff(to:)`/`falloff(by:)`
+  leave a field's falloff unchanged on every field kind and never finish — even with no duration
+  or on a node that isn't a field, holding up any `sequence` or `group` they're in — so
+  `falloffTo`/`falloffBy` do the same; set `falloff` directly instead. The
+  reversed charge, mass and strength-to actions do nothing — Apple's mass ones trap, as do mass
+  actions that take the mass to `0` or below. All of them are no-ops on a node without a physics
+  body (or, for strength and falloff, on a node that isn't a field).
 - **`SKAction.duration` is settable**, as on Apple: on a single action it changes how long the
   action runs; on a `sequence`/`group`/`repeat` it changes only the reported value, which Apple's
   does too.
@@ -559,6 +577,8 @@ categories recur throughout and are called out once here rather than per item:
   subset of Apple's field kinds is implemented; noise, turbulence, electric, magnetic, spring,
   vortex, and checkerboard-texture-based velocity fields aren't — see `docs/ROADMAP.md`'s
   "Explicitly Out of Scope".
+- **`SKPhysicsBody.charge` is stored but has no effect** (since 0.5.0): the physics actions
+  animate it, but there are no electric or magnetic fields for it to act on.
 - **`SKFieldNode.region` isn't implemented** — every field is always unbounded, as if `region`
   were `null`, since this port has no `SKRegion` implementation (the same gap Phase 6 documented
   for `SKConstraint`). **`isExclusive`** is stored but not enforced — every enabled, bitmask

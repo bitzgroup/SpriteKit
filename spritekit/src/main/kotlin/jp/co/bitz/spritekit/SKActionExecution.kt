@@ -19,6 +19,9 @@ internal class SKActionState(val action: SKAction) {
     var childStates: List<SKActionState>? = null
     var repeatCount: Int = 0
 
+    /** How much of its eased progress a physics action has already applied. */
+    var appliedProgress: Float = 0f
+
     /** Returns the value captured on the first call for this state; ignores [current] on later calls. */
     @Suppress("UNCHECKED_CAST")
     fun <T> captureOnce(current: () -> T): T {
@@ -134,7 +137,7 @@ private fun stepRepeat(
     return if (finished) remaining else null
 }
 
-// Early returns cover PlaySoundFileNamed's special (non-duration-based) path and the
+// Early returns cover PlaySoundFileNamed's and Falloff's special (non-duration-based) paths and the
 // zero-duration instant-effect case, ahead of the normal progress-based path below.
 @Suppress("ReturnCount")
 private fun stepLeaf(
@@ -145,6 +148,7 @@ private fun stepLeaf(
     val action = state.action
     val kind = action.kind
     if (kind is SKActionKind.PlaySoundFileNamed) return stepPlaySound(state, kind, availableTime)
+    if (kind is SKActionKind.Falloff) return null // never finishes, as on Apple
     val duration = action.duration
     if (duration <= Duration.ZERO) {
         applyLeafEffect(state, action.kind, node, progress = 1f, elapsed = Duration.ZERO)
@@ -187,6 +191,7 @@ private fun applyLeafEffect(
     elapsed: Duration,
 ) {
     if (applyTransformEffect(state, kind, node, progress)) return
+    if (applyPhysicsEffect(state, kind, node, progress)) return
     when (kind) {
         is SKActionKind.Follow -> applyFollow(state, kind, node, progress)
         is SKActionKind.FadeAlphaTo -> {
