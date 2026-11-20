@@ -7,7 +7,7 @@ import android.graphics.PathMeasure
  * The maximum distance, in path-length units, any point on the true curve may lie from the
  * nearest point on [flattenPath]'s straight-line approximation of it — see `Path.approximate`.
  */
-private const val FLATTEN_ACCEPTABLE_ERROR = 0.25f
+internal const val FLATTEN_ACCEPTABLE_ERROR = 0.25f
 
 /**
  * A single contour flattened out of an `android.graphics.Path`: its points (curves already

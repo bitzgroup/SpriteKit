@@ -36,6 +36,7 @@ internal fun SKWorldShape.contains(point: Vector2): Boolean =
         is SKWorldShape.Circle -> (point - center).lengthSquared() <= radius * radius
         is SKWorldShape.Polygon -> convexPolygonContains(vertices, point)
         is SKWorldShape.EdgeChain -> false
+        is SKWorldShape.Compound -> parts.any { it.contains(point) }
     }
 
 private fun convexPolygonContains(
@@ -82,6 +83,22 @@ internal fun SKWorldShape.rayHits(
         is SKWorldShape.Polygon -> polygonEntry(body, start, end)
         is SKWorldShape.EdgeChain ->
             segmentHits(body, if (closed) closedSegments(vertices) else vertices.zipWithNext(), start, end)
+        is SKWorldShape.Compound -> compoundHits(body, start, end)
+    }
+
+/**
+ * Each part's hits, leaving out those inside another part -- where a ray crosses from one piece
+ * of a split concave polygon into the next, say, rather than into the body.
+ */
+private fun SKWorldShape.Compound.compoundHits(
+    body: SKPhysicsBody,
+    start: Vector2,
+    end: Vector2,
+): List<SKRayHit> =
+    parts.flatMapIndexed { index, part ->
+        part.rayHits(body, start, end).filter { hit ->
+            parts.withIndex().none { (other, shape) -> other != index && shape.contains(hit.point) }
+        }
     }
 
 private fun SKWorldShape.Polygon.polygonEntry(

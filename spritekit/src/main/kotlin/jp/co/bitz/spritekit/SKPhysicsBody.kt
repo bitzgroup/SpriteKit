@@ -1,10 +1,13 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.Path
+
 /**
  * A rigid-body shape and its dynamics, attached to an [SKNode] via [SKNode.physicsBody] — mirrors
  * Apple's `SKPhysicsBody`. Construct via the [circleOfRadius]/[rectangleOf]/[polygonFrom]/
- * [edgeLoopFrom]/[edgeFrom] factories, matching Apple's own class-method surface (`bodies(fromTexture:...)`
- * texture-alpha-mask bodies aren't implemented — see `docs/API_COMPATIBILITY.md`).
+ * [edgeLoopFrom]/[edgeChainFrom]/[edgeFrom]/[bodies] factories, matching Apple's own initializers
+ * (`bodies(fromTexture:...)` texture-alpha-mask bodies aren't implemented — see
+ * `docs/API_COMPATIBILITY.md`).
  *
  * Simulated by [SKPhysicsWorld] once its owning node is part of a presented [SKScene]'s tree. All
  * state is confined to [SKView]'s render thread, like the rest of the scene graph.
@@ -315,12 +318,64 @@ public class SKPhysicsBody internal constructor(
         ): SKPhysicsBody = SKPhysicsBody(SKPhysicsShape.Polygon(rectangleVertices(size, center)))
 
         /**
-         * A convex polygon body from [vertices] (CCW winding, in the node's local space) — Apple's
-         * `polygonFrom(_:)`, taking a `CGPath` there; this library has no path type, so the vertex
-         * list is passed directly (see `docs/API_COMPATIBILITY.md`). Concave input isn't validated
-         * or corrected, matching Apple's own "must be convex" contract.
+         * A polygon body with [vertices] as its outline (in the node's local space, either
+         * winding, closed back to the first) — Apple's `init(polygonFrom:)` for a path of
+         * straight lines. A concave outline works, as Apple's does: the body keeps its full area
+         * and collides in its notches.
          */
-        public fun polygonFrom(vertices: List<Vector2>): SKPhysicsBody = SKPhysicsBody(SKPhysicsShape.Polygon(vertices))
+        public fun polygonFrom(vertices: List<Vector2>): SKPhysicsBody = SKPhysicsBody(polygonShape(vertices))
+
+        /**
+         * A polygon body with [path]'s first subpath as its outline, closed back to its start —
+         * Apple's `init(polygonFrom:)`, which reads only the first subpath too. Curves are
+         * flattened into straight edges, except that a full circle makes an exact circle body, as
+         * on Apple (verified on iOS/tvOS simulators). Concave outlines work, as in the
+         * vertex-list overload.
+         */
+        public fun polygonFrom(path: Path): SKPhysicsBody = SKPhysicsBody(pathPolygonShape(firstSubpath(path).points))
+
+        /**
+         * A static boundary along [path]'s first subpath — Apple's `init(edgeChainFrom:)`, which
+         * reads only the first subpath too; curves are flattened. Closed only if the subpath is.
+         * Always [isDynamic] `false`, like [edgeFrom].
+         */
+        public fun edgeChainFrom(path: Path): SKPhysicsBody {
+            val subpath = firstSubpath(path)
+            return SKPhysicsBody(SKPhysicsShape.EdgeChain(subpath.points, subpath.closed)).apply { isDynamic = false }
+        }
+
+        /**
+         * A static boundary along [path]'s first subpath, closed back to its start — Apple's
+         * `init(edgeLoopFrom: CGPath)`, which reads only the first subpath too; curves are
+         * flattened. Always [isDynamic] `false`, like [edgeFrom].
+         */
+        public fun edgeLoopFrom(path: Path): SKPhysicsBody =
+            SKPhysicsBody(
+                SKPhysicsShape.EdgeChain(firstSubpath(path).points, closed = true),
+            ).apply { isDynamic = false }
+
+        /**
+         * One body made of [bodies]' shapes, each where it sits in its own body — Apple's
+         * `init(bodies:)`. Every part collides, so a body can have gaps. As on Apple (verified
+         * on iOS/tvOS simulators): its area is the parts' areas summed, its [density],
+         * [restitution] and [friction] are the first body's (so its mass is that density times
+         * the summed area), and everything else starts at the defaults. A compound among
+         * [bodies] adds its parts to collide with but no mass. Of no bodies, it has no shape and
+         * a density of `0`.
+         */
+        public fun bodies(bodies: List<SKPhysicsBody>): SKPhysicsBody {
+            val parts = bodies.flatMap { (it.shape as? SKPhysicsShape.Compound)?.parts ?: listOf(it.shape) }
+            val solidParts = bodies.map { it.shape }.filter { it !is SKPhysicsShape.Compound }
+            val first = bodies.firstOrNull()
+            return SKPhysicsBody(SKPhysicsShape.Compound(parts, solidParts)).apply {
+                density = first?.density ?: 0f
+                restitution = first?.restitution ?: restitution
+                friction = first?.friction ?: friction
+            }
+        }
+
+        private fun firstSubpath(path: Path): SKFlattenedContour =
+            flattenPath(path).firstOrNull() ?: SKFlattenedContour(emptyList(), closed = false)
 
         /**
          * A static boundary following [rect]'s four edges — Apple's `edgeLoopFrom(_:)`. Always

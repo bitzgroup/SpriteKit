@@ -80,7 +80,7 @@ private fun step(
     val observations = findContactObservations(bodies, shapes)
     recordContactedBodies(bodies, observations)
 
-    val physicalContacts = observations.mapNotNull { toResolvedContact(it, scene) }
+    val physicalContacts = observations.flatMap { toResolvedContacts(it, scene) }
     repeat(VELOCITY_ITERATIONS) {
         physicalContacts.forEach(::resolveVelocity)
         resolveJointVelocities(world.joints, nodeByBody, scene)
@@ -131,6 +131,7 @@ internal fun worldShape(
                 shape.vertices.map { node.convertTo(it, scene) },
                 shape.closed,
             )
+        is SKPhysicsShape.Compound -> SKWorldShape.Compound(shape.parts.map { worldShape(node, scene, it) })
     }
 
 private fun dampingFactor(
@@ -214,6 +215,8 @@ private data class SKContactObservation(
     val nodeB: SKNode,
     val bodyB: SKPhysicsBody,
     val manifold: SKContactManifold,
+    /** Every place the two touch -- more than [manifold], the deepest, when either is a compound. */
+    val manifolds: List<SKContactManifold> = listOf(manifold),
 )
 
 /**
@@ -245,30 +248,38 @@ private fun observeContact(
     val shapeA = shapes.getValue(entryA)
     val shapeB = shapes.getValue(entryB)
     if (!broadPhaseOverlap(shapeA, shapeB)) return null
-    val manifold = narrowPhase(shapeA, shapeB) ?: return null
-    return SKContactObservation(entryA.node, entryA.body, entryB.node, entryB.body, manifold)
+    val manifolds = narrowPhaseAll(shapeA, shapeB)
+    val deepest = manifolds.maxByOrNull { it.penetration } ?: return null
+    return SKContactObservation(entryA.node, entryA.body, entryB.node, entryB.body, deepest, manifolds)
 }
 
 /**
- * [observation], if its bodies should physically collide and aren't both immovable -- `null`
- * otherwise (e.g. a sensor-only pair).
+ * [observation]'s contacts to resolve, one per place its bodies touch, if they should physically
+ * collide and aren't both immovable -- none otherwise (e.g. a sensor-only pair).
  */
+private fun toResolvedContacts(
+    observation: SKContactObservation,
+    scene: SKScene,
+): List<SKResolvedContact> = observation.manifolds.mapNotNull { toResolvedContact(observation, it, scene) }
+
+/** [manifold], one of [observation]'s, as a contact to resolve -- `null` if it shouldn't be. */
 @Suppress("ReturnCount")
 private fun toResolvedContact(
     observation: SKContactObservation,
+    manifold: SKContactManifold,
     scene: SKScene,
 ): SKResolvedContact? {
     val a = observation.bodyA
     val b = observation.bodyB
     if (a.inverseMass == 0f && b.inverseMass == 0f) return null // both immovable
     if (!shouldCollide(a, b)) return null
-    val normal = observation.manifold.normal
+    val normal = manifold.normal
     val tangent = Vector2(normal.y, -normal.x)
     val restitution = maxOf(a.restitution, b.restitution)
     val centerA = observation.nodeA.convertTo(a.centerOfMass, scene)
     val centerB = observation.nodeB.convertTo(b.centerOfMass, scene)
     val points =
-        observation.manifold.points.map { point ->
+        manifold.points.map { point ->
             val rA = point - centerA
             val rB = point - centerB
             val approach = relativeVelocity(a, rA, b, rB) dot normal
@@ -284,7 +295,7 @@ private fun toResolvedContact(
         SKPhysicsEntry(observation.nodeA, a),
         SKPhysicsEntry(observation.nodeB, b),
         normal,
-        observation.manifold.penetration,
+        manifold.penetration,
         kotlin.math.sqrt(a.friction * b.friction),
         points,
     )
