@@ -59,6 +59,13 @@ public class SKPhysicsBody internal constructor(
     /** Bounciness on collision, from `0` (no bounce) to `1` (elastic). Defaults to `0.2`, matching Apple. */
     public var restitution: Float = 0.2f
 
+    /**
+     * This body's electrical charge — Apple's `charge`, `0` by default. Stored, and animated by
+     * [SKAction.changeChargeTo]/[SKAction.changeChargeBy], but it has no effect yet: this port has
+     * no electric or magnetic fields to act on it.
+     */
+    public var charge: Float = 0f
+
     /** Fraction of linear velocity retained each second, damping motion. Defaults to `0.1`, matching Apple. */
     public var linearDamping: Float = 0.1f
 

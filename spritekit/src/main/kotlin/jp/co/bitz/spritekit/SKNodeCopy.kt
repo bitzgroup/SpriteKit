@@ -41,6 +41,7 @@ internal fun SKPhysicsBody.copyBody(): SKPhysicsBody =
         it.density = density
         it.friction = friction
         it.restitution = restitution
+        it.charge = charge
         it.linearDamping = linearDamping
         it.angularDamping = angularDamping
         it.isDynamic = isDynamic

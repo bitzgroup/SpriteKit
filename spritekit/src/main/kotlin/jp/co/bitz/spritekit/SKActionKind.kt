@@ -94,6 +94,34 @@ internal sealed class SKActionKind {
 
     data class ChangePlaybackRateTo(val rate: Float) : SKActionKind()
 
+    /**
+     * Pushes a body by [impulse] at [at] (scene coordinates; `null` for its center of mass), spread
+     * over the action as its eased progress advances. A force is passed as its impulse over the
+     * action's duration.
+     */
+    data class ApplyImpulse(val impulse: Vector2, val at: Vector2?) : SKActionKind()
+
+    /** A force, applied as its impulse over the action's duration, as [ApplyImpulse] applies its own. */
+    data class ApplyForce(val force: Vector2, val at: Vector2?) : SKActionKind()
+
+    data class ApplyAngularImpulse(val impulse: Float) : SKActionKind()
+
+    data class ApplyTorque(val torque: Float) : SKActionKind()
+
+    /** A `relative` value is added to the mass the action starts from. */
+    data class ChangeMass(val value: Float, val relative: Boolean) : SKActionKind()
+
+    /** A `relative` value is added to the charge the action starts from. */
+    data class ChangeCharge(val value: Float, val relative: Boolean) : SKActionKind()
+
+    data class StrengthTo(val strength: Float) : SKActionKind()
+
+    /** A multiplicative factor. */
+    data class StrengthBy(val factor: Float) : SKActionKind()
+
+    /** Apple's `falloff(to:)`/`falloff(by:)`, which leave a field's falloff as it is and never finish. */
+    data object Falloff : SKActionKind()
+
     data class PlaySoundFileNamed(val path: String, val waitForCompletion: Boolean) : SKActionKind()
 }
 
@@ -119,5 +147,9 @@ internal fun SKActionKind.reversed(): SKActionKind =
         is SKActionKind.Sequence -> SKActionKind.Sequence(actions.reversed().map { it.reversed() })
         is SKActionKind.Group -> SKActionKind.Group(actions.map { it.reversed() })
         is SKActionKind.Repeat -> SKActionKind.Repeat(action.reversed(), count)
+        is SKActionKind.StrengthBy -> SKActionKind.StrengthBy(1f / factor)
+        // Apple's reversed charge and strength-to actions change nothing; its reversed mass actions
+        // trap. Here all of them wait out their duration.
+        is SKActionKind.ChangeMass, is SKActionKind.ChangeCharge, is SKActionKind.StrengthTo -> SKActionKind.Wait
         else -> this
     }

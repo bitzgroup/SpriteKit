@@ -108,10 +108,11 @@ Missing `SKAction` factories (everything else in Apple's list is present):
 | ~~A3~~ | ~~`setTexture(_:)`, `setTexture(_:resize:)`~~ — **Done**. | P1 |
 | ~~A4~~ | ~~`speed(to:duration:)`, `speed(by:duration:)` (depends on N2)~~ — **Done** as `speedTo`/`speedBy`; `speedBy` multiplies, as Apple's does. | P1 |
 | ~~A5~~ | ~~`run(_:onChildWithName:)` with the full name-search syntax~~ — **Done** with N3; runs on the first match only, as on Apple. | P2 |
-| A6 | `applyForce`/`applyTorque`/`applyImpulse`/`applyAngularImpulse` actions, `changeCharge`, `changeMass`, `strength(to:/by:)`, `falloff(to:/by:)` | P2 |
+| ~~A6~~ | ~~`applyForce`/`applyTorque`/`applyImpulse`/`applyAngularImpulse` actions, `changeCharge`, `changeMass`, `strength(to:/by:)`, `falloff(to:/by:)`~~ — **Done**, verified on iOS/tvOS simulators: force and impulse actions change the velocity as actions run, following the eased progress; a reversed one pushes the same way; `strength(by:)` multiplies; Apple's `falloff` actions change nothing and never finish, and the port's do the same. Adds a stored `SKPhysicsBody.charge`. | P2 |
 | A7 | `wait(forDuration:withRange:)` re-randomizing per run, `group` leftover time (both recorded deviations) | P2 |
 | ~~A8~~ | ~~`SKAction.duration` as a public, settable property (verify current visibility)~~ — **Done** — settable; on a composite it changes only the reported value, as on Apple. | P1 |
 | A9 | `stereoPan`, `changeObstruction`, `changeOcclusion`, `changeReverb`, `warp(to:)`, `animate(withNormalTextures:)`, `setNormalTexture`, `SKAction(named:)` | Out of scope with their subsystems |
+| A10 | Apple's timing curves. Recording A6 showed Apple's `easeIn` is `2t² − t³` (a quarter of the way: 7/64; halfway: 3/8), where the port's is `t²`; record `easeOut`/`easeInEaseOut` too and match them. | P2 |
 
 ### 2.6 Physics
 
@@ -121,7 +122,8 @@ Missing `SKAction` factories (everything else in Apple's list is present):
 | ~~P2~~ | ~~`SKPhysicsBody.node`, `isResting`, `area`, `joints`, `allContactedBodies()`~~ | **Done**, verified on iOS/tvOS simulators; joint anchors are now fixed when a joint is added. | P1 |
 | ~~P3~~ | ~~`applyForce(_:at:)`, `applyImpulse(_:at:)`, torque from off-centre contacts~~ | **Done**, verified on iOS/tvOS simulators: an off-center force or impulse turns the body by `r × F` with lengths in meters; bodies turn about their center of mass (an off-center shape swings its node around it); contacts touch at up to two clipped points and push at each, so a box landing on a corner turns flat and a sliding ball starts rolling. Recording it showed Apple simulates in steps of 1/120 of a second whatever the frame rate, moving at most 300 points and turning at most π/2 a step; the port now does too, so scenes settle the same way at any frame rate. Joints are still linear-only. | P2 |
 | P4 | `SKPhysicsBody(bodies:)`, `init(edgeChainFrom:)`, `init(edgeLoopFrom: path)`, `init(polygonFrom: path)` | Compound and path-based bodies. | P2 |
-| P5 | `SKPhysicsBody.charge`, `SKPhysicsWorld.sampleFields(at:)`, `SKRegion`, remaining field kinds, `SKPhysicsContact.collisionImpulse`, joint limits/reaction forces | Already recorded; grouped here as one physics-completeness work item. | P3 |
+| P5 | ~~`SKPhysicsBody.charge`~~ (stored since A6, with no field to act on it), `SKPhysicsWorld.sampleFields(at:)`, `SKRegion`, remaining field kinds, `SKPhysicsContact.collisionImpulse`, joint limits/reaction forces | Already recorded; grouped here as one physics-completeness work item. | P3 |
+| P6 | `SKFieldNode` default `falloff` per field kind | Recording A6 showed Apple's `radialGravityField()` starts with a falloff of `2`; the port's fields all start at `0`. Record each kind's defaults and match them. | P2 |
 
 ### 2.7 Camera, constraints, particles, tile maps, transitions, audio
 
