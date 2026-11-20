@@ -390,9 +390,10 @@ categories recur throughout and are called out once here rather than per item:
 - **`run(_:onChildWithName:)` uses the full search syntax** of `SKNode.childNode` (see "Scene
   graph" above) and runs on the first match only, as on Apple (since 0.4.0; before that, direct
   children only).
-- **`wait(duration:withRange:)` picks its random duration once, when the action is created.**
-  Apple re-randomizes on every run of a reused action instance (e.g. inside a `repeatForever`);
-  this library doesn't, for simplicity.
+- **`wait(duration:withRange:)` draws a new length on every run** — each pass of a `repeat`, and
+  each node it runs on — and its `duration` reads as the base duration, as on Apple (since 0.5.0,
+  verified on iOS/tvOS simulators; before that, the length was drawn once, when the action was
+  created, and `duration` reported it).
 - **`reversed()` only reverses relative ("by") actions and composites (`sequence`/`group`/
   `repeat`) built from them.** Absolute ("to") actions — `moveTo`, `scaleTo`, `rotateTo`,
   `resizeTo`, `fadeAlphaTo`, `colorize` — return an unreversed copy of themselves, since the value
@@ -429,10 +430,9 @@ categories recur throughout and are called out once here rather than per item:
 - **`SKAction.duration` is settable**, as on Apple: on a single action it changes how long the
   action runs; on a `sequence`/`group`/`repeat` it changes only the reported value, which Apple's
   does too.
-- **A `group`'s exact leftover time isn't tracked.** In an enclosing `sequence`, a finished
-  `group` always hands zero leftover time to whatever runs next, even if its children actually
-  finished partway through the available frame time — contract-conformant for "did the group
-  finish," not bit-identical to Apple's own (undocumented) internal timing.
+- **A `group` hands on the time its last action didn't need**, so in a `sequence` the next action
+  starts exactly where it would after a plain `wait` of the same length, as on Apple (since 0.5.0,
+  verified on iOS/tvOS simulators; before that, a finished `group` handed on no time).
 - **`resizeTo`/`resizeBy`/`animate` are no-ops on any node that isn't an `SKSpriteNode`**, and
   `colorize` on any node that isn't an `SKSpriteNode` or `SKLabelNode` (the node types with a
   mutable `size`/`texture`, or `color`/`colorBlendFactor`), same as their underlying properties.

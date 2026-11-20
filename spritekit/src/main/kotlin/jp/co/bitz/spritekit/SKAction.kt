@@ -2,9 +2,7 @@ package jp.co.bitz.spritekit
 
 import android.graphics.Path
 import android.graphics.PathMeasure
-import kotlin.random.Random
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -261,22 +259,14 @@ public class SKAction internal constructor(
         public fun wait(duration: Duration): SKAction = SKAction(duration, SKActionKind.Wait)
 
         /**
-         * Waits a random duration in `[duration - range/2, duration + range/2]`.
-         *
-         * Deviation: the random duration is picked once, when this action is created. Apple
-         * re-randomizes on every run of a reused action instance (e.g. inside a
-         * [repeatForever]); this library doesn't, for simplicity — see
-         * `docs/API_COMPATIBILITY.md`.
+         * Waits a random duration in `[duration - range/2, duration + range/2]` (never below zero),
+         * drawn afresh every time the action runs — each run of a [repeat], and each node it runs
+         * on — as Apple's does. Its [SKAction.duration] reads as [duration].
          */
         public fun wait(
             duration: Duration,
             withRange: Duration,
-        ): SKAction {
-            val halfRangeNanos = withRange.inWholeNanoseconds / 2
-            val jitterNanos = if (halfRangeNanos > 0) Random.nextLong(-halfRangeNanos, halfRangeNanos + 1) else 0L
-            val resolvedNanos = (duration.inWholeNanoseconds + jitterNanos).coerceAtLeast(0L)
-            return SKAction(resolvedNanos.nanoseconds, SKActionKind.Wait)
-        }
+        ): SKAction = SKAction(duration, SKActionKind.WaitRange(withRange))
 
         /**
          * Sets an [SKSpriteNode]'s [SKSpriteNode.texture] to [texture], instantly — Apple's
