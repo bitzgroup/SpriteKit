@@ -21,6 +21,17 @@ internal sealed class SKPhysicsShape {
      * mass/collision response as a mover.
      */
     data class EdgeChain(val vertices: List<Vector2>, val closed: Boolean) : SKPhysicsShape()
+
+    /**
+     * Several shapes moving as one body -- Apple's `SKPhysicsBody(bodies:)`, and a concave polygon
+     * split into convex pieces. Every one of [parts] collides (none is itself a compound), but only
+     * [solidParts] add mass: as on Apple, the parts of a compound nested in another collide
+     * without adding any (verified on iOS/tvOS simulators).
+     */
+    data class Compound(
+        val parts: List<SKPhysicsShape>,
+        val solidParts: List<SKPhysicsShape> = parts,
+    ) : SKPhysicsShape()
 }
 
 /**
@@ -38,6 +49,11 @@ private fun SKPhysicsShape.inMeters(): SKPhysicsShape {
         is SKPhysicsShape.Circle -> SKPhysicsShape.Circle(radius * scale, center * scale)
         is SKPhysicsShape.Polygon -> SKPhysicsShape.Polygon(vertices.map { it * scale })
         is SKPhysicsShape.EdgeChain -> this
+        is SKPhysicsShape.Compound ->
+            SKPhysicsShape.Compound(
+                parts.map { it.inMeters() },
+                solidParts.map { it.inMeters() },
+            )
     }
 }
 
@@ -58,6 +74,7 @@ private fun SKPhysicsShape.rawArea(): Float =
         is SKPhysicsShape.Circle -> PI.toFloat() * radius * radius
         is SKPhysicsShape.Polygon -> abs(signedPolygonArea(vertices))
         is SKPhysicsShape.EdgeChain -> 0f
+        is SKPhysicsShape.Compound -> solidParts.sumOf { it.rawArea().toDouble() }.toFloat()
     }
 
 /**
@@ -84,7 +101,17 @@ private fun SKPhysicsShape.rawMassProperties(density: Float): SKMassProperties =
             SKMassProperties(mass, mass * radius * radius / 2f, center)
         }
         is SKPhysicsShape.Polygon -> polygonMassProperties(vertices, density)
+        is SKPhysicsShape.Compound -> combinedMassProperties(solidParts.map { it.rawMassProperties(density) })
     }
+
+/** Parts' mass properties as one body's: their masses summed, inertia moved to the shared center of mass. */
+private fun combinedMassProperties(parts: List<SKMassProperties>): SKMassProperties {
+    val mass = parts.sumOf { it.mass.toDouble() }.toFloat()
+    if (mass == 0f) return SKMassProperties(0f, 0f)
+    val centroid = parts.fold(Vector2.Zero) { sum, part -> sum + part.centroid * part.mass } * (1f / mass)
+    val inertia = parts.sumOf { (it.inertia + it.mass * (it.centroid - centroid).lengthSquared()).toDouble() }.toFloat()
+    return SKMassProperties(mass, inertia, centroid)
+}
 
 private fun signedPolygonArea(vertices: List<Vector2>): Float {
     var area = 0f

@@ -513,8 +513,25 @@ categories recur throughout and are called out once here rather than per item:
   polygon second-moment-of-area sum for convex polygons — hand-verified against the known
   `I = mass*(w²+h²)/12` square formula before implementation), not necessarily Apple's own
   (undocumented) computation.
-- **`polygonFrom(_:)`** takes a `List<Vector2>` rather than a `CGPath` — this library has no path
-  type. Concave input isn't validated or corrected, matching Apple's own "must be convex" contract.
+- **Path-based bodies take an `android.graphics.Path`** (this library's `CGPath` stand-in, as for
+  `SKShapeNode`): `polygonFrom(path)`, `edgeChainFrom(path)` and `edgeLoopFrom(path)` (since
+  0.5.0). As on Apple (verified on iOS/tvOS simulators), each reads only the path's first subpath;
+  a polygon closes back to its start, either winding works, and a concave outline keeps its full
+  area and collides in its notches (the port splits it into a few convex pieces, as a compound
+  body). A full circle's path makes an exact circle body, as on Apple. Other curves are flattened
+  into straight edges to within a quarter point, where Apple's flattening is coarser on small
+  curves (a 20×10 ellipse's polygon has 8 edges and 90% of the area), so curved bodies' areas
+  differ slightly. The `polygonFrom(vertices)` overload, for a path of straight lines, also takes
+  concave outlines since 0.5.0 (before, they were used as given, as if convex). The edge factories
+  give static bodies, like `edgeFrom`/`edgeLoopFrom(rect)`.
+- **`bodies(list)` combines bodies, as Apple's `init(bodies:)`** (since 0.5.0, verified on iOS/tvOS
+  simulators): every part collides where it sits in its own body (gaps between them don't), the
+  area is the parts' summed, and the compound turns about their shared center of mass. Its
+  `density`, `restitution` and `friction` are the first body's — so its mass is that density times
+  the whole area — and everything else starts at the defaults. A compound among the bodies adds
+  its parts to collide with but no area. Two of Apple's results aren't mirrored: with an edge body
+  first, Apple's density and mass come out NaN (the port uses the edge's density); with a compound
+  first, Apple's density comes out 22,500 times too large (the port uses that compound's density).
 - **`bodies(fromTexture:...)`** (texture-alpha-mask bodies) is not implemented.
 - **Collisions turn bodies** (since 0.5.0, verified on iOS/tvOS simulators): polygons, and a
   polygon against an edge, touch at up to two points clipped as Box2D clips them, and the

@@ -13,6 +13,9 @@ internal sealed class SKWorldShape {
     data class Polygon(val vertices: List<Vector2>) : SKWorldShape()
 
     data class EdgeChain(val vertices: List<Vector2>, val closed: Boolean) : SKWorldShape()
+
+    /** Several shapes moving as one body; never nested. */
+    data class Compound(val parts: List<SKWorldShape>) : SKWorldShape()
 }
 
 /** The axis-aligned bounding box of [SKWorldShape], used for broad-phase overlap tests. */
@@ -21,6 +24,10 @@ internal fun SKWorldShape.aabb(): Rect =
         is SKWorldShape.Circle -> Rect(center.x - radius, center.y - radius, center.x + radius, center.y + radius)
         is SKWorldShape.Polygon -> boundingRectOf(vertices)
         is SKWorldShape.EdgeChain -> boundingRectOf(vertices)
+        is SKWorldShape.Compound ->
+            parts.map { it.aabb() }.reduceOrNull { a, b ->
+                Rect(minOf(a.left, b.left), minOf(a.top, b.top), maxOf(a.right, b.right), maxOf(a.bottom, b.bottom))
+            } ?: Rect(0f, 0f, 0f, 0f)
     }
 
 /** Whether [a] and [b]'s [aabb]s overlap — the O(n²) broad phase run over every body pair. */
@@ -57,6 +64,7 @@ internal fun narrowPhase(
     b: SKWorldShape,
 ): SKContactManifold? =
     when (a) {
+        is SKWorldShape.Compound -> narrowPhaseAll(a, b).maxByOrNull { it.penetration }
         is SKWorldShape.Circle -> narrowPhaseFromCircle(a, b)
         is SKWorldShape.Polygon -> narrowPhaseFromPolygon(a, b)
         is SKWorldShape.EdgeChain -> narrowPhaseFromEdgeChain(a, b)
@@ -67,6 +75,7 @@ private fun narrowPhaseFromCircle(
     b: SKWorldShape,
 ): SKContactManifold? =
     when (b) {
+        is SKWorldShape.Compound -> narrowPhase(b, a)?.flip()
         is SKWorldShape.Circle -> circleCircle(a, b)
         is SKWorldShape.Polygon -> circlePolygon(a, b)
         is SKWorldShape.EdgeChain -> circleEdgeChain(a, b)
@@ -77,6 +86,7 @@ private fun narrowPhaseFromPolygon(
     b: SKWorldShape,
 ): SKContactManifold? =
     when (b) {
+        is SKWorldShape.Compound -> narrowPhase(b, a)?.flip()
         is SKWorldShape.Circle -> circlePolygon(b, a)?.flip()
         is SKWorldShape.Polygon -> polygonPolygon(a.vertices, b.vertices)
         is SKWorldShape.EdgeChain -> polygonEdgeChain(a, b)
@@ -87,6 +97,7 @@ private fun narrowPhaseFromEdgeChain(
     b: SKWorldShape,
 ): SKContactManifold? =
     when (b) {
+        is SKWorldShape.Compound -> narrowPhase(b, a)?.flip()
         is SKWorldShape.Circle -> circleEdgeChain(b, a)?.flip()
         is SKWorldShape.Polygon -> polygonEdgeChain(b, a)?.flip()
         is SKWorldShape.EdgeChain -> null

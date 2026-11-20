@@ -211,6 +211,7 @@ internal fun outlinePolylines(shape: SKPhysicsShape): List<Pair<List<Vector2>, B
         }
         is SKPhysicsShape.Polygon -> listOf(shape.vertices to true)
         is SKPhysicsShape.EdgeChain -> listOf(shape.vertices to shape.closed)
+        is SKPhysicsShape.Compound -> shape.parts.flatMap(::outlinePolylines)
     }
 
 /** Appends one quad per segment of [points], each extended by half [width] at both ends so corners close. */
