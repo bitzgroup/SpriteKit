@@ -3,7 +3,9 @@ package jp.co.bitz.spritekit
 import android.graphics.PathMeasure
 import kotlin.math.PI
 import kotlin.math.atan2
+import kotlin.random.Random
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.nanoseconds
 
 /**
  * Per-run state for a currently-executing [SKAction] (or a nested sub-action within a
@@ -93,14 +95,15 @@ private fun stepGroup(
 ): Duration? {
     val childStates = state.childStates ?: kind.actions.map { SKActionState(it) }.also { state.childStates = it }
     var allFinished = true
+    var leftover = availableTime
     for (childState in childStates) {
         if (childState.finished) continue
-        if (stepAction(childState, node, availableTime) == null) allFinished = false
+        val childLeftover = stepAction(childState, node, availableTime)
+        if (childLeftover == null) allFinished = false else leftover = minOf(leftover, childLeftover)
     }
-    // Children can finish at different points within `availableTime`; this library doesn't track
-    // each one's exact leftover, so a group inside a sequence always consumes its full time
-    // budget once every child is done, rather than passing an exact remainder onward.
-    return if (allFinished) Duration.ZERO else null
+    // The group ends when its last child does, handing on the time that child didn't need, as
+    // Apple's does (verified on iOS/tvOS simulators).
+    return if (allFinished) leftover else null
 }
 
 private fun stepRepeat(
@@ -149,7 +152,14 @@ private fun stepLeaf(
     val kind = action.kind
     if (kind is SKActionKind.PlaySoundFileNamed) return stepPlaySound(state, kind, availableTime)
     if (kind is SKActionKind.Falloff) return null // never finishes, as on Apple
-    val duration = action.duration
+    val duration =
+        if (kind is SKActionKind.WaitRange) {
+            state.captureOnce {
+                randomWait(action.duration, kind.range)
+            }
+        } else {
+            action.duration
+        }
     if (duration <= Duration.ZERO) {
         applyLeafEffect(state, action.kind, node, progress = 1f, elapsed = Duration.ZERO)
         return availableTime
@@ -208,7 +218,7 @@ private fun applyLeafEffect(
         is SKActionKind.RunBlock -> kind.block()
         is SKActionKind.RunOnChild -> node.childNode(kind.childName)?.run(kind.action)
         is SKActionKind.RemoveFromParent -> node.removeFromParent()
-        is SKActionKind.Wait -> Unit
+        is SKActionKind.Wait, is SKActionKind.WaitRange -> Unit
         is SKActionKind.Custom -> kind.block(node, elapsed)
         is SKActionKind.Animate -> applyAnimate(state, kind, node, elapsed)
         is SKActionKind.Play -> (node as? SKAudioNode)?.play()
@@ -475,3 +485,13 @@ internal fun shortestAngleDelta(
 }
 
 private const val MAX_REPEAT_ITERATIONS_PER_STEP = 10_000
+
+/** A duration drawn evenly from `[duration - range/2, duration + range/2]`, never below zero. */
+private fun randomWait(
+    duration: Duration,
+    range: Duration,
+): Duration {
+    val halfRangeNanos = range.inWholeNanoseconds / 2
+    val jitterNanos = if (halfRangeNanos > 0) Random.nextLong(-halfRangeNanos, halfRangeNanos + 1) else 0L
+    return (duration.inWholeNanoseconds + jitterNanos).coerceAtLeast(0L).nanoseconds
+}

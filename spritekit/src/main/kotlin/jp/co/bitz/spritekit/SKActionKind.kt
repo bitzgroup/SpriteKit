@@ -63,6 +63,9 @@ internal sealed class SKActionKind {
 
     data object Wait : SKActionKind()
 
+    /** A wait whose length is drawn afresh, within [range] around the action's duration, on every run. */
+    data class WaitRange(val range: Duration) : SKActionKind()
+
     data class RunBlock(val block: () -> Unit) : SKActionKind()
 
     data class RunOnChild(val action: SKAction, val childName: String) : SKActionKind()
