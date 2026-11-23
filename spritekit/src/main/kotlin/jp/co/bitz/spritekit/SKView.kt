@@ -511,7 +511,7 @@ public class SKView
 
         /**
          * Renders the current scene's state via [sceneRenderer] — clears to
-         * [SKScene.backgroundColor] and draws its sprites (Phase 3). Falls back to a plain black
+         * [SKScene.backgroundColor] and draws its node tree. Falls back to a plain black
          * clear when no scene is presented yet.
          */
         private fun renderFrame(): SKRenderStatistics {

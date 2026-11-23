@@ -18,9 +18,9 @@ public enum class SKTouchPhase {
  * [MotionEvent] and handed to [SKView]'s render thread via `runOnGLThread`. See
  * `docs/ARCHITECTURE.md`'s "Touch event routing" section.
  *
- * [x]/[y] are in the view's own coordinate space (pixels, origin top-left, y-down) — converting
- * to the scene's y-up coordinate space requires the scene's size/scale, which isn't dispatched
- * until Phase 10 wires this snapshot up to `SKNode`/`SKScene` touch handling.
+ * [x]/[y] are in the view's own coordinate space (pixels, origin top-left, y-down). Touch dispatch
+ * converts them to the scene's y-up coordinate space (using the scene's size, anchor point,
+ * scale mode, and camera) before delivering them to `SKNode`/`SKScene` touch handlers.
  */
 public data class SKTouchEvent(
     public val pointerId: Int,

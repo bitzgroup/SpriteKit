@@ -16,8 +16,8 @@ import android.graphics.RectF
  * place and keeping the same instance defeats this cache and renders stale geometry.
  *
  * Deviation: [glowWidth] is stored for API parity but doesn't render a glow — that needs a
- * blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13); see
- * `docs/ROADMAP.md`.
+ * blur/glow shader pass, which this port doesn't implement; see
+ * `docs/API_COMPATIBILITY.md`.
  */
 public open class SKShapeNode(
     public var path: Path? = null,

@@ -58,7 +58,7 @@ internal data class SKRenderCommand(
  * otherwise — see `docs/ARCHITECTURE.md`. Descendants of an [SKCropNode] carry that node's
  * (possibly further narrowed, if nested) [SKRenderCommand.clipRect].
  *
- * Pure Kotlin, reusing [SKNode.convertTo] (from Phase 2) to correctly account for every
+ * Pure Kotlin, reusing [SKNode.convertTo] to correctly account for every
  * ancestor's position/rotation/scale — no OpenGL dependency, so this is unit-testable
  * independent of a live GL context, *except* when the scene contains an [SKLabelNode] with
  * non-empty [SKLabelNode.text] or an [SKShapeNode] with a non-null [SKShapeNode.path] — both
