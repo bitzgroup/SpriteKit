@@ -147,6 +147,11 @@ branching model.
 
 ## Working in this repo
 
+- **Writing for outside readers:** this is public OSS — follow `CONTRIBUTING.md`'s "Writing for
+  readers outside the project" rules in every comment, KDoc, doc, commit message, and PR you write.
+  In particular: describe code as it is now (no roadmap phase numbers, PR numbers, or "previously"
+  in code comments — history goes in commits/PRs/`docs/ROADMAP.md`), don't leave forward-looking
+  notes that will go stale, and keep doc cross-references pointing at sections that exist.
 - **Documentation language:** all docs (README, KDoc, ROADMAP, etc.) must be written in **English**
   — this is an OSS project.
 - **Documentation location:** project docs beyond the root `README.md` (roadmap, architecture

@@ -77,7 +77,8 @@ conversion, `SKView.isPaused`/`scene`) have landed.
 ./gradlew detekt            # static analysis
 ```
 
-See [`CLAUDE.md`](CLAUDE.md) for the full command reference and project structure.
+See [`CLAUDE.md`](CLAUDE.md) for the full command reference and project structure, and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request.
 
 ## Usage
 

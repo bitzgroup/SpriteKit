@@ -13,7 +13,7 @@ package jp.co.bitz.spritekit
  * spring, vortex, and checkerboard-texture fields aren't; see `docs/ROADMAP.md`'s "Explicitly Out
  * of Scope". Apple's `region` property isn't implemented either — every field is always unbounded
  * (as if `region` were `null`), since this port has no `SKRegion` implementation, the same
- * limitation Phase 6 documented for `SKConstraint`. [isExclusive] is stored but not enforced. See
+ * limitation `SKConstraint` has. [isExclusive] is stored but not enforced. See
  * `docs/API_COMPATIBILITY.md`.
  */
 public class SKFieldNode private constructor(

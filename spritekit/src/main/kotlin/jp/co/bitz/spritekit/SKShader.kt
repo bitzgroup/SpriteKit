@@ -35,7 +35,7 @@ internal class SKShaderGpuState {
  * Deviation: Apple's shader-modifier snippet system — which auto-injects built-in symbols
  * (`u_time`, `v_tex_coord`, `SKDefaultShading()`, ...) into a per-node-type template — isn't
  * publicly specified beyond its observable effect, so this port doesn't attempt to reproduce it;
- * see `docs/ROADMAP.md`'s Phase 13 scope. Instead, [source] is a *complete* GLSL ES fragment
+ * see `docs/ARCHITECTURE.md`. Instead, [source] is a *complete* GLSL ES fragment
  * shader (a whole `void main() { ... }`), compiled in place of the renderer's own default
  * fragment shader against the same varyings/uniforms it already provides:
  * ```glsl
@@ -66,8 +66,8 @@ public class SKShader(
 
     public companion object {
         /**
-         * A built-in example shader (Phase 13's "one trivial example demonstrating the extension
-         * point" — see `docs/ROADMAP.md`): blends each pixel between its own color and its
+         * A built-in example shader demonstrating the [SKShader] extension point:
+         * blends each pixel between its own color and its
          * grayscale luminance (standard NTSC luma weights), by [intensity] — `0` leaves the
          * texture untouched, `1` is fully grayscale. [intensity] is exposed as a live-adjustable
          * `"u_Intensity"` [SKUniform] on the returned shader (`shader.uniformNamed("u_Intensity")`).

@@ -6,7 +6,7 @@ import kotlin.math.hypot
 /**
  * Applies [constraint] to [node] (a no-op if [SKConstraint.enabled] is `false`).
  *
- * Pure Kotlin, reusing [SKNode.convertTo] (from Phase 2) for [SKConstraintKind.Distance]/
+ * Pure Kotlin, reusing [SKNode.convertTo] for [SKConstraintKind.Distance]/
  * [SKConstraintKind.Orient]'s cross-node position lookups — no OpenGL/Android dependency, so
  * this is unit-testable independent of a live GL context.
  */
