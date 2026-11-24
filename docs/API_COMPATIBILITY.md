@@ -604,9 +604,19 @@ categories recur throughout and are called out once here rather than per item:
   were `null`, since this port has no `SKRegion` implementation (the same gap
   `SKConstraint` has). **`isExclusive`** is stored but not enforced — every enabled, bitmask
   matching field affects a body regardless of whether another exclusive field also does.
-- **`radialGravityField`'s `strength`/`falloff`/`minimumRadius` formula** —
-  `strength / max(distance, minimumRadius)^falloff`, directed towards the field node's position —
-  is a standard inverse-power model, not necessarily Apple's own (undocumented) one.
+- **Gravity fields use Apple's units and falloff** (since 0.5.0, recorded on iOS/tvOS simulators):
+  a `radialGravityField` or `linearGravityField` accelerates at `strength` meters per second
+  squared (150 points/s², the same units as `SKPhysicsWorld.gravity`) divided by the distance from
+  the field node in meters — never less than `minimumRadius`, which is in points — raised to
+  `falloff`. A linear field's vector is used as given, not normalized. Defaults match Apple's:
+  `falloff` is 2 for `radialGravityField` and 0 for the other kinds, and `minimumRadius` is
+  `0.0045776367`. Before that, fields accelerated in points per second squared, every `falloff`
+  started at 0, linear fields ignored it and normalized their vector, and `minimumRadius` started
+  at 0. `SKEmitterNode` particles respond to fields through the same formula; that particles share
+  it with physics bodies hasn't been recorded on Apple separately.
+- **`dragField` is a plain `−strength × velocity` drag.** Apple's slows a body non-linearly and,
+  from a strength of about 0.1, sends it to the 36000 points/s speed cap instead; that isn't
+  mirrored (`docs/PARITY_GAP_PLAN.md` P7).
 - **`velocityField` directly overrides a body's velocity** each step (matching Apple's documented
   "applies a velocity, not an acceleration" behavior) rather than integrating a force, and is
   applied after every force-based field for that step, so it wins whenever both affect the same

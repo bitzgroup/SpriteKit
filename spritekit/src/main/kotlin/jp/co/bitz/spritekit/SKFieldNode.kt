@@ -21,23 +21,26 @@ public class SKFieldNode private constructor(
 ) : SKNode() {
     /**
      * Scales this field's effect. Negative values reverse it (e.g. a repelling
-     * [radialGravityField]). Defaults to `1`.
+     * [radialGravityField]). Defaults to `1`. For the gravity fields, `1` accelerates at one meter
+     * per second squared — 150 points per second squared, the same units as
+     * [SKPhysicsWorld.gravity] — before [falloff] applies.
      */
     public var strength: Float = 1f
 
     /**
-     * The exponent controlling how a [radialGravityField]'s strength falls off with distance —
-     * `0` (the default) means constant strength regardless of distance; `2` approximates
-     * inverse-square gravity. Ignored by [linearGravityField]/[dragField]/[velocityField], which
-     * have no notion of distance from the field.
+     * The exponent of how a gravity field weakens with distance from this node: its strength is
+     * divided by the distance in meters (150 points) raised to this power, so `0` keeps it constant
+     * and `2` is inverse-square. Applies to [radialGravityField] and [linearGravityField], as on
+     * Apple; [dragField] and [velocityField] ignore it. Defaults to `2` for [radialGravityField]
+     * and `0` for the others, matching Apple.
      */
-    public var falloff: Float = 0f
+    public var falloff: Float = if (kind == SKFieldKind.RadialGravity) 2f else 0f
 
     /**
-     * The distance below which [falloff] stops increasing a [radialGravityField]'s strength
-     * further, avoiding a singularity at the field's own position.
+     * The distance, in points, below which [falloff] stops strengthening the field further,
+     * avoiding a singularity at the field's own position. Defaults to Apple's `0.0045776367`.
      */
-    public var minimumRadius: Float = 0f
+    public var minimumRadius: Float = DEFAULT_MINIMUM_RADIUS
 
     /** Whether this field currently affects bodies at all. Defaults to `true`. */
     public var isEnabled: Boolean = true
@@ -54,9 +57,9 @@ public class SKFieldNode private constructor(
     public var categoryBitMask: Int = -1
 
     /**
-     * The direction [linearGravityField] accelerates bodies in (normalized before [strength] is
-     * applied) or the target velocity [velocityField] drives bodies towards. Unused by
-     * [radialGravityField]/[dragField].
+     * The acceleration [linearGravityField] applies (in meters per second squared, multiplied by
+     * [strength] and *not* normalized, as on Apple) or the target velocity [velocityField] drives
+     * bodies towards. Unused by [radialGravityField]/[dragField].
      */
     public var direction: Vector2 = Vector2.Zero
 
@@ -75,12 +78,15 @@ public class SKFieldNode private constructor(
     }
 
     public companion object {
+        /** Apple's default [minimumRadius], in points. */
+        private const val DEFAULT_MINIMUM_RADIUS = 0.0045776367f
+
         /** A field that accelerates bodies towards (or, with negative [strength], away from) this node's position. */
         public fun radialGravityField(): SKFieldNode = SKFieldNode(SKFieldKind.RadialGravity)
 
         /**
-         * A field that accelerates every affected body uniformly along [direction], scaled by
-         * [strength] — like a local, opt-in override of [SKPhysicsWorld.gravity].
+         * A field that accelerates every affected body by [direction] (meters per second squared),
+         * scaled by [strength] — like a local, opt-in addition to [SKPhysicsWorld.gravity].
          */
         public fun linearGravityField(direction: Vector2): SKFieldNode =
             SKFieldNode(SKFieldKind.LinearGravity).apply { this.direction = direction }

@@ -3,8 +3,8 @@ package jp.co.bitz.spritekit
 import kotlin.math.pow
 
 /**
- * Floor for a [SKFieldKind.RadialGravity] field's effective distance, avoiding a literal division
- * by zero at the field's own position.
+ * Floor for a field's effective distance in [falloffScale], avoiding a literal division by zero at
+ * the field's own position when [SKFieldNode.minimumRadius] is `0`.
  */
 private const val MINIMUM_FIELD_DISTANCE = 1e-6f
 
@@ -80,7 +80,7 @@ internal fun fieldAcceleration(
 ): Vector2 =
     when (field.kind) {
         SKFieldKind.RadialGravity -> radialGravityAcceleration(field, fieldWorldPosition, worldPosition)
-        SKFieldKind.LinearGravity -> field.direction.normalized() * field.strength
+        SKFieldKind.LinearGravity -> linearGravityAcceleration(field, fieldWorldPosition, worldPosition)
         SKFieldKind.Drag -> velocity * -field.strength
         SKFieldKind.Velocity -> Vector2.Zero
     }
@@ -88,6 +88,38 @@ internal fun fieldAcceleration(
 /** The velocity a [SKFieldKind.Velocity] field drives an affected body/particle directly towards. */
 internal fun fieldOverrideVelocity(field: SKFieldNode): Vector2 = field.direction * field.strength
 
+/**
+ * How much [field]'s [SKFieldNode.falloff] weakens it at [distance] points from the field node, as
+ * Apple's SpriteKit does (recorded on iOS/tvOS simulators): the distance — never less than
+ * [SKFieldNode.minimumRadius] — is measured in meters of [POINTS_PER_METER] points and raised to
+ * the `falloff` power, so a field has its full strength one meter (150 points) away.
+ */
+private fun falloffScale(
+    field: SKFieldNode,
+    distance: Float,
+): Float {
+    if (field.falloff == 0f) return 1f
+    val meters = maxOf(distance, field.minimumRadius, MINIMUM_FIELD_DISTANCE) / POINTS_PER_METER
+    return 1f / meters.pow(field.falloff)
+}
+
+/**
+ * A linear gravity field's push: its `direction` (not normalized) in meters per second squared,
+ * times `strength`, weakened by [falloffScale] with distance from the field node.
+ */
+private fun linearGravityAcceleration(
+    field: SKFieldNode,
+    fieldWorldPosition: Vector2,
+    worldPosition: Vector2,
+): Vector2 {
+    val scale = field.strength * POINTS_PER_METER * falloffScale(field, (fieldWorldPosition - worldPosition).length())
+    return field.direction * scale
+}
+
+/**
+ * A radial gravity field's pull: towards the field node, at `strength` meters per second squared
+ * ([POINTS_PER_METER] points per second squared) one meter away, weakened by [falloffScale].
+ */
 private fun radialGravityAcceleration(
     field: SKFieldNode,
     fieldWorldPosition: Vector2,
@@ -97,7 +129,5 @@ private fun radialGravityAcceleration(
     val distance = toField.length()
     if (distance == 0f) return Vector2.Zero
     val direction = toField * (1f / distance)
-    val effectiveDistance = maxOf(distance, field.minimumRadius, MINIMUM_FIELD_DISTANCE)
-    val magnitude = if (field.falloff == 0f) field.strength else field.strength / effectiveDistance.pow(field.falloff)
-    return direction * magnitude
+    return direction * (field.strength * POINTS_PER_METER * falloffScale(field, distance))
 }

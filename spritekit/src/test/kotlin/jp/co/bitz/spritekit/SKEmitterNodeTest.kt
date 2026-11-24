@@ -164,7 +164,7 @@ class SKEmitterNodeTest {
         stepEmitters(scene, 1.seconds) // spawns the particle
         stepEmitters(scene, 1.seconds) // ages it under the field's acceleration
 
-        assertEquals(-20f, emitter.particles.single().velocity.y)
+        assertEquals(-3000f, emitter.particles.single().velocity.y) // 20 m/s², in points
     }
 
     @Test
