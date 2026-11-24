@@ -474,6 +474,16 @@ categories recur throughout and are called out once here rather than per item:
 - **`SKRegion` isn't implemented.** Every constraint Apple documents as taking one
   (`SKConstraint.positionX(_:y:)` and its siblings) actually takes an `SKRange`; nothing in this
   port's constraint API needed a region.
+- **`SKConstraint.distance(_:to:in:)`/`orient(to:in:offset:)`** take the node as `node`, since
+  `in` is a Kotlin keyword.
+- **`SKConstraint.referenceNode`** matches Apple's (since 0.5.0; verified on iOS/tvOS simulators)
+  for position and distance ranges: they're measured in its coordinates, including its scale and
+  rotation, or the parent's when it's `nil`. A point target is in the parent's coordinates
+  unless a node is given. Where Apple's rotation results with a reference node don't follow its
+  coordinates, the port does: a `zRotation` range is measured relative to the reference node's
+  rotation, and `orient` doesn't depend on the reference node at all. Apple also gives a NaN
+  position when a distance constraint with a reference node puts the node exactly on its
+  target; the port leaves the node there. See `PARITY_GAP_PLAN.md` C3.
 - **`SKConstraint`'s built-in kinds are *contract-conformant, not bit-identical*** with Apple's
   own (undocumented) constraint-solving internals — in particular, `orient(to:offset:)`'s exact
   algorithm for resolving the allowed angular deviation from facing the target isn't documented by
