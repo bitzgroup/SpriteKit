@@ -395,11 +395,33 @@ class SKActionExecutionTest {
     }
 
     @Test
-    fun `easing curves map the midpoint as expected`() {
+    fun `easing curves are Apple's recorded cubics`() {
+        // Recorded on iOS/tvOS simulators: easeIn 2t² − t³, easeOut t + t² − t³, easeInEaseOut 3t² − 2t³.
         assertEquals(0.5f, SKActionTimingMode.Linear.ease(0.5f))
-        assertEquals(0.25f, SKActionTimingMode.EaseIn.ease(0.5f))
-        assertEquals(0.75f, SKActionTimingMode.EaseOut.ease(0.5f))
-        assertEquals(0.5f, SKActionTimingMode.EaseInEaseOut.ease(0.5f))
+        assertEquals(7f / 64f, SKActionTimingMode.EaseIn.ease(0.25f), 1e-6f)
+        assertEquals(0.375f, SKActionTimingMode.EaseIn.ease(0.5f), 1e-6f)
+        assertEquals(45f / 64f, SKActionTimingMode.EaseIn.ease(0.75f), 1e-6f)
+        assertEquals(19f / 64f, SKActionTimingMode.EaseOut.ease(0.25f), 1e-6f)
+        assertEquals(0.625f, SKActionTimingMode.EaseOut.ease(0.5f), 1e-6f)
+        assertEquals(57f / 64f, SKActionTimingMode.EaseOut.ease(0.75f), 1e-6f)
+        assertEquals(5f / 32f, SKActionTimingMode.EaseInEaseOut.ease(0.25f), 1e-6f)
+        assertEquals(0.5f, SKActionTimingMode.EaseInEaseOut.ease(0.5f), 1e-6f)
+    }
+
+    @Test
+    fun `every easing curve runs from 0 to 1 and easeOut mirrors easeIn`() {
+        for (mode in SKActionTimingMode.entries) {
+            assertEquals(0f, mode.ease(0f), 1e-6f)
+            assertEquals(1f, mode.ease(1f), 1e-6f)
+        }
+        for (i in 0..20) {
+            val t = i / 20f
+            assertEquals(
+                1f - SKActionTimingMode.EaseIn.ease(1f - t),
+                SKActionTimingMode.EaseOut.ease(t),
+                1e-6f,
+            )
+        }
     }
 
     @Test

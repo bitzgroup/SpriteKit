@@ -112,7 +112,7 @@ Missing `SKAction` factories (everything else in Apple's list is present):
 | ~~A7~~ | ~~`wait(forDuration:withRange:)` re-randomizing per run, `group` leftover time (both recorded deviations)~~ — **Done**, verified on iOS/tvOS simulators: a ranged wait draws a new length on every run (each pass of a `repeat`, each node) and reports its base `duration`; a `group` hands on the time its last action didn't need, so the next action in a `sequence` starts exactly where it would after a plain wait. | P2 |
 | ~~A8~~ | ~~`SKAction.duration` as a public, settable property (verify current visibility)~~ — **Done** — settable; on a composite it changes only the reported value, as on Apple. | P1 |
 | A9 | `stereoPan`, `changeObstruction`, `changeOcclusion`, `changeReverb`, `warp(to:)`, `animate(withNormalTextures:)`, `setNormalTexture`, `SKAction(named:)` | Out of scope with their subsystems |
-| A10 | Apple's timing curves. Recording A6 showed Apple's `easeIn` is `2t² − t³` (a quarter of the way: 7/64; halfway: 3/8), where the port's is `t²`; record `easeOut`/`easeInEaseOut` too and match them. | P2 |
+| ~~A10~~ | ~~Apple's timing curves (`easeIn`/`easeOut`/`easeInEaseOut`)~~ — **Done**, recorded on iOS/tvOS simulators (the sample app's `SKActionTimingCurveParityTests`): `easeIn` is `2t² − t³`, `easeOut` its mirror `t + t² − t³`, `easeInEaseOut` `3t² − 2t³` (already matched). | P2 |
 
 ### 2.6 Physics
 

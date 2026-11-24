@@ -391,6 +391,9 @@ categories recur throughout and are called out once here rather than per item:
 - **`run(_:onChildWithName:)` uses the full search syntax** of `SKNode.childNode` (see "Scene
   graph" above) and runs on the first match only, as on Apple (since 0.4.0; before that, direct
   children only).
+- **`SKActionTimingMode` uses Apple's curves** (since 0.5.0, recorded on iOS/tvOS simulators):
+  `easeIn` is `2t² − t³`, `easeOut` its mirror `t + t² − t³`, and `easeInEaseOut` `3t² − 2t³`.
+  Before that, `easeIn` was `t²` and `easeOut` `2t − t²`; `easeInEaseOut` already matched.
 - **`wait(duration:withRange:)` draws a new length on every run** — each pass of a `repeat`, and
   each node it runs on — and its `duration` reads as the base duration, as on Apple (since 0.5.0,
   verified on iOS/tvOS simulators; before that, the length was drawn once, when the action was
