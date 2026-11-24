@@ -95,7 +95,8 @@ categories recur throughout and are called out once here rather than per item:
   Graphics/Objective-C legacy this port doesn't need. A size-valued `Vector2` (e.g.
   `SKScene.size`) also exposes `width`/`height`, so `size.width` reads exactly as on Apple.
 - **`Rect` stands in for `CGRect`**, returned by `calculateAccumulatedFrame()` — a plain Kotlin
-  value type, not `android.graphics.RectF` (see `docs/ROADMAP.md`'s Phase 2 entry for why). It's
+  value type, not `android.graphics.RectF` (see `docs/ROADMAP.md`'s
+  "Phase 2 — Scene Graph Core" section for why). It's
   edge-based (`left`/`top`/`right`/`bottom`) rather than origin-plus-size, but exposes
   `width`/`height` so `frame.height` reads exactly as on Apple.
 - **`SKScene.scaleMode` `.aspectFit`/`.aspectFill` always center the scaled scene within the
@@ -320,7 +321,7 @@ categories recur throughout and are called out once here rather than per item:
   itself, and `splinePoints` — a Catmull-Rom spline drawn as cubic Béziers — starts with a
   zero-length curve from the first point to itself.
 - **`SKShapeNode.glowWidth`** is stored for API parity but doesn't render a glow — that needs a
-  blur/glow shader pass, deferred with the rest of the advanced shader work (Phase 13). It does
+  blur/glow shader pass, which this port doesn't implement. It does
   widen the frame, as on Apple.
 - **`SKShapeNode.isAntialiased` outlines are antialiased the way Apple's are** (since 0.5.0;
   before that every outline was drawn hard-edged). Recorded on iOS/tvOS simulators: each edge of
@@ -597,8 +598,8 @@ categories recur throughout and are called out once here rather than per item:
 - **`SKPhysicsBody.charge` is stored but has no effect** (since 0.5.0): the physics actions
   animate it, but there are no electric or magnetic fields for it to act on.
 - **`SKFieldNode.region` isn't implemented** — every field is always unbounded, as if `region`
-  were `null`, since this port has no `SKRegion` implementation (the same gap Phase 6 documented
-  for `SKConstraint`). **`isExclusive`** is stored but not enforced — every enabled, bitmask
+  were `null`, since this port has no `SKRegion` implementation (the same gap
+  `SKConstraint` has). **`isExclusive`** is stored but not enforced — every enabled, bitmask
   matching field affects a body regardless of whether another exclusive field also does.
 - **`radialGravityField`'s `strength`/`falloff`/`minimumRadius` formula** —
   `strength / max(distance, minimumRadius)^falloff`, directed towards the field node's position —
@@ -622,7 +623,7 @@ categories recur throughout and are called out once here rather than per item:
   runtime reflection on the value's type (`CGFloat`, `SKColor`, `CGPoint`, ...). More boilerplate
   per call site, but type-safe, and with no implicit "which types does interpolation actually
   support" contract to document.
-- **Particles respond to `SKFieldNode`s via `SKEmitterNode.fieldBitMask`**, reusing Phase 7d's
+- **Particles respond to `SKFieldNode`s via `SKEmitterNode.fieldBitMask`**, reusing the physics
   field-force formulas (refactored to operate on a world position/velocity pair rather than an
   `SKPhysicsBody`, so both physics bodies and particles — which have no physics body — can share
   the same code). Defaults to `0` (unaffected by any field), matching Apple.
@@ -784,7 +785,7 @@ categories recur throughout and are called out once here rather than per item:
 
 ## Shaders (`SKShader`, `SKUniform`)
 
-- Ships an extensibility hook plus one trivial built-in example (Phase 13) rather than full
+- Ships an extensibility hook plus one trivial built-in example rather than full
   parity. Apple's shader-modifier snippet system (built-in symbols like `u_time`/`v_tex_coord`
   auto-injected per node type) is not publicly specified beyond its observable effect and is
   deferred, along with `SKAttribute` per-vertex custom attributes and `SKWarpGeometry` mesh warp
