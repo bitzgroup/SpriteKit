@@ -66,7 +66,7 @@ override fun onPause() { super.onPause(); binding.skView.onPause() }
 override fun onResume() { super.onResume(); binding.skView.onResume() }
 ```
 
-For transition-driven scene swaps (Apple's `SKView.presentScene(_:transition:)`, Phase 11), both
+For transition-driven scene swaps (Apple's `SKView.presentScene(_:transition:)`), both
 the `View` and the Compose wrapper expose an imperative `presentScene(scene, transition)` call,
 since animating between two scenes over time isn't naturally expressed as a single property/
 parameter swap. On the Compose side this lives on `SKViewState`; the composable's `scene`
@@ -106,7 +106,7 @@ It snapshots the parts of the event the scene graph needs (pointer id, position 
 action) into one immutable value per reported pointer, then hands that batch to the render thread
 via `runOnGLThread`, where it's delivered as Apple does — one `Set<SKTouch>` per phase and target
 node. `SKNode`/`SKScene`'s `touchesBegan`/`touchesMoved`/`touchesEnded`/
-`touchesCancelled` (Phase 10) always run on the render thread — the same thread as node mutation —
+`touchesCancelled` always run on the render thread — the same thread as node mutation —
 so hit-testing and touch handling need no synchronization with the render/update loop.
 
 Remote and game-controller buttons take the same path, but only when the host forwards them: as on
@@ -190,5 +190,5 @@ design decisions are:
   accumulated-z rule applies to touch hit-testing (`SKTouchDispatch.kt`). Then batched by texture
   and blend mode into as few draw calls as practical (a dynamic-VBO quad batcher).
 - The renderer always dispatches each node's draw call through a "current shader program" concept
-  — a default built-in program when no custom `SKShader` is set — so Phase 13's shader hook doesn't
-  require re-architecting the batcher built in Phase 3.
+  — a default built-in program when no custom `SKShader` is set — so the `SKShader` hook doesn't
+  require re-architecting the batcher.

@@ -43,25 +43,30 @@ which follows the same porting philosophy for Apple's GameplayKit.
 
 ## Status
 
-This project is under active development. Phase 0 (project scaffolding), Phase 1 (threading & view
-foundation), Phase 2 (scene graph core — `SKNode`/`SKScene`), Phase 3 (textures & sprite rendering
-— `SKTexture`, `SKTextureAtlas`, `SKSpriteNode`), Phase 4 (shapes & labels — `SKShapeNode`,
-`SKLabelNode`), Phase 5 (actions — `SKAction`), Phase 6 (camera, effects, crop, constraints —
-`SKCameraNode`, `SKEffectNode`, `SKCropNode`, `SKConstraint`), Phase 7 (physics —
-`SKPhysicsWorld`/`SKPhysicsBody`, `SKPhysicsContact`/`SKPhysicsContactDelegate`, the
-`SKPhysicsJoint` family, and `SKFieldNode`), Phase 8 (particles — `SKEmitterNode`,
-`SKKeyframeSequence`), Phase 9 (tile maps — `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/
-`SKTileDefinition`/`SKTileMapNode`), Phase 10 (input — `SKNode` touch dispatch), Phase 11
-(transitions — `SKTransition`, `SKView.presentScene(_:transition:)`), Phase 12 (audio —
-`SKAudioNode`, the `play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate`/`playSoundFileNamed`
-`SKAction`s), Phase 13 (shaders — `SKShader`/`SKUniform` on `SKSpriteNode`, plus the built-in
-`SKShader.grayscale` example), and Phase 14 (documentation — full public-API KDoc coverage,
-`docs/API_COMPATIBILITY.md`, and this README's [Usage](#usage) section), and Phase 15 (hexagonal
-tile maps — `SKTileSetType`) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full
-phased plan and progress checklist. A later audit against Apple's SpriteKit recorded the API still
-missing in [`docs/PARITY_GAP_PLAN.md`](docs/PARITY_GAP_PLAN.md), with the plan for closing it; its
-first items (remote/game-controller `presses*` input, point queries and view ↔ scene coordinate
-conversion, `SKView.isPaused`/`scene`) have landed.
+This project is under active development. Implemented so far:
+
+- **Scene graph and view:** `SKView` (and a Compose wrapper), `SKNode`/`SKScene`, threading
+- **Rendering:** `SKTexture`, `SKTextureAtlas`, `SKSpriteNode`, `SKShapeNode`, `SKLabelNode`
+- **Actions:** `SKAction`
+- **Camera, effects, and constraints:** `SKCameraNode`, `SKEffectNode`, `SKCropNode`,
+  `SKConstraint`
+- **Physics:** `SKPhysicsWorld`/`SKPhysicsBody`, `SKPhysicsContact`/`SKPhysicsContactDelegate`, the
+  `SKPhysicsJoint` family, and `SKFieldNode`
+- **Particles:** `SKEmitterNode`, `SKKeyframeSequence`
+- **Tile maps:** `SKTileSet`/`SKTileGroup`/`SKTileGroupRule`/`SKTileDefinition`/`SKTileMapNode`,
+  including hexagonal tile sets (`SKTileSetType`)
+- **Input:** `SKNode` touch dispatch, remote/game-controller `presses*` input, point queries, and
+  view ↔ scene coordinate conversion
+- **Transitions:** `SKTransition`, `SKView.presentScene(_:transition:)`
+- **Audio:** `SKAudioNode`, the `play`/`pause`/`stop`/`changeVolume`/`changePlaybackRate`/
+  `playSoundFileNamed` `SKAction`s
+- **Shaders:** `SKShader`/`SKUniform` on `SKSpriteNode`, plus the built-in `SKShader.grayscale`
+  example
+
+Every public API has KDoc, and known differences from Apple's SpriteKit are recorded in
+[`docs/API_COMPATIBILITY.md`](docs/API_COMPATIBILITY.md). API still missing is listed in
+[`docs/PARITY_GAP_PLAN.md`](docs/PARITY_GAP_PLAN.md), with the plan for closing it; see
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the full development plan.
 
 ## Requirements
 
