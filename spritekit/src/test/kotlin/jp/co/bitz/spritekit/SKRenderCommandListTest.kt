@@ -347,6 +347,7 @@ class SKRenderCommandListTest {
             SKEmitterNode().apply {
                 particleBirthRate = 3f
                 numParticlesToEmit = 3
+                particleLifetime = 10f
             }
         scene.addChild(emitter)
         stepEmitters(scene, 1.seconds)
@@ -374,6 +375,7 @@ class SKRenderCommandListTest {
                 particleSize = Vector2(4f, 4f)
                 particleBirthRate = 1f
                 numParticlesToEmit = 1
+                particleLifetime = 10f
             }
         scene.addChild(emitter)
         stepEmitters(scene, 1.seconds) // spawns one particle at the emitter's local origin

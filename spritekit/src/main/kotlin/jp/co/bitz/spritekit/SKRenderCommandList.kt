@@ -1,5 +1,7 @@
 package jp.co.bitz.spritekit
 
+import java.util.Collections
+import java.util.IdentityHashMap
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -107,7 +109,14 @@ private class SKRenderCommandCollector(
     // main walk does reach them is harmless -- see that function's KDoc.
     private val referenceVersion = referenceWorldVersion(referenceNode)
 
+    /**
+     * Every emitter in the scene with particles living in another node's space (its
+     * [SKEmitterNode.targetNode]), keyed by that node: they're drawn with it, not with the emitter.
+     */
+    private val emittersBySpace = IdentityHashMap<SKNode, MutableList<SKEmitterNode>>()
+
     fun collect(scene: SKScene): List<SKRenderCommand> {
+        collectTargetedEmitters(scene)
         visit(
             scene,
             inheritedAlpha = 1f,
@@ -117,6 +126,15 @@ private class SKRenderCommandCollector(
             parentWorldVersion = 0L,
         )
         return commands.sortedWith(compareBy({ it.second.first }, { it.second.second })).map { it.first }
+    }
+
+    private fun collectTargetedEmitters(node: SKNode) {
+        if (node is SKEmitterNode) {
+            for (space in node.particles.mapTo(Collections.newSetFromMap(IdentityHashMap())) { it.space }) {
+                if (space !== node) emittersBySpace.getOrPut(space) { mutableListOf() } += node
+            }
+        }
+        for (child in node.children) collectTargetedEmitters(child)
     }
 
     private fun add(
@@ -160,6 +178,7 @@ private class SKRenderCommandCollector(
             val context =
                 RenderContext(referenceNode, clip.rect, ::add, zPosition, worldVersion, referenceVersion, pixelSize)
             addCommand(node, context, alpha)
+            emittersBySpace[node]?.forEach { addParticleCommands(it, node, context, alpha) }
         }
         for (child in node.children) visit(child, alpha, hidden, clip.rect, zPosition, worldVersion)
     }
@@ -186,7 +205,7 @@ private fun addCommand(
         is SKSpriteNode -> addSpriteCommand(node, context, alpha)
         is SKLabelNode -> addLabelCommand(node, context, alpha)
         is SKShapeNode -> addShapeCommands(node, context, alpha)
-        is SKEmitterNode -> addEmitterCommands(node, context, alpha)
+        is SKEmitterNode -> addParticleCommands(node, node, context, alpha)
         is SKTileMapNode -> addTileMapCommands(node, context, alpha)
         else -> Unit
     }
@@ -394,44 +413,43 @@ private fun shapeCommand(
     )
 
 /**
- * One [SKRenderCommand] per currently-alive particle -- each is its own small textured quad, with
- * its own scale/rotation/alpha/color/z-position sampled from its age (that z-position offset is
- * relative to [node]'s own effective z-position, i.e. [RenderContext.zPosition], the same way
- * [SKNode.position] is relative to [node]'s own transform), positioned by translating
- * [SKParticle.position] (in [node]'s own local space) before converting to [context]'s reference
- * space, reusing the same [quadVertices] shape [addSpriteCommand] does.
+ * One [SKRenderCommand] per one of [emitter]'s living particles in [space] — the emitter itself,
+ * or the node its particles target (see [SKEmitterNode.targetNode]), drawn with that node's
+ * transform, [alpha] and effective z-position ([RenderContext.zPosition], plus each particle's
+ * own). Each particle is its own small textured quad whose scale, rotation, opacity and color come
+ * from its age — sampled from the emitter's keyframe sequences, where set, at the fraction of its
+ * lifetime it has lived — reusing the same [quadVertices] shape [addSpriteCommand] does.
  */
-private fun addEmitterCommands(
-    node: SKEmitterNode,
+private fun addParticleCommands(
+    emitter: SKEmitterNode,
+    space: SKNode,
     context: RenderContext,
     alpha: Float,
 ) {
-    val texture = node.particleTexture
+    val texture = emitter.particleTexture
     val uv = texture?.textureRect ?: Rect(0f, 0f, 1f, 1f)
-    val halfSize = node.effectiveParticleSize() * 0.5f
-    for (particle in node.particles) {
-        val scale = particle.initialScale + particle.scaleSpeed * particle.age
+    val halfSize = emitter.effectiveParticleSize() * 0.5f
+    for (particle in emitter.particles) {
+        if (particle.space !== space) continue
+        val life = (particle.age / particle.lifetime).coerceIn(0f, 1f)
+        val scale = emitter.particleScaleSequence?.sample(life) ?: particle.scale()
         val rotation = particle.initialRotation + particle.rotationSpeed * particle.age
-        val particleAlpha = (particle.initialAlpha + particle.alphaSpeed * particle.age).coerceIn(0f, 1f)
+        val particleAlpha = (emitter.particleAlphaSequence?.sample(life) ?: particle.alpha()).coerceIn(0f, 1f)
         val colorBlendFactor =
-            (particle.initialColorBlendFactor + particle.colorBlendFactorSpeed * particle.age).coerceIn(
-                0f,
-                1f,
-            )
-        val lifeFraction = (particle.age / particle.lifetime).coerceIn(0f, 1f)
-        val colorInt = node.particleColorSequence?.sample(lifeFraction) ?: node.particleColor
+            (emitter.particleColorBlendFactorSequence?.sample(life) ?: particle.colorBlendFactor()).coerceIn(0f, 1f)
+        val colorInt = emitter.particleColorSequence?.sample(life) ?: emitter.particleColor
 
         val localCorners = rotatedQuadCorners(halfSize * scale, rotation).map { it + particle.position }
-        val corners = node.convertAllTo(localCorners, context.referenceNode)
+        val corners = space.convertAllTo(localCorners, context.referenceNode)
         context.add(
             SKRenderCommand(
                 texture = texture,
-                blendMode = node.particleBlendMode,
+                blendMode = emitter.particleBlendMode,
                 vertices = quadVertices(corners, uv),
-                color = tintedVertexColor(colorInt, colorBlendFactor, alpha * particleAlpha),
+                color = tintedVertexColor(colorInt, colorBlendFactor, alpha * particleAlpha, tintsAlpha = true),
                 clipRect = context.clipRect,
             ),
-            context.zPosition + particle.initialZPosition + particle.zPositionSpeed * particle.age,
+            context.zPosition + particle.zPosition,
         )
     }
 }
