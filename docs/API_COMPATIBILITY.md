@@ -636,11 +636,28 @@ categories recur throughout and are called out once here rather than per item:
 
 - **`SKEmitterNode`** supports programmatic configuration only — Apple's `.sks` particle-editor
   archive format has no Android equivalent parser to build against.
-- **`SKEmitterNode.targetNode`** isn't implemented — every particle stays in the emitting node's
-  own local space for its whole life (so moving the emitter drags its existing particles along,
-  unlike Apple's default of reparenting particles into the emitter's *parent* so they don't).
-- **The scale/rotation/alpha `SKKeyframeSequence` properties** Apple documents as siblings of
-  `particleColorSequence` aren't implemented — only `particleColorSequence` is.
+- **`SKEmitterNode` follows what Apple's draws, as recorded on iOS/tvOS simulators** (the sample
+  app's `SKEmitterParityTests`, which render one particle and read its pixels back):
+  - Defaults: `emissionAngle` is `π/2`, `particleLifetime` `0` (a particle with no lifetime is
+    never drawn) and `particleColor` transparent white.
+  - `particleColorBlendFactor` mixes both color *and* opacity from opaque white toward
+    `particleColor`'s; `particleColorSequence` replaces only the color, so the blend factor still
+    decides how much of it shows.
+  - `particleAlphaSequence`, `particleScaleSequence` and `particleColorBlendFactorSequence` replace
+    their value, range and speed, sampled at the fraction of a particle's lifetime it has lived
+    (keyframe times past `1` are never reached). Apple has no public rotation or speed sequence.
+  - `targetNode`: particles are born where the emitter is, then live in the target's coordinates —
+    they stay put when the emitter moves and move with the target, are drawn with the target's
+    transform and opacity (not the emitter's, whose `alpha`/`isHidden` no longer apply to them),
+    and take their emission angle, speed, accelerations and size in the target's coordinates,
+    ignoring the emitter's rotation and scale. Removing the emitter removes its particles. Apple
+    holds the target weakly; this library holds it strongly.
+  - A newer particle is always drawn on top of an older one: `particleRenderOrder` is accepted
+    but changes nothing, as on Apple. `particleZPosition` orders particles against other nodes;
+    `particleZPositionSpeed` is accepted but changes nothing, as on Apple.
+  - `particleAction` is accepted but runs on no particle: on simulators Apple's leaves every
+    particle as it was (moves, scales, fades and colorizes alike).
+  - `shader` isn't implemented (shaders run on `SKSpriteNode` only).
 - **`SKKeyframeSequence` is generic and is given an `SKKeyframeInterpolator` for its value type**
   when it's created, rather than Apple's untyped (`[Any]`) version, which interpolates whatever
   numbers (`NSNumber`) and colors (`SKColor`) it holds and samples anything else as `nil`.

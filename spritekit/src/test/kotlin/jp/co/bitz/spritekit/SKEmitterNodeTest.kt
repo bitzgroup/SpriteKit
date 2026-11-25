@@ -33,7 +33,11 @@ class SKEmitterNodeTest {
     @Test
     fun `particleBirthRate emits particles at the expected rate`() {
         val scene = SKScene(size = Vector2(100f, 100f))
-        val emitter = SKEmitterNode().apply { particleBirthRate = 10f }
+        val emitter =
+            SKEmitterNode().apply {
+                particleBirthRate = 10f
+                particleLifetime = 10f
+            }
         scene.addChild(emitter)
 
         stepEmitters(scene, 1.seconds)
@@ -122,7 +126,11 @@ class SKEmitterNodeTest {
     @Test
     fun `resetSimulation clears particles and emission counters`() {
         val scene = SKScene(size = Vector2(100f, 100f))
-        val emitter = SKEmitterNode().apply { particleBirthRate = 5f }
+        val emitter =
+            SKEmitterNode().apply {
+                particleBirthRate = 5f
+                particleLifetime = 10f
+            }
         scene.addChild(emitter)
         stepEmitters(scene, 1.seconds)
         assertTrue(emitter.particles.isNotEmpty())

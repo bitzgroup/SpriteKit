@@ -1,6 +1,6 @@
 package jp.co.bitz.spritekit
 
-import android.graphics.Color
+import kotlin.math.PI
 
 /**
  * A node that emits and simulates a stream of small textured quads ("particles") — mirrors
@@ -14,9 +14,11 @@ import android.graphics.Color
  * Every `particleXxxSpeed` is a per-second rate of change applied over each particle's lifetime
  * (e.g. `particleAlphaSpeed` fades a particle in/out over time).
  *
- * Apple's `targetNode` (reparenting newly-born particles into another node's space so they don't
- * move with the emitter) and [particleColorSequence]'s sibling `Sequence` properties for
- * scale/rotation/alpha aren't implemented — see `docs/API_COMPATIBILITY.md`.
+ * The `particleXxxSequence` properties replace their `particleXxx`/`Range`/`Speed` settings with a
+ * value over each particle's life, sampled at the fraction of its lifetime it has lived (keyframe
+ * times past `1` are never reached). [targetNode] keeps particles in another node's coordinates, so
+ * they stay where they were born when the emitter moves. The defaults, and what Apple's emitter does
+ * and doesn't draw, are as recorded on iOS/tvOS simulators — see `docs/API_COMPATIBILITY.md`.
  */
 public class SKEmitterNode : SKNode() {
     /**
@@ -42,8 +44,11 @@ public class SKEmitterNode : SKNode() {
     /** Total particles to ever emit; `0` (the default) means unlimited (governed by [particleBirthRate] alone). */
     public var numParticlesToEmit: Int = 0
 
-    /** How long (in seconds) a particle lives before being removed. Defaults to `1`. */
-    public var particleLifetime: Float = 1f
+    /**
+     * How long (in seconds) a particle lives before being removed. Defaults to `0`, as on Apple: a
+     * particle with no lifetime is never drawn.
+     */
+    public var particleLifetime: Float = 0f
 
     /** Random variance applied to [particleLifetime] for each new particle. */
     public var particleLifetimeRange: Float = 0f
@@ -59,9 +64,9 @@ public class SKEmitterNode : SKNode() {
 
     /**
      * The direction (in radians, `0` along `+x`, matching [SKNode.zRotation]'s convention) new
-     * particles are emitted in.
+     * particles are emitted in. Defaults to `π/2` (straight up), as on Apple.
      */
-    public var emissionAngle: Float = 0f
+    public var emissionAngle: Float = (PI / 2).toFloat()
 
     /** Random variance applied to [emissionAngle] for each new particle. */
     public var emissionAngleRange: Float = 0f
@@ -81,6 +86,12 @@ public class SKEmitterNode : SKNode() {
     /** Per-second rate of change applied to a particle's opacity over its lifetime. */
     public var particleAlphaSpeed: Float = 0f
 
+    /**
+     * A particle's opacity over its life, replacing [particleAlpha], [particleAlphaRange] and
+     * [particleAlphaSpeed] while set. `null` by default.
+     */
+    public var particleAlphaSequence: SKKeyframeSequence<Float>? = null
+
     /** A new particle's initial scale multiplier, applied on top of [particleSize]. Defaults to `1`. */
     public var particleScale: Float = 1f
 
@@ -89,6 +100,12 @@ public class SKEmitterNode : SKNode() {
 
     /** Per-second rate of change applied to a particle's scale over its lifetime. */
     public var particleScaleSpeed: Float = 0f
+
+    /**
+     * A particle's scale over its life, replacing [particleScale], [particleScaleRange] and
+     * [particleScaleSpeed] while set. `null` by default.
+     */
+    public var particleScaleSequence: SKKeyframeSequence<Float>? = null
 
     /** A new particle's initial rotation, in radians. */
     public var particleRotation: Float = 0f
@@ -101,11 +118,16 @@ public class SKEmitterNode : SKNode() {
 
     /**
      * A particle's tint color (ARGB, matching [android.graphics.Color]) — ignored while
-     * [particleColorSequence] is set. Defaults to white.
+     * [particleColorSequence] is set. Defaults to transparent white, as on Apple, which only shows
+     * once [particleColorBlendFactor] is raised.
      */
-    public var particleColor: Int = Color.WHITE
+    public var particleColor: Int = 0x00FFFFFF
 
-    /** How much [particleColor] tints [particleTexture]'s own colors, like [SKSpriteNode.colorBlendFactor]. */
+    /**
+     * How far a particle's color *and* opacity move from opaque white toward [particleColor]'s, the
+     * way Apple mixes them: red at alpha `0.5` blended by `0.5` draws `(1, 0.5, 0.5)` at alpha
+     * `0.75`. Defaults to `0`, so the particle keeps its texture's colors.
+     */
     public var particleColorBlendFactor: Float = 0f
 
     /** Random variance applied to [particleColorBlendFactor] for each new particle. */
@@ -115,22 +137,60 @@ public class SKEmitterNode : SKNode() {
     public var particleColorBlendFactorSpeed: Float = 0f
 
     /**
-     * A color-over-lifetime ramp overriding [particleColor]/[particleColorBlendFactor] entirely
-     * while set. `null` by default.
+     * A particle's blend factor over its life, replacing [particleColorBlendFactor],
+     * [particleColorBlendFactorRange] and [particleColorBlendFactorSpeed] while set. `null` by
+     * default.
+     */
+    public var particleColorBlendFactorSequence: SKKeyframeSequence<Float>? = null
+
+    /**
+     * A particle's color over its life, replacing [particleColor] while set — only the color: the
+     * blend factor still decides how much of it shows, as on Apple. `null` by default.
      */
     public var particleColorSequence: SKKeyframeSequence<Int>? = null
 
     /** How a particle's pixels combine with what's already drawn. Defaults to [SKBlendMode.Alpha]. */
     public var particleBlendMode: SKBlendMode = SKBlendMode.Alpha
 
-    /** A new particle's initial [SKNode.zPosition]-equivalent draw ordering. */
+    /**
+     * A new particle's z-position, added to this node's own effective one: it orders particles
+     * against other nodes.
+     */
     public var particleZPosition: Float = 0f
 
     /** Random variance applied to [particleZPosition] for each new particle. */
     public var particleZPositionRange: Float = 0f
 
-    /** Per-second rate of change applied to a particle's z-position over its lifetime. */
+    /**
+     * Accepted for API parity with no effect: on Apple, a particle's z-position doesn't change over
+     * its life — it neither reorders particles nor moves them past other nodes.
+     */
     public var particleZPositionSpeed: Float = 0f
+
+    /**
+     * Accepted for API parity with no effect: in every order, a newer particle is drawn on top of
+     * an older one, which is what Apple draws for all three. Defaults to
+     * [SKParticleRenderOrder.OldestLast], as on Apple.
+     */
+    public var particleRenderOrder: SKParticleRenderOrder = SKParticleRenderOrder.OldestLast
+
+    /**
+     * Accepted for API parity with no effect: Apple runs a particle action on no particle that
+     * iOS/tvOS simulators draw (moves, scales, fades and colorizes all leave particles as they were).
+     * `null` by default.
+     */
+    public var particleAction: SKAction? = null
+
+    /**
+     * The node whose coordinates new particles live in, or `null` (the default) for this emitter's
+     * own. With a target, a particle is born where the emitter is but then belongs to the target:
+     * it stays put when the emitter moves and moves with the target; it's drawn with the target's
+     * transform and opacity, not the emitter's (hiding or fading the emitter leaves it showing),
+     * and its emission angle, speed, accelerations and size are in the target's coordinates,
+     * ignoring the emitter's rotation and scale. Removing the emitter from its scene removes its
+     * particles from view. Apple holds the target weakly; this holds it strongly.
+     */
+    public var targetNode: SKNode? = null
 
     /**
      * Which [SKFieldNode.categoryBitMask] categories affect this emitter's particles. Defaults to
@@ -162,9 +222,11 @@ public class SKEmitterNode : SKNode() {
         target.particleAlpha = particleAlpha
         target.particleAlphaRange = particleAlphaRange
         target.particleAlphaSpeed = particleAlphaSpeed
+        target.particleAlphaSequence = particleAlphaSequence
         target.particleScale = particleScale
         target.particleScaleRange = particleScaleRange
         target.particleScaleSpeed = particleScaleSpeed
+        target.particleScaleSequence = particleScaleSequence
         target.particleRotation = particleRotation
         target.particleRotationRange = particleRotationRange
         target.particleRotationSpeed = particleRotationSpeed
@@ -172,12 +234,16 @@ public class SKEmitterNode : SKNode() {
         target.particleColorBlendFactor = particleColorBlendFactor
         target.particleColorBlendFactorRange = particleColorBlendFactorRange
         target.particleColorBlendFactorSpeed = particleColorBlendFactorSpeed
+        target.particleColorBlendFactorSequence = particleColorBlendFactorSequence
         target.particleColorSequence = particleColorSequence
         target.particleBlendMode = particleBlendMode
         target.particleZPosition = particleZPosition
         target.particleZPositionRange = particleZPositionRange
         target.particleZPositionSpeed = particleZPositionSpeed
         target.fieldBitMask = fieldBitMask
+        target.particleRenderOrder = particleRenderOrder
+        target.particleAction = particleAction
+        target.targetNode = targetNode
     }
 
     internal val particles: MutableList<SKParticle> = mutableListOf()
@@ -201,7 +267,8 @@ public class SKEmitterNode : SKNode() {
 }
 
 /**
- * One simulated particle's mutable state, in its emitting [SKEmitterNode]'s local space. Not part
+ * One simulated particle's mutable state, in [space]: its emitting [SKEmitterNode]'s local space,
+ * or the emitter's [SKEmitterNode.targetNode]'s if it had one when the particle was born. Not part
  * of the public API.
  *
  * One parameter per animatable attribute's `initial`/`Speed` pair, mirroring [SKEmitterNode]'s own
@@ -209,6 +276,7 @@ public class SKEmitterNode : SKNode() {
  */
 @Suppress("LongParameterList")
 internal class SKParticle(
+    val space: SKNode,
     var position: Vector2,
     var velocity: Vector2,
     val lifetime: Float,
@@ -220,7 +288,30 @@ internal class SKParticle(
     val rotationSpeed: Float,
     val initialColorBlendFactor: Float,
     val colorBlendFactorSpeed: Float,
-    val initialZPosition: Float,
-    val zPositionSpeed: Float,
+    val zPosition: Float,
     var age: Float = 0f,
-)
+) {
+    /** The scale [initialScale] and [scaleSpeed] give at [age], for an emitter with no scale sequence. */
+    fun scale(): Float = initialScale + scaleSpeed * age
+
+    /** The opacity [initialAlpha] and [alphaSpeed] give at [age], for an emitter with no alpha sequence. */
+    fun alpha(): Float = initialAlpha + alphaSpeed * age
+
+    /** The blend factor its initial value and speed give at [age], for an emitter with no blend-factor sequence. */
+    fun colorBlendFactor(): Float = initialColorBlendFactor + colorBlendFactorSpeed * age
+}
+
+/**
+ * The order an [SKEmitterNode] is asked to draw its particles in, mirroring Apple's
+ * `SKParticleRenderOrder` — see [SKEmitterNode.particleRenderOrder].
+ */
+public enum class SKParticleRenderOrder {
+    /** Oldest particles drawn last. The default, as on Apple. */
+    OldestLast,
+
+    /** Oldest particles drawn first. */
+    OldestFirst,
+
+    /** Any order. */
+    DontCare,
+}

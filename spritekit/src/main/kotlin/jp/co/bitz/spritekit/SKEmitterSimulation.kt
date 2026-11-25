@@ -100,7 +100,7 @@ private fun fieldAccelerationSum(
     scene: SKScene,
 ): Vector2 {
     if (fields.isEmpty() || emitter.fieldBitMask == 0) return Vector2.Zero
-    val worldPosition = emitter.convertTo(particle.position, scene)
+    val worldPosition = particle.space.convertTo(particle.position, scene)
     var sum = Vector2.Zero
     for ((field, fieldWorldPosition) in fields) {
         sum += fieldContribution(field, fieldWorldPosition, emitter.fieldBitMask, worldPosition, particle)
@@ -139,7 +139,8 @@ private fun emitParticles(
     emitter.emissionAccumulator += emitter.particleBirthRate * dt
     while (emitter.emissionAccumulator >= 1f) {
         if (emitter.numParticlesToEmit > 0 && emitter.totalEmitted >= emitter.numParticlesToEmit) break
-        emitter.particles += spawnParticle(emitter)
+        // A particle with no lifetime still counts as emitted, but Apple never draws it.
+        spawnParticle(emitter)?.let { emitter.particles += it }
         emitter.totalEmitted++
         emitter.emissionAccumulator -= 1f
     }
@@ -154,17 +155,26 @@ private fun randomized(
     range: Float,
 ): Float = if (range == 0f) base else base + (Random.nextFloat() - 0.5f) * range
 
-private fun spawnParticle(emitter: SKEmitterNode): SKParticle {
-    val lifetime = randomized(emitter.particleLifetime, emitter.particleLifetimeRange).coerceAtLeast(0.0001f)
+/**
+ * A new particle, or `null` if its lifetime comes out at `0` or less. It's born at the emitter's
+ * position (offset by [SKEmitterNode.particlePositionRange] in the emitter's space); with a
+ * [SKEmitterNode.targetNode] it then lives in the target's space, its velocity unrotated by the
+ * emitter, as on Apple.
+ */
+private fun spawnParticle(emitter: SKEmitterNode): SKParticle? {
+    val lifetime = randomized(emitter.particleLifetime, emitter.particleLifetimeRange)
+    if (lifetime <= 0f) return null
     val speed = randomized(emitter.particleSpeed, emitter.particleSpeedRange)
     val angle = randomized(emitter.emissionAngle, emitter.emissionAngleRange)
-    val position =
+    val birthPosition =
         Vector2(
             randomized(0f, emitter.particlePositionRange.x),
             randomized(0f, emitter.particlePositionRange.y),
         )
+    val space = emitter.targetNode ?: emitter
     return SKParticle(
-        position = position,
+        space = space,
+        position = if (space === emitter) birthPosition else emitter.convertTo(birthPosition, space),
         velocity = Vector2(cos(angle), sin(angle)) * speed,
         lifetime = lifetime,
         initialAlpha = randomized(emitter.particleAlpha, emitter.particleAlphaRange).coerceIn(0f, 1f),
@@ -179,7 +189,6 @@ private fun spawnParticle(emitter: SKEmitterNode): SKParticle {
                 emitter.particleColorBlendFactorRange,
             ).coerceIn(0f, 1f),
         colorBlendFactorSpeed = emitter.particleColorBlendFactorSpeed,
-        initialZPosition = randomized(emitter.particleZPosition, emitter.particleZPositionRange),
-        zPositionSpeed = emitter.particleZPositionSpeed,
+        zPosition = randomized(emitter.particleZPosition, emitter.particleZPositionRange),
     )
 }
