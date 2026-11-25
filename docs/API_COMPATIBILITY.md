@@ -641,11 +641,18 @@ categories recur throughout and are called out once here rather than per item:
   unlike Apple's default of reparenting particles into the emitter's *parent* so they don't).
 - **The scale/rotation/alpha `SKKeyframeSequence` properties** Apple documents as siblings of
   `particleColorSequence` aren't implemented — only `particleColorSequence` is.
-- **`SKKeyframeSequence` is generic and takes an explicit `interpolate` function at `sample`
-  time**, rather than Apple's untyped (`[Any]`) version, which infers how to interpolate via
-  runtime reflection on the value's type (`CGFloat`, `SKColor`, `CGPoint`, ...). More boilerplate
-  per call site, but type-safe, and with no implicit "which types does interpolation actually
-  support" contract to document.
+- **`SKKeyframeSequence` is generic and is given an `SKKeyframeInterpolator` for its value type**
+  when it's created, rather than Apple's untyped (`[Any]`) version, which interpolates whatever
+  numbers (`NSNumber`) and colors (`SKColor`) it holds and samples anything else as `nil`.
+  `SKKeyframeInterpolator.FloatValues` and `ColorValues` (ARGB `Int`s, this library's color type)
+  cover those two; a color whose spline overshoots is clamped to `0..1` per channel, which Apple's
+  extended-range colors don't need. Otherwise it behaves as recorded on iOS/tvOS simulators (the
+  sample app's `SKKeyframeSequenceParityTests`): `Linear`/`Clamp` by default; `Step` holds the
+  latest keyframe reached; `Spline` is a cubic Hermite curve, flat at the end keyframes, whose
+  other tangents weight the change on each side by the opposite side's time gap; `Loop` wraps the
+  time by the last keyframe's time; times are never sorted, sampling limits the time to the *last*
+  keyframe's time, and equal times sample as the later keyframe. Apple's `for:` argument labels
+  are `index` parameters (`for` is a Kotlin keyword), and `count()` stays a function.
 - **Particles respond to `SKFieldNode`s via `SKEmitterNode.fieldBitMask`**, reusing the physics
   field-force formulas (refactored to operate on a world position/velocity pair rather than an
   `SKPhysicsBody`, so both physics bodies and particles — which have no physics body — can share

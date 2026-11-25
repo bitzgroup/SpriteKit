@@ -419,7 +419,7 @@ private fun addEmitterCommands(
                 1f,
             )
         val lifeFraction = (particle.age / particle.lifetime).coerceIn(0f, 1f)
-        val colorInt = node.particleColorSequence?.sample(lifeFraction, ::lerpColor) ?: node.particleColor
+        val colorInt = node.particleColorSequence?.sample(lifeFraction) ?: node.particleColor
 
         val localCorners = rotatedQuadCorners(halfSize * scale, rotation).map { it + particle.position }
         val corners = node.convertAllTo(localCorners, context.referenceNode)
