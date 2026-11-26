@@ -276,27 +276,47 @@ public class SKView
         public fun presentScene(scene: SKScene) {
             // Apple's presentScene(_:) also un-pauses a paused view (verified on an iOS simulator).
             isPaused = false
-            runOnGLThread { setCurrentScene(scene) }
+            runOnGLThread {
+                finishTransition()
+                setCurrentScene(scene)
+            }
         }
 
         /**
          * Presents [scene] like [presentScene], but plays [transition] over its
          * [SKTransition.duration] instead of cutting instantly — a no-op transition (just an
          * instant cut) if no scene was already presented, since there'd be nothing to transition
-         * from.
+         * from. While it plays, [SKTransition.pausesIncomingScene]/[SKTransition.pausesOutgoingScene]
+         * decide which of the two scenes run; once it ends both are un-paused, as on Apple.
          */
         public fun presentScene(
             scene: SKScene,
             transition: SKTransition,
         ) {
             runOnGLThread {
-                currentScene?.let {
-                    transitionFromScene = it
+                finishTransition()
+                val outgoing = currentScene
+                setCurrentScene(scene)
+                if (outgoing != null) {
+                    transitionFromScene = outgoing
                     transitionSpec = transition
                     transitionElapsed = Duration.ZERO
+                    if (transition.pausesOutgoingScene) outgoing.isPaused = true
+                    if (transition.pausesIncomingScene) scene.isPaused = true
                 }
-                setCurrentScene(scene)
             }
+        }
+
+        /**
+         * Ends an in-progress transition (if any), un-pausing both of its scenes as Apple does when
+         * a transition finishes. Must only be called on the render thread.
+         */
+        private fun finishTransition() {
+            if (transitionSpec == null) return
+            transitionFromScene?.isPaused = false
+            currentScene?.isPaused = false
+            transitionSpec = null
+            transitionFromScene = null
         }
 
         /**
@@ -548,16 +568,16 @@ public class SKView
             }
             transitionElapsed += deltaTime
             if (transitionElapsed >= transition.duration) {
-                transitionSpec = null
-                transitionFromScene = null
+                finishTransition()
                 return renderFrame()
             }
             val progress = (transitionElapsed / transition.duration).toFloat()
             var statistics = SKRenderStatistics.Zero
             for (layer in transitionLayers(transition, progress, viewWidth, viewHeight)) {
+                val layerScene = if (layer.useToScene) toScene else fromScene
                 statistics +=
                     sceneRenderer.draw(
-                        scene = if (layer.useToScene) toScene else fromScene,
+                        scene = layerScene,
                         viewWidth = viewWidth,
                         viewHeight = viewHeight,
                         resourceRegistry = resourceRegistry,
@@ -565,7 +585,8 @@ public class SKView
                         viewportSize = layer.viewportSize,
                         globalAlpha = layer.alpha,
                         clearFirst = layer.clearFirst,
-                        outerClip = splitClip(layer.split, fromScene),
+                        clearColor = layer.clearColor,
+                        outerClip = splitClip(layer.split, layerScene),
                         allowsTransparency = renderTransparently,
                         pixelSize = 1f / density,
                         showsPhysics = showsPhysics,
@@ -589,27 +610,30 @@ public class SKView
         }
 
         /**
-         * The scene-space rect [SKTransitionSplit.Left]/[SKTransitionSplit.Right] refers to, in
-         * [fromScene]'s own reference space -- `null` for [SKTransitionSplit.None].
+         * The rect the half named by [split] covers, in [scene]'s own reference space -- `null`
+         * for [SKTransitionSplit.None].
          */
         private fun splitClip(
             split: SKTransitionSplit,
-            fromScene: SKScene,
+            scene: SKScene,
         ): Rect? {
             if (split == SKTransitionSplit.None) return null
             val projection =
                 computeSceneProjection(
-                    fromScene.size,
-                    fromScene.anchorPoint,
-                    fromScene.scaleMode,
+                    scene.size,
+                    scene.anchorPoint,
+                    scene.scaleMode,
                     viewWidth,
                     viewHeight,
-                    hasCamera = fromScene.camera != null,
+                    hasCamera = scene.camera != null,
                 )
             val midX = (projection.left + projection.right) / 2f
+            val midY = (projection.bottom + projection.top) / 2f
             return when (split) {
                 SKTransitionSplit.Left -> Rect(projection.left, projection.bottom, midX, projection.top)
                 SKTransitionSplit.Right -> Rect(midX, projection.bottom, projection.right, projection.top)
+                SKTransitionSplit.Bottom -> Rect(projection.left, projection.bottom, projection.right, midY)
+                SKTransitionSplit.Top -> Rect(projection.left, midY, projection.right, projection.top)
                 SKTransitionSplit.None -> null
             }
         }
@@ -652,22 +676,29 @@ public class SKView
                 val scene = currentScene
                 // Also covers a scene whose scaleMode was switched to `.resizeFill` after presenting.
                 scene?.let { syncResizeFillSize(it) }
-                if (scene != null && !isPaused && !scene.isPaused) {
-                    scene.dispatchUpdate(deltaTime)
-                    scene.stepActions(deltaTime)
-                    scene.dispatchDidEvaluateActions()
-                    simulatePhysics(scene, deltaTime)
-                    scene.dispatchDidSimulatePhysics()
-                    scene.applyConstraints()
-                    scene.dispatchDidApplyConstraints()
-                    stepEmitters(scene, deltaTime)
-                    stepTileMaps(scene, deltaTime)
-                    stepAudioNodes(scene)
-                    renderStatistics(renderTransitionFrame(deltaTime))
-                    scene.dispatchDidFinishUpdate()
-                } else {
-                    renderStatistics(renderTransitionFrame(deltaTime))
-                }
+                // An outgoing scene the transition doesn't pause keeps running until it ends.
+                val outgoing = transitionFromScene?.takeIf { transitionSpec != null && !isPaused && !it.isPaused }
+                val running = listOfNotNull(outgoing, scene?.takeIf { !isPaused && !it.isPaused })
+                for (runningScene in running) stepScene(runningScene, deltaTime)
+                renderStatistics(renderTransitionFrame(deltaTime))
+                for (runningScene in running) runningScene.dispatchDidFinishUpdate()
+            }
+
+            /** One frame of [scene]'s update loop, up to (not including) `didFinishUpdate`. */
+            private fun stepScene(
+                scene: SKScene,
+                deltaTime: Duration,
+            ) {
+                scene.dispatchUpdate(deltaTime)
+                scene.stepActions(deltaTime)
+                scene.dispatchDidEvaluateActions()
+                simulatePhysics(scene, deltaTime)
+                scene.dispatchDidSimulatePhysics()
+                scene.applyConstraints()
+                scene.dispatchDidApplyConstraints()
+                stepEmitters(scene, deltaTime)
+                stepTileMaps(scene, deltaTime)
+                stepAudioNodes(scene)
             }
         }
 

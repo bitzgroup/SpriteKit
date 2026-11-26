@@ -159,9 +159,8 @@ categories recur throughout and are called out once here rather than per item:
   setting `view.isPaused` sets the presented scene's `isPaused` to the same value, and while the
   view is paused nothing in the scene runs whatever the scene's own `isPaused` says.
   `presentScene(scene)` un-pauses both the incoming scene and the view itself, as Apple's does;
-  `presentScene(scene, transition)` un-pauses the incoming scene but leaves a paused view paused
-  (Apple's `SKTransition.pausesIncomingScene`/`pausesOutgoingScene` aren't implemented — see
-  `PARITY_GAP_PLAN.md` X1).
+  `presentScene(scene, transition)` leaves a paused view paused, and pauses the scenes as the
+  transition's `pausesIncomingScene`/`pausesOutgoingScene` say (see "Transitions" below).
   `SKView.onResume()` (the Android counterpart of returning to the foreground) un-pauses the scene
   even if the app had paused it through `scene.isPaused` — Apple's `SKView` does the same — but
   leaves a paused *view* paused. `scene` is `null` until the first `presentScene` has taken effect
@@ -813,17 +812,31 @@ categories recur throughout and are called out once here rather than per item:
 
 - **No offscreen-framebuffer (FBO) support** — this renderer never draws a scene to a texture, so
   every transition effect is built purely from `glViewport` offset/size, a whole-scene alpha
-  multiplier, and (for `doorway` only) a plain rectangular clip, rather than true compositing.
+  multiplier, and (for the door effects) a rectangular clip to one half of a scene, rather than
+  true compositing. A layer drawn opaquely over another still covers its area with its scene's
+  background color, so a door or sliding scene hides what's beneath it as Apple's does; the
+  fading layers of `fade`/`crossFade` draw only their nodes.
+- **`doorsOpenHorizontal`/`doorsOpenVertical`/`doorsCloseHorizontal`/`doorsCloseVertical` match
+  Apple's** (recorded on iOS/tvOS simulators by the sample app's `SKTransitionParityUITests`): each
+  door is one half of its scene, moved without scaling by half the view, timed by `3t² − 2t³`
+  (`easeInEaseOut`). Opening doors split the outgoing scene over the stationary incoming one;
+  closing doors slide the incoming scene's halves in over the stationary outgoing one.
+- **`doorway` is a 2D approximation of Apple's 3D effect.** As on Apple, the outgoing scene's
+  halves slide apart while the incoming scene comes forward over black from about 0.42 of its
+  size (`1 / (1 + distance)`, with the distance eased like the doors — a fit within 0.03 of the
+  sizes recorded on iOS/tvOS simulators). Apple's doors also swing away in perspective, shrinking
+  and darkening until they're gone a little before the end; here they keep their size and color
+  and slide off exactly at the end.
 - **`flipHorizontal`/`flipVertical` approximate Apple's true 3D flip as a 2D squash-then-grow**
   (the outgoing scene narrows to nothing, then the incoming scene grows back out) — this renderer
   has no 3D perspective transform to do an actual flip with.
-- **`doorway`'s split is a plain vertical line down the middle**, each half sliding straight
-  sideways — not Apple's (undocumented) exact panel geometry/easing.
-- **The outgoing scene is frozen for the whole transition** — only the *incoming* scene's
-  `update`/actions/physics/etc. continue running; the outgoing scene is drawn purely as a visual
-  snapshot of whatever state it was in when the transition began.
-- **Transition progress is linear** — no easing curve (Apple's transitions may use one; exact
-  timing isn't documented).
+- **`pausesIncomingScene` and `pausesOutgoingScene` default to `true` and behave as Apple's**
+  (recorded on iOS/tvOS simulators): a scene they pause reads `isPaused == true` and gets no
+  `update`/actions/physics until the transition ends, when both scenes are un-paused; a scene they
+  don't pause keeps running, the outgoing one until the transition ends. One difference: Apple runs
+  the incoming scene's `update` once before pausing it, and this port doesn't.
+- **Progress is linear for every effect but the doors and `doorway`** — `fade`, `crossFade`,
+  `moveIn`, `push`, `reveal` and the flips haven't been recorded against Apple's timing yet.
 
 ## Audio (`SKAudioNode`, audio `SKAction`s)
 
