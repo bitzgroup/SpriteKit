@@ -76,8 +76,10 @@ internal class SKSceneRenderer {
     }
 
     /**
-     * Clears the frame to [SKScene.backgroundColor] (unless [clearFirst] is `false`, for a layer
-     * drawn on top of one already on screen — see `SKTransitionLayers.kt`), then draws [scene]'s
+     * Clears the frame to [clearColor], or else [SKScene.backgroundColor] (unless [clearFirst] is
+     * `false`, for a layer drawn on top of one already on screen — see `SKTransitionLayers.kt`;
+     * such a layer, when opaque, still fills its own viewport area, within [outerClip], with
+     * [SKScene.backgroundColor]), then draws [scene]'s
      * content into a `glViewport` of [viewportSize] (defaulting to the full [viewWidth]x
      * [viewHeight]) at [viewportOffset], each vertex's alpha additionally scaled by [globalAlpha],
      * and — if set — every command further clipped to [outerClip] (in the same space as
@@ -97,6 +99,7 @@ internal class SKSceneRenderer {
         viewportSize: Vector2? = null,
         globalAlpha: Float = 1f,
         clearFirst: Boolean = true,
+        clearColor: Int? = null,
         outerClip: Rect? = null,
         allowsTransparency: Boolean = false,
         pixelSize: Float = 0f,
@@ -117,9 +120,18 @@ internal class SKSceneRenderer {
         GLES20.glViewport(viewportOffset.x.toInt(), viewportOffset.y.toInt(), size.x.toInt(), size.y.toInt())
 
         if (clearFirst) {
-            val clear = backgroundClearColor(scene.backgroundColor, allowsTransparency)
+            val clear = backgroundClearColor(clearColor ?: scene.backgroundColor, allowsTransparency)
             GLES20.glClearColor(clear[0], clear[1], clear[2], clear[3])
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        } else if (globalAlpha >= 1f) {
+            // An opaque layer drawn over another (a transition panel or sliding scene) covers its
+            // own area with its scene's background, as Apple's transitions show the whole scene.
+            val clear = backgroundClearColor(scene.backgroundColor, allowsTransparency)
+            GLES20.glClearColor(clear[0], clear[1], clear[2], clear[3])
+            val area = outerClip ?: Rect(projection.left, projection.bottom, projection.right, projection.top)
+            applyScissor(area, projection, viewportOffset, size)
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
         }
 
         var commands = buildRenderCommands(scene, pixelSize)
@@ -128,7 +140,7 @@ internal class SKSceneRenderer {
             commands = commands + physicsOutlineCommands(scene, scene.camera ?: scene, unitsPerPixel)
         }
         val statistics =
-            drawCommands(commands, resourceRegistry, projection, viewWidth, viewHeight, globalAlpha, outerClip)
+            drawCommands(commands, resourceRegistry, projection, viewportOffset, size, globalAlpha, outerClip)
         GLES20.glViewport(0, 0, viewWidth, viewHeight)
         return statistics
     }
@@ -148,7 +160,15 @@ internal class SKSceneRenderer {
         Matrix.orthoM(mvpMatrix, 0, 0f, width, 0f, height, -1f, 1f)
         GLES20.glViewport(0, 0, viewWidth, viewHeight)
         val projection = SKSceneProjection(left = 0f, right = width, bottom = 0f, top = height)
-        drawCommands(commands, resourceRegistry, projection, viewWidth, viewHeight, globalAlpha = 1f, outerClip = null)
+        drawCommands(
+            commands,
+            resourceRegistry,
+            projection,
+            viewportOffset = Vector2.Zero,
+            viewportSize = Vector2(width, height),
+            globalAlpha = 1f,
+            outerClip = null,
+        )
     }
 
     @Suppress("LongParameterList")
@@ -156,8 +176,8 @@ internal class SKSceneRenderer {
         commands: List<SKRenderCommand>,
         resourceRegistry: SKResourceRegistry,
         projection: SKSceneProjection,
-        viewWidth: Int,
-        viewHeight: Int,
+        viewportOffset: Vector2,
+        viewportSize: Vector2,
         globalAlpha: Float,
         outerClip: Rect?,
     ): SKRenderStatistics {
@@ -167,7 +187,7 @@ internal class SKSceneRenderer {
         var index = 0
         while (index < commands.size) {
             val run = takeRun(commands, index)
-            drawRun(run, resourceRegistry, projection, viewWidth, viewHeight, globalAlpha, outerClip)
+            drawRun(run, resourceRegistry, projection, viewportOffset, viewportSize, globalAlpha, outerClip)
             val quads = run.sumOf { it.vertices.size } / VERTICES_PER_QUAD
             statistics += SKRenderStatistics(drawCount = 1, quadCount = quads)
             index += run.size
@@ -181,12 +201,12 @@ internal class SKSceneRenderer {
         run: List<SKRenderCommand>,
         resourceRegistry: SKResourceRegistry,
         projection: SKSceneProjection,
-        viewWidth: Int,
-        viewHeight: Int,
+        viewportOffset: Vector2,
+        viewportSize: Vector2,
         globalAlpha: Float,
         outerClip: Rect?,
     ) {
-        applyScissor(combinedClip(run.first().clipRect, outerClip), projection, viewWidth, viewHeight)
+        applyScissor(combinedClip(run.first().clipRect, outerClip), projection, viewportOffset, viewportSize)
         applyBlendMode(run.first().blendMode)
 
         val binding = resolveProgram(run.first().shader, resourceRegistry)
@@ -389,26 +409,28 @@ private fun takeRun(
 
 /**
  * Enables/configures (or disables) `GL_SCISSOR_TEST` for [clipRect] — in the same space as
- * render command vertices — mapped through [projection] into `glScissor`'s viewport-pixel,
- * bottom-left-origin coordinates. `null` disables scissoring. For [SKCropNode].
+ * render command vertices — mapped through [projection] into the `glViewport` at
+ * [viewportOffset] of [viewportSize], in `glScissor`'s window-pixel, bottom-left-origin
+ * coordinates (the scissor box, unlike the vertices, isn't moved by the viewport). `null`
+ * disables scissoring. For [SKCropNode] and transition panels.
  */
 private fun applyScissor(
     clipRect: Rect?,
     projection: SKSceneProjection,
-    viewWidth: Int,
-    viewHeight: Int,
+    viewportOffset: Vector2,
+    viewportSize: Vector2,
 ) {
     if (clipRect == null) {
         GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
         return
     }
-    val scaleX = viewWidth / (projection.right - projection.left)
-    val scaleY = viewHeight / (projection.top - projection.bottom)
-    val x = (clipRect.left - projection.left) * scaleX
+    val scaleX = viewportSize.x / (projection.right - projection.left)
+    val scaleY = viewportSize.y / (projection.top - projection.bottom)
+    val x = viewportOffset.x + (clipRect.left - projection.left) * scaleX
     // clipRect.top is the smaller-y (this library's Rect is normalized left<=right/top<=bottom),
     // which in this y-up world is the visually *lower* edge -- matching glScissor's own
     // bottom-left-origin y parameter directly, with no flip needed.
-    val y = (clipRect.top - projection.bottom) * scaleY
+    val y = viewportOffset.y + (clipRect.top - projection.bottom) * scaleY
     val width = (clipRect.right - clipRect.left) * scaleX
     val height = (clipRect.bottom - clipRect.top) * scaleY
     GLES20.glEnable(GLES20.GL_SCISSOR_TEST)

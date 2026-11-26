@@ -1,20 +1,27 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.Color
+
 /**
- * Which half of the viewport a transition layer is clipped to -- [SKTransitionKind.Doorway]'s two
- * splitting panels. `None` means unclipped.
+ * Which half of its scene a transition layer is clipped to -- the door effects' two panels.
+ * `None` means unclipped.
  */
 internal enum class SKTransitionSplit {
     None,
     Left,
     Right,
+    Bottom,
+    Top,
 }
+
+/** How small the incoming scene starts out in [SKTransitionKind.Doorway], as recorded on iOS/tvOS simulators. */
+private const val DOORWAY_INCOMING_START_SCALE = 0.42f
 
 /**
  * One `SKSceneRenderer.draw` call's worth of a transition frame: which scene, at what
  * `glViewport` offset/size (`null` size means the full viewport), overall alpha multiplier,
  * whether it should clear the framebuffer first (the first layer of a frame always should; later
- * layers drawn on top of it shouldn't), and which half of the viewport (if any) to clip to.
+ * layers drawn on top of it shouldn't), and which half of its scene (if any) to clip to.
  */
 internal data class SKTransitionLayer(
     val useToScene: Boolean,
@@ -23,6 +30,8 @@ internal data class SKTransitionLayer(
     val alpha: Float = 1f,
     val clearFirst: Boolean = true,
     val split: SKTransitionSplit = SKTransitionSplit.None,
+    /** What [clearFirst] clears to — `null` for the layer's own scene's background color. */
+    val clearColor: Int? = null,
 )
 
 /**
@@ -61,7 +70,11 @@ internal fun transitionLayers(
         SKTransitionKind.MoveIn -> moveInLayers(motion, t)
         SKTransitionKind.Push -> pushLayers(motion, t)
         SKTransitionKind.Reveal -> revealLayers(motion, t)
-        SKTransitionKind.Doorway -> doorwayLayers(viewWidth, t)
+        SKTransitionKind.Doorway -> doorwayLayers(viewWidth, viewHeight, t)
+        SKTransitionKind.DoorsOpenHorizontal -> doorsLayers(Vector2(viewWidth * 0.5f, 0f), opening = true, t)
+        SKTransitionKind.DoorsOpenVertical -> doorsLayers(Vector2(0f, viewHeight * 0.5f), opening = true, t)
+        SKTransitionKind.DoorsCloseHorizontal -> doorsLayers(Vector2(viewWidth * 0.5f, 0f), opening = false, t)
+        SKTransitionKind.DoorsCloseVertical -> doorsLayers(Vector2(0f, viewHeight * 0.5f), opening = false, t)
         SKTransitionKind.FlipHorizontal -> flipLayers(t, horizontal = true, viewWidth, viewHeight)
         SKTransitionKind.FlipVertical -> flipLayers(t, horizontal = false, viewWidth, viewHeight)
     }
@@ -107,26 +120,68 @@ private fun revealLayers(
         SKTransitionLayer(useToScene = false, viewportOffset = motion * t, clearFirst = false),
     )
 
-private fun doorwayLayers(
-    viewWidth: Int,
+/**
+ * Apple's door effects ease in and out — `3t² − 2t³`, as recorded on iOS/tvOS simulators, with the
+ * panels moving by exactly that fraction of half the view.
+ */
+private fun doorsEasing(t: Float): Float = t * t * (3f - 2f * t)
+
+/**
+ * The two panels of a door effect, [travel] being how far each panel moves from closed to fully
+ * open (half the view, sideways or up/down). Opening splits the outgoing scene over the incoming
+ * one; closing slides the incoming scene's halves in over the outgoing one. Each panel is the
+ * scene's own half, moved without scaling, as on Apple.
+ */
+private fun doorsLayers(
+    travel: Vector2,
+    opening: Boolean,
     t: Float,
 ): List<SKTransitionLayer> {
-    val halfWidth = viewWidth * 0.5f
+    val eased = doorsEasing(t)
+    val open = if (opening) eased else 1f - eased
+    val horizontal = travel.x != 0f
+    val panelScene = !opening // closing doors are the incoming scene
     return listOf(
-        SKTransitionLayer(useToScene = true),
+        SKTransitionLayer(useToScene = opening),
         SKTransitionLayer(
-            useToScene = false,
-            viewportOffset = Vector2(-halfWidth * t, 0f),
+            useToScene = panelScene,
+            viewportOffset = travel * -open,
             clearFirst = false,
-            split = SKTransitionSplit.Left,
+            split = if (horizontal) SKTransitionSplit.Left else SKTransitionSplit.Bottom,
         ),
         SKTransitionLayer(
-            useToScene = false,
-            viewportOffset = Vector2(halfWidth * t, 0f),
+            useToScene = panelScene,
+            viewportOffset = travel * open,
             clearFirst = false,
-            split = SKTransitionSplit.Right,
+            split = if (horizontal) SKTransitionSplit.Right else SKTransitionSplit.Top,
         ),
     )
+}
+
+/**
+ * [SKTransitionKind.Doorway]: the incoming scene comes forward from [DOORWAY_INCOMING_START_SCALE]
+ * of its size over black (as a perspective approach would, scaled by `1 / (1 + distance)`), while
+ * the outgoing scene opens like [SKTransitionKind.DoorsOpenHorizontal]. Apple's panels also swing
+ * away in perspective, shrinking and darkening, which this 2D version doesn't do.
+ */
+private fun doorwayLayers(
+    viewWidth: Int,
+    viewHeight: Int,
+    t: Float,
+): List<SKTransitionLayer> {
+    val eased = doorsEasing(t)
+    val distance = (1f / DOORWAY_INCOMING_START_SCALE - 1f) * (1f - eased)
+    val scale = 1f / (1f + distance)
+    val fullSize = Vector2(viewWidth.toFloat(), viewHeight.toFloat())
+    val size = fullSize * scale
+    val incoming =
+        SKTransitionLayer(
+            useToScene = true,
+            viewportOffset = (fullSize - size) * 0.5f,
+            viewportSize = size,
+            clearColor = Color.BLACK,
+        )
+    return listOf(incoming) + doorsLayers(Vector2(viewWidth * 0.5f, 0f), opening = true, t).drop(1)
 }
 
 private fun flipLayers(
