@@ -629,6 +629,17 @@ categories recur throughout and are called out once here rather than per item:
 - **`dragField` is a plain `−strength × velocity` drag.** Apple's slows a body non-linearly and,
   from a strength of about 0.1, sends it to the 36000 points/s speed cap instead; that isn't
   mirrored (`docs/PARITY_GAP_PLAN.md` P7).
+- **`physicsBodyOutline(node)` is an addition with no Apple counterpart.** Apple keeps physics-body
+  shapes private and reads them only for GameplayKit's `SKNode.obstacles(fromNodePhysicsBodies:)`.
+  This top-level function returns the same outline in scene space, so
+  [bitzgroup/GKSKBridge](https://github.com/bitzgroup/GKSKBridge) can mirror that API: a polygon's
+  vertices counterclockwise from the first one given, a circle as an octagon at scene-space angles,
+  an edge chain as given (a loop repeats its first vertex), a one-part `bodies` as that part, and
+  `null` for a single edge, several parts or a concave polygon (recorded on iOS/tvOS simulators).
+  It uses the node's current transform, while Apple's obstacles use the one its physics engine
+  last synced, which lags behind a node moved after its body joined the scene until the next
+  frame. Recording it also showed that a clockwise polygon outline keeps its first vertex when
+  reversed, which this port now does too.
 - **`velocityField` directly overrides a body's velocity** each step (matching Apple's documented
   "applies a velocity, not an acceleration" behavior) rather than integrating a force, and is
   applied after every force-based field for that step, so it wins whenever both affect the same
