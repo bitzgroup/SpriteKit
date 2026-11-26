@@ -497,8 +497,9 @@ private fun addTileCommand(
     context.add(
         SKRenderCommand(
             texture = texture,
-            blendMode = SKBlendMode.Alpha,
+            blendMode = node.blendMode,
             vertices = quadVertices(corners, uv),
+            // Apple doesn't draw a tile map's color at any colorBlendFactor (verified on iOS/tvOS).
             color = SKVertexColor(1f, 1f, 1f, alpha),
             clipRect = context.clipRect,
         ),

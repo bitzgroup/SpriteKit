@@ -3,7 +3,10 @@ package jp.co.bitz.spritekit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotSame
+import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class SKTileSetTest {
@@ -66,8 +69,17 @@ class SKTileSetTest {
     }
 
     @Test
-    fun `a group requires at least one rule`() {
-        assertFailsWith<IllegalArgumentException> { SKTileGroup(emptyList()) }
+    fun `the empty group has no rules and is a new group each time`() {
+        val empty = SKTileGroup.empty()
+
+        assertTrue(empty.rules.isEmpty())
+        assertNull(empty.name)
+        assertNotSame(empty, SKTileGroup.empty())
+    }
+
+    @Test
+    fun `a definition's placement weight defaults to 1`() {
+        assertEquals(1, SKTileDefinition().placementWeight)
     }
 
     @Test
