@@ -18,9 +18,15 @@ internal sealed class SKPhysicsShape {
 
     /**
      * A static-only boundary (walls/floors): a chain of line segments with no interior, so no
-     * mass/collision response as a mover.
+     * mass/collision response as a mover. [segment] marks the single edge of
+     * `SKPhysicsBody.edgeFrom`, which collides like a two-point chain but, as on Apple, gives no
+     * [physicsBodyOutline].
      */
-    data class EdgeChain(val vertices: List<Vector2>, val closed: Boolean) : SKPhysicsShape()
+    data class EdgeChain(
+        val vertices: List<Vector2>,
+        val closed: Boolean,
+        val segment: Boolean = false,
+    ) : SKPhysicsShape()
 
     /**
      * Several shapes moving as one body -- Apple's `SKPhysicsBody(bodies:)`, and a concave polygon

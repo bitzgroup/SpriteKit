@@ -391,7 +391,9 @@ public class SKPhysicsBody internal constructor(
             point1: Vector2,
             point2: Vector2,
         ): SKPhysicsBody =
-            SKPhysicsBody(SKPhysicsShape.EdgeChain(listOf(point1, point2), closed = false)).apply { isDynamic = false }
+            SKPhysicsBody(SKPhysicsShape.EdgeChain(listOf(point1, point2), closed = false, segment = true)).apply {
+                isDynamic = false
+            }
 
         private fun rectangleVertices(
             size: Vector2,

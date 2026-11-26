@@ -22,7 +22,8 @@ private const val MIN_CIRCLE_POINTS = 8
  */
 internal fun polygonShape(points: List<Vector2>): SKPhysicsShape {
     val ring = simplifiedRing(points)
-    val ccw = if (ring.size >= 3 && ringArea(ring) < 0f) ring.reversed() else ring
+    // Reversed from its second point on, so the outline still starts where it was given, as Apple's does.
+    val ccw = if (ring.size >= 3 && ringArea(ring) < 0f) ring.take(1) + ring.drop(1).reversed() else ring
     val pieces = if (ccw.size < 3 || isConvex(ccw)) listOf(ccw) else convexPieces(ccw)
     return pieces.singleOrNull()?.let { SKPhysicsShape.Polygon(it) }
         ?: SKPhysicsShape.Compound(pieces.map { SKPhysicsShape.Polygon(it) })
