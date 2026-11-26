@@ -694,9 +694,25 @@ categories recur throughout and are called out once here rather than per item:
   undocumented) internal scheme: `HexagonalPointy` is "odd-r" (odd-numbered rows shifted right by
   half a tile width; rows spaced 3/4 of a tile height apart), `HexagonalFlat` is "odd-q" (odd-
   numbered columns shifted down by half a tile height; columns spaced 3/4 of a tile width apart).
-  `centerOfTile`/`tileColumnIndex`/`tileRowIndex` and the map's overall layout size (which feeds
+  `centerOfTile`/`tileColumnIndex`/`tileRowIndex` and `mapSize` (which feeds
   `calculateAccumulatedFrame`) all follow this same convention consistently, but Apple's own exact
-  formulas for these aren't public, so this is *contract-conformant, not bit-identical*.
+  formulas for these aren't public, so this is *contract-conformant, not bit-identical*. (Recorded
+  on iOS/tvOS simulators, Apple's hexagonal `mapSize` doesn't describe a box around the cells at
+  all — a 1 × 1 map can report a negative width or height.) For `Grid`, `mapSize` matches Apple:
+  `numberOfColumns` × `numberOfRows` tiles, not including the node's scale.
+- **`SKTileMapNode.color`/`colorBlendFactor` are stored but not drawn**, as on Apple: pixel probes on
+  iOS/tvOS simulators show Apple's tile maps ignore them at any blend factor. `blendMode` is drawn.
+  The defaults are Apple's: white, `0`, `SKBlendMode.Alpha`.
+- **`enableAutomapping` defaults to `true`**, as on Apple. `fill(with)` (and the `fillWith`
+  constructor parameter, Apple's `init(tileSet:columns:rows:tileSize:fillWith:)`) never automaps:
+  every cell gets a definition of the group's first rule, whatever `enableAutomapping` says
+  (verified on iOS/tvOS simulators).
+- **`SKTileGroup.empty()` is a new rule-less group each call**, and placing it (or any group with no
+  rules) clears the cells, so `tileGroup` reads back `null` there — as on Apple.
+- **`SKTileDefinition.placementWeight`** (default `1`) chooses among a rule's definitions in
+  proportion to the weights, for `setTileGroup`, automapping and `fill` alike; a weight of `0` is
+  never placed while another is positive, and when every weight is `0` each definition is equally
+  likely — Apple's behavior, recorded on iOS/tvOS simulators.
 - **`SKTileDefinition.textures` may be empty**, unlike Apple (which always requires at least one)
   — an empty-textures definition renders flat-colored, this port's usual "no texture" convention
   (matching untextured `SKSpriteNode`/`SKEmitterNode` particles). Chosen deliberately so

@@ -29,7 +29,8 @@ public object SKTileAdjacencyMask {
 
 /**
  * One candidate appearance for a tile within an [SKTileGroup]: [tileDefinitions] (one is picked at
- * random when more than one, for visual variety among tiles satisfying the same adjacency) apply
+ * random by [SKTileDefinition.placementWeight] when more than one, for visual variety among tiles
+ * satisfying the same adjacency) apply
  * when a placed tile's actual neighbor configuration best matches [adjacency] (an
  * [SKTileAdjacencyMask] combination) — mirrors Apple's `SKTileGroupRule`.
  */

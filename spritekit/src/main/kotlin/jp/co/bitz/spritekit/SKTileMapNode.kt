@@ -1,5 +1,6 @@
 package jp.co.bitz.spritekit
 
+import android.graphics.Color
 import kotlin.math.floor
 import kotlin.time.Duration
 
@@ -109,6 +110,7 @@ public class SKTileMapNode(
     public val numberOfRows: Int,
     /** Each cell's footprint, in this node's own local space. Defaults to [SKTileSet.defaultTileSize]. */
     public val tileSize: Vector2 = tileSet.defaultTileSize,
+    /** A group to [fill] every cell with, as Apple's `init(tileSet:columns:rows:tileSize:fillWith:)` does. */
     fillWith: SKTileGroup? = null,
 ) : SKNode() {
     init {
@@ -123,14 +125,28 @@ public class SKTileMapNode(
     public var anchorPoint: Vector2 = Vector2(0.5f, 0.5f)
 
     /**
-     * When `true`, [setTileGroup] (the 3-argument overload) picks each placed tile's
-     * [SKTileDefinition] by matching its actual neighbor configuration against its group's
-     * [SKTileGroupRule]s, and re-evaluates already-tiled neighbors too — Apple's auto-tiling.
-     * When `false` (the default), a placed tile always uses its group's first rule. See
-     * `docs/API_COMPATIBILITY.md` for how ties/imperfect matches are resolved — this is
-     * *contract-conformant, not bit-identical* with Apple's own (undocumented) matching algorithm.
+     * When `true` (the default, as on Apple), [setTileGroup] (the 3-argument overload) picks each
+     * placed tile's [SKTileDefinition] by matching its actual neighbor configuration against its
+     * group's [SKTileGroupRule]s, and re-evaluates already-tiled neighbors too — Apple's
+     * auto-tiling. When `false`, a placed tile always uses its group's first rule. [fill] never
+     * automaps. See `docs/API_COMPATIBILITY.md` for how ties/imperfect matches are resolved — this
+     * is *contract-conformant, not bit-identical* with Apple's own (undocumented) matching
+     * algorithm.
      */
-    public var enableAutomapping: Boolean = false
+    public var enableAutomapping: Boolean = true
+
+    /**
+     * A color for the tiles — Apple's `color`, default white. Stored only: Apple doesn't draw a
+     * tile map's [color] at any [colorBlendFactor] (verified by pixel probes on iOS/tvOS
+     * simulators), so this port doesn't either.
+     */
+    public var color: Int = Color.WHITE
+
+    /** How much [color] would tint the tiles — Apple's `colorBlendFactor`, default `0`; stored only, see [color]. */
+    public var colorBlendFactor: Float = 0f
+
+    /** How the tiles' pixels combine with what's already drawn. Defaults to [SKBlendMode.Alpha]. */
+    public var blendMode: SKBlendMode = SKBlendMode.Alpha
 
     private val groups: Array<SKTileGroup?> = arrayOfNulls(numberOfColumns * numberOfRows)
     private val definitions: Array<SKTileDefinition?> = arrayOfNulls(numberOfColumns * numberOfRows)
@@ -146,15 +162,28 @@ public class SKTileMapNode(
         if (target !is SKTileMapNode) return
         target.anchorPoint = anchorPoint
         target.enableAutomapping = enableAutomapping
+        target.color = color
+        target.colorBlendFactor = colorBlendFactor
+        target.blendMode = blendMode
         groups.copyInto(target.groups)
         definitions.copyInto(target.definitions)
     }
 
     init {
-        if (fillWith != null) {
-            for (row in 0 until numberOfRows) {
-                for (column in 0 until numberOfColumns) setTileGroup(fillWith, column, row)
-            }
+        if (fillWith != null) fill(fillWith)
+    }
+
+    /**
+     * Places [with] in every cell (`null`, or a group with no rules, clears them all) — Apple's
+     * `fill(with:)`. Unlike [setTileGroup], it never automaps, whatever [enableAutomapping] says:
+     * each cell gets a definition of [with]'s first rule, chosen by
+     * [SKTileDefinition.placementWeight] (verified on iOS/tvOS simulators).
+     */
+    public fun fill(with: SKTileGroup?) {
+        val group = with?.takeIf { it.rules.isNotEmpty() }
+        for (i in groups.indices) {
+            groups[i] = group
+            definitions[i] = group?.let { pickWeighted(it.rules.first().tileDefinitions) }
         }
     }
 
@@ -181,10 +210,11 @@ public class SKTileMapNode(
     ): SKTileDefinition? = if (inBounds(column, row)) definitions[index(column, row)] else null
 
     /**
-     * Places [tileGroup] at ([column], [row]) (`null` clears it), choosing a [SKTileDefinition]
-     * per [enableAutomapping]'s rule-matching behavior. A no-op if ([column], [row]) is out of
-     * bounds. See [setTileGroup] (4-argument overload) to set an exact definition directly,
-     * bypassing rule matching entirely.
+     * Places [tileGroup] at ([column], [row]) (`null`, or a group with no rules, clears it),
+     * choosing a [SKTileDefinition] per [enableAutomapping]'s rule-matching behavior and, among
+     * the chosen rule's definitions, by [SKTileDefinition.placementWeight]. A no-op if
+     * ([column], [row]) is out of bounds. See [setTileGroup] (4-argument overload) to set an exact
+     * definition directly, bypassing rule matching entirely.
      */
     public fun setTileGroup(
         tileGroup: SKTileGroup?,
@@ -192,11 +222,12 @@ public class SKTileMapNode(
         row: Int,
     ) {
         if (!inBounds(column, row)) return
-        groups[index(column, row)] = tileGroup
-        if (tileGroup == null) {
+        val group = tileGroup?.takeIf { it.rules.isNotEmpty() }
+        groups[index(column, row)] = group
+        if (group == null) {
             definitions[index(column, row)] = null
         } else if (!enableAutomapping) {
-            definitions[index(column, row)] = tileGroup.rules.first().tileDefinitions.random()
+            definitions[index(column, row)] = pickWeighted(group.rules.first().tileDefinitions)
         }
         if (enableAutomapping) remapCellAndNeighbors(column, row)
     }
@@ -218,12 +249,15 @@ public class SKTileMapNode(
     }
 
     /**
-     * This map's full layout size, in this node's own local space. For the hexagonal types this
-     * is the tightest box containing every cell, which — because alternating rows/columns
-     * overlap by [HEX_LINE_SPACING_FACTOR] of a tile and are offset by half a tile from their
-     * neighbors — is *not* simply `numberOfColumns * numberOfRows` tiles' worth of space.
+     * This map's full layout size, in this node's own local space (so not including its scale) —
+     * Apple's `mapSize`. For [SKTileSetType.Grid] that's [numberOfColumns] × [numberOfRows]
+     * tiles, as on Apple. For the hexagonal types it's the tightest box containing every cell of
+     * this port's own hexagonal layout, which — because alternating rows/columns overlap by
+     * [HEX_LINE_SPACING_FACTOR] of a tile and are offset by half a tile from their neighbors — is
+     * *not* simply `numberOfColumns * numberOfRows` tiles' worth of space; Apple's layout and
+     * sizes differ (see `docs/API_COMPATIBILITY.md`).
      */
-    private val mapSize: Vector2
+    public val mapSize: Vector2
         get() =
             when (tileSet.type) {
                 SKTileSetType.Grid -> Vector2(numberOfColumns * tileSize.x, numberOfRows * tileSize.y)
@@ -377,7 +411,7 @@ public class SKTileMapNode(
     ) {
         val group = tileGroup(column, row) ?: return
         val rule = bestRule(group, neighborMask(column, row, group))
-        definitions[index(column, row)] = rule.tileDefinitions.random()
+        definitions[index(column, row)] = pickWeighted(rule.tileDefinitions)
     }
 
     /**

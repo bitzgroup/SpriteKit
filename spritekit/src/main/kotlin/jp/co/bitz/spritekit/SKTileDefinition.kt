@@ -1,5 +1,6 @@
 package jp.co.bitz.spritekit
 
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -24,6 +25,14 @@ public class SKTileDefinition(
 
     /** An identifying name, purely for the caller's own bookkeeping — not used by lookup/rule matching. */
     public var name: String? = null
+
+    /**
+     * How likely this definition is to be placed, relative to the other definitions of the same
+     * [SKTileGroupRule] — Apple's `placementWeight`, default `1`. A weight of `0` is never placed
+     * while another definition of the rule has a positive weight; when every weight is `0`, each
+     * is equally likely (verified on iOS/tvOS simulators).
+     */
+    public var placementWeight: Int = 1
 
     /** Arbitrary user data, `null` until the caller sets it — this library's `NSMutableDictionary` stand-in. */
     public var userData: MutableMap<String, Any?>? = null
@@ -51,4 +60,22 @@ internal fun frameIndexAt(
 ): Int {
     if (frameCount <= 1 || timePerFrame <= Duration.ZERO) return 0
     return (elapsed / timePerFrame).toInt().mod(frameCount)
+}
+
+/**
+ * One of [definitions], chosen at random in proportion to each one's
+ * [SKTileDefinition.placementWeight] (negative weights count as `0`), or evenly when no weight is
+ * positive; `null` if [definitions] is empty.
+ */
+internal fun pickWeighted(
+    definitions: List<SKTileDefinition>,
+    random: Random = Random.Default,
+): SKTileDefinition? {
+    val total = definitions.sumOf { it.placementWeight.coerceAtLeast(0).toLong() }
+    if (total <= 0L) return definitions.randomOrNull(random)
+    var remaining = random.nextLong(total)
+    return definitions.firstOrNull { definition ->
+        remaining -= definition.placementWeight.coerceAtLeast(0)
+        remaining < 0L
+    }
 }

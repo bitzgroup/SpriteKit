@@ -405,6 +405,26 @@ class SKRenderCommandListTest {
     }
 
     @Test
+    fun `a tile map draws with its blend mode and ignores its color`() {
+        val scene = SKScene(size = Vector2(100f, 100f))
+        val group = SKTileGroup(SKTileDefinition(size = Vector2(10f, 10f)))
+        val tileMap =
+            SKTileMapNode(SKTileSet(listOf(group)), numberOfColumns = 1, numberOfRows = 1, tileSize = Vector2(10f, 10f))
+                .apply {
+                    fill(group)
+                    color = android.graphics.Color.RED
+                    colorBlendFactor = 1f
+                    blendMode = SKBlendMode.Add
+                }
+        scene.addChild(tileMap)
+
+        val command = buildRenderCommands(scene).single()
+
+        assertEquals(SKBlendMode.Add, command.blendMode)
+        assertEquals(SKVertexColor(1f, 1f, 1f, 1f), command.color)
+    }
+
+    @Test
     fun `a tile's quad is centered on centerOfTile, sized by its definition rather than the map's tileSize`() {
         val scene = SKScene(size = Vector2(100f, 100f))
         val group = SKTileGroup(SKTileDefinition(size = Vector2(4f, 4f)))
