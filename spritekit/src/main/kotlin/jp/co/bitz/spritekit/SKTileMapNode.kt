@@ -116,6 +116,8 @@ public class SKTileMapNode(
     init {
         require(numberOfColumns > 0) { "numberOfColumns must be positive" }
         require(numberOfRows > 0) { "numberOfRows must be positive" }
+        // Apple names every new tile map this (verified on iOS/tvOS simulators).
+        name = DEFAULT_NAME
     }
 
     /**
@@ -153,6 +155,11 @@ public class SKTileMapNode(
 
     /** This map's own animation clock, advanced by `stepTileMaps` -- see `SKTileMapSimulation.kt`. */
     internal var elapsedTime: Duration = Duration.ZERO
+
+    private companion object {
+        /** The [SKNode.name] a new tile map starts with, as on Apple. */
+        const val DEFAULT_NAME = "Default Tile Map"
+    }
 
     /** A copy with the same tiles — see [SKNode.copy]. */
     override fun copy(): SKTileMapNode = copyInto(SKTileMapNode(tileSet, numberOfColumns, numberOfRows, tileSize))

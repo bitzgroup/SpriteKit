@@ -724,6 +724,8 @@ categories recur throughout and are called out once here rather than per item:
   getting its own narrower mask type: a hexagonal tile group's rules simply never see 2 of the 8
   bits set (`UP`/`DOWN` for `HexagonalPointy`, `LEFT`/`RIGHT` for `HexagonalFlat`), since a hex
   cell only has 6 neighbors.
+- **A new `SKTileMapNode` is named `"Default Tile Map"`**, as Apple's is (verified on iOS/tvOS
+  simulators).
 - **`SKTileMapNode.numberOfColumns`/`numberOfRows` are fixed at construction** — Apple allows
   resizing a live map (preserving existing tiles); this port doesn't.
 - **Automapping's rule-matching algorithm is *contract-conformant, not bit-identical*** with
