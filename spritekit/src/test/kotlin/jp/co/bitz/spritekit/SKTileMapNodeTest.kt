@@ -10,6 +10,16 @@ class SKTileMapNodeTest {
     private fun tileSet(group: SKTileGroup): SKTileSet = SKTileSet(listOf(group))
 
     @Test
+    fun `a new map is named Default Tile Map, as on Apple`() {
+        val group = SKTileGroup(SKTileDefinition())
+        val map = SKTileMapNode(tileSet(group), numberOfColumns = 1, numberOfRows = 1, tileSize = Vector2(10f, 10f))
+
+        assertEquals("Default Tile Map", map.name)
+        map.name = null
+        assertNull(map.copy().name)
+    }
+
+    @Test
     fun `a new map is empty everywhere`() {
         val group = SKTileGroup(SKTileDefinition())
         val map = SKTileMapNode(tileSet(group), numberOfColumns = 2, numberOfRows = 2, tileSize = Vector2(10f, 10f))

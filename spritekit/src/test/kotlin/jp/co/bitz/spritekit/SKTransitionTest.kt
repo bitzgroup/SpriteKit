@@ -35,7 +35,19 @@ class SKTransitionTest {
         assertEquals(duration, SKTransition.crossFade(duration).duration)
         assertEquals(duration, SKTransition.moveIn(SKTransitionDirection.Right, duration).duration)
         assertEquals(duration, SKTransition.doorway(duration).duration)
+        assertEquals(duration, SKTransition.doorsOpenHorizontal(duration).duration)
+        assertEquals(duration, SKTransition.doorsOpenVertical(duration).duration)
+        assertEquals(duration, SKTransition.doorsCloseHorizontal(duration).duration)
+        assertEquals(duration, SKTransition.doorsCloseVertical(duration).duration)
         assertEquals(duration, SKTransition.flipHorizontal(duration).duration)
         assertEquals(duration, SKTransition.flipVertical(duration).duration)
+    }
+
+    @Test
+    fun `both scenes are paused during a transition by default, as on Apple`() {
+        val transition = SKTransition.doorsOpenHorizontal(1.seconds)
+
+        assertEquals(true, transition.pausesIncomingScene)
+        assertEquals(true, transition.pausesOutgoingScene)
     }
 }

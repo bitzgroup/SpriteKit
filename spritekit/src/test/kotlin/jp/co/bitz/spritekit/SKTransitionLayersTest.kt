@@ -141,6 +141,67 @@ class SKTransitionLayersTest {
     }
 
     @Test
+    fun `doorsOpenHorizontal panels ease out to half the view each, over a stationary incoming scene`() {
+        val transition = SKTransition.doorsOpenHorizontal(1.seconds)
+
+        // Apple's recorded easing, 3t² - 2t³: 0.216 at t = 0.3.
+        val layers = transitionLayers(transition, 0.3f, 200, 100)
+
+        assertEquals(3, layers.size)
+        assertEquals(true, layers[0].useToScene)
+        assertEquals(Vector2.Zero, layers[0].viewportOffset)
+        assertEquals(false, layers[1].useToScene)
+        assertEquals(SKTransitionSplit.Left, layers[1].split)
+        assertEquals(Vector2(-100f * 0.216f, 0f), layers[1].viewportOffset)
+        assertEquals(SKTransitionSplit.Right, layers[2].split)
+        assertEquals(Vector2(100f * 0.216f, 0f), layers[2].viewportOffset)
+        assertEquals(Vector2(-50f, 0f), transitionLayers(transition, 0.5f, 200, 100)[1].viewportOffset)
+        assertEquals(Vector2(100f, 0f), transitionLayers(transition, 1f, 200, 100)[2].viewportOffset)
+    }
+
+    @Test
+    fun `doorsOpenVertical splits across the middle and opens up and down`() {
+        val layers = transitionLayers(SKTransition.doorsOpenVertical(1.seconds), 0.5f, 200, 100)
+
+        assertEquals(SKTransitionSplit.Bottom, layers[1].split)
+        assertEquals(Vector2(0f, -25f), layers[1].viewportOffset)
+        assertEquals(SKTransitionSplit.Top, layers[2].split)
+        assertEquals(Vector2(0f, 25f), layers[2].viewportOffset)
+    }
+
+    @Test
+    fun `closing doors slide the incoming scene's halves in over the outgoing scene`() {
+        val horizontal = transitionLayers(SKTransition.doorsCloseHorizontal(1.seconds), 0.3f, 200, 100)
+
+        assertEquals(false, horizontal[0].useToScene)
+        assertTrue(horizontal.drop(1).all { it.useToScene && !it.clearFirst })
+        assertEquals(Vector2(-100f * 0.784f, 0f), horizontal[1].viewportOffset)
+        assertEquals(Vector2(100f * 0.784f, 0f), horizontal[2].viewportOffset)
+
+        val vertical = transitionLayers(SKTransition.doorsCloseVertical(1.seconds), 1f, 200, 100)
+        assertEquals(Vector2.Zero, vertical[1].viewportOffset)
+        assertEquals(Vector2.Zero, vertical[2].viewportOffset)
+    }
+
+    @Test
+    fun `doorway brings the incoming scene forward from 0_42 of its size over black`() {
+        val transition = SKTransition.doorway(1.seconds)
+
+        val start = transitionLayers(transition, 0f, 200, 100)[0]
+        assertEquals(true, start.useToScene)
+        assertEquals(android.graphics.Color.BLACK, start.clearColor)
+        assertEquals(Vector2(84f, 42f), start.viewportSize!!, absoluteTolerance = 1e-3f)
+        assertEquals(Vector2(58f, 29f), start.viewportOffset, absoluteTolerance = 1e-3f)
+
+        // Recorded on tvOS: about 0.59 of the full size halfway through.
+        val middle = transitionLayers(transition, 0.5f, 200, 100)[0]
+        assertEquals(0.592f, middle.viewportSize!!.x / 200f, absoluteTolerance = 0.01f)
+
+        val end = transitionLayers(transition, 1f, 200, 100)[0]
+        assertEquals(Vector2(200f, 100f), end.viewportSize!!)
+    }
+
+    @Test
     fun `flipHorizontal squashes the outgoing scene to nothing, then grows the incoming scene back out`() {
         val transition = SKTransition.flipHorizontal(1.seconds)
 
