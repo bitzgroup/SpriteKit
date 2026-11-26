@@ -39,8 +39,7 @@ public class SKPhysicsBody internal constructor(
      * This body's moment of inertia about its center of mass, in kg·m² with lengths in meters of
      * 150 points (as Apple measures it), derived from [density] like [mass]. Not part of Apple's
      * API, which keeps it internal; [applyTorque] and [applyAngularImpulse] change
-     * [angularVelocity] by the torque or impulse divided by it. Before 0.5.0 it was measured about
-     * the node's origin.
+     * [angularVelocity] by the torque or impulse divided by it.
      */
     public val inertia: Float get() = massProperties.inertia
 
@@ -177,7 +176,7 @@ public class SKPhysicsBody internal constructor(
 
     /**
      * Requests swept (tunneling-resistant) collision detection for this body. Accepted for API
-     * parity but not yet implemented — see `docs/API_COMPATIBILITY.md`. Defaults to `false`.
+     * parity with no effect — see `docs/API_COMPATIBILITY.md`. Defaults to `false`.
      */
     public var usesPreciseCollisionDetection: Boolean = false
 

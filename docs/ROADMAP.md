@@ -183,8 +183,7 @@ built on. See `docs/ARCHITECTURE.md` for the full design.*
       `fadeAlphaTo`/`fadeAlphaBy`, `hide`/`unhide`, `colorize`, `wait`/`wait(withRange:)`, `run`
       (block), `removeFromParent`, `sequence`/`group`/`repeat`/`repeatForever`, `customAction`,
       `animate` (texture list), `reversed()`, `speed`, `timingMode`/`timingFunction`.
-      `run(_:onChildWithName:)` was deferred here and added later (direct children only — see
-      `docs/API_COMPATIBILITY.md`)
+      `run(_:onChildWithName:)` was deferred here and added later (see `docs/API_COMPATIBILITY.md`)
 - [x] `SKAction.follow(_:asOffset:orientToPath:duration:)` / `follow(_:asOffset:orientToPath:speed:)`
       — path-following, added after a host app needed arc motion along a quadratic curve and found
       it missing. Follows only a path's first contour, via

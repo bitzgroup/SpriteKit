@@ -216,12 +216,13 @@ ordinary SpriteKit port will reach for next.
 
 ## 5. Suggested changes to recorded scope decisions
 
-- `SKAction.run(_:onChildWithName:)` is implemented but still listed under ROADMAP's "Explicitly
-  Out of Scope"; remove it from that list.
+- ~~`SKAction.run(_:onChildWithName:)` is implemented but still listed under ROADMAP's "Explicitly
+  Out of Scope"; remove it from that list.~~ Done.
 - ~~`SKNode.copy()`: revisit the blanket "no `NSCopying`" rule for nodes specifically (N4).~~ Done:
   nodes have `copy()`; the general rule stays.
-- Add `SKTransformNode`, `SK3DNode`, `SKRenderer`, `SKMutableTexture`, `SKReachConstraints` to
-  `API_COMPATIBILITY.md`'s "Not implemented" list so that their absence is at least recorded.
+- ~~Add `SKTransformNode`, `SK3DNode`, `SKRenderer`, `SKMutableTexture`, `SKReachConstraints` to
+  `API_COMPATIBILITY.md`'s "Not implemented" list so that their absence is at least recorded.~~
+  Done.
 
 ## 6. Keeping this from recurring
 
