@@ -59,20 +59,17 @@ internal fun fillBoundsOf(
 /**
  * [node]'s triangulated geometry for [path], reusing [SKShapeNode.triangulationCache] when it was
  * computed from this exact [path] instance (mutating a `Path` in place and reusing it is not
- * supported — assign a new `Path` instead, matching this library's own usage throughout the
- * `scenes` layer of consumer apps) and the same stroke style ([SKShapeNode.lineWidth],
+ * supported — assign a new `Path` instead) and the same stroke style ([SKShapeNode.lineWidth],
  * [SKShapeNode.lineCap], [SKShapeNode.lineJoin], [SKShapeNode.miterLimit], and — when
  * [SKShapeNode.isAntialiased] — [pixelSize], one screen pixel in local units; a caller that only
  * needs the contours passes `null` to keep whatever the cache was built with), and recomputing
  * (flatten, then ear-clip fill / ribbon stroke) otherwise.
  *
- * This is the fix for the hot path [SKRenderCommandList.kt]'s `addShapeCommands` used to run
- * unconditionally on every single frame: [triangulateFill]'s ear-clipping is worst-case cubic in
- * the contour's point count, and a circle flattened at [flattenPath]'s default step produces on
- * the order of a hundred points for a typical on-screen radius — cheap once, ruinous at 60fps
- * across a few dozen static shapes (as a board-game scene with many circular pieces discovered).
- * [SKLabelNode] already cached its own (comparably expensive) glyph rendering the same way; this
- * brings [SKShapeNode] in line with that precedent.
+ * [SKRenderCommandList.kt]'s `addShapeCommands` calls this for every shape on every frame, so the
+ * cache matters: [triangulateFill]'s ear-clipping is worst-case cubic in the contour's point
+ * count, and a circle flattened at [flattenPath]'s default step produces on the order of a hundred
+ * points for a typical on-screen radius — cheap once, ruinous at 60fps across a few dozen static
+ * shapes. [SKLabelNode] caches its own (comparably expensive) glyph rendering the same way.
  */
 internal fun triangulatedShape(
     node: SKShapeNode,

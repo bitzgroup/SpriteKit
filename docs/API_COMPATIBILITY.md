@@ -126,7 +126,7 @@ categories recur throughout and are called out once here rather than per item:
   `SKView` keeps `SKScene.size` equal to its own size in dp — this library's stand-in for Apple's
   points, so one scene point covers about the same physical size on both platforms — and calls
   `didChangeSize(_:)` whenever it changes. As on Apple, the resize happens *after* `didMove(view)`,
-  so `size` may still be the scene's initial size inside `didMove`. (Previously `.resizeFill` was
+  so `size` may still be the scene's initial size inside `didMove`. (Before 0.3.0, `.resizeFill` was
   rendered exactly like `.fill` — the declared size stretched to the view — and the scene was never
   resized.)
 - **`didMove(view)`/`willMove(view)` instead of `didMove(to:)`/`willMove(from:)`** — Kotlin can't
@@ -359,7 +359,7 @@ categories recur throughout and are called out once here rather than per item:
   resolves via `Typeface.create`; Apple's monospaced families (`Menlo`, `Courier`, ...) map to
   `monospace`, and other Apple families Android doesn't ship fall back to the default sans-serif
   (Android's closest match for Helvetica). Android family names (`"sans-serif-medium"`) also work.
-  Exact weights need API 28; below that, weights of 600 and up render bold. (Previously the whole
+  Exact weights need API 28; below that, weights of 600 and up render bold. (Before 0.3.0 the whole
   name went to `Typeface.create(name, NORMAL)`, so `"Helvetica-Bold"` silently rendered regular.)
 - **`SKLabelNode.attributedText` is a `CharSequence`, styled with Android spans** instead of an
   `NSAttributedString` and its attributes: `ForegroundColorSpan` for `.foregroundColor`,
@@ -547,6 +547,9 @@ categories recur throughout and are called out once here rather than per item:
   first, Apple's density and mass come out NaN (the port uses the edge's density); with a compound
   first, Apple's density comes out 22,500 times too large (the port uses that compound's density).
 - **`bodies(fromTexture:...)`** (texture-alpha-mask bodies) is not implemented.
+- **`usesPreciseCollisionDetection` is accepted with no effect**: there is no swept collision
+  detection, so a body fast enough to cross another within one 1/120-second step can pass
+  through it.
 - **Collisions turn bodies** (since 0.5.0, verified on iOS/tvOS simulators): polygons, and a
   polygon against an edge, touch at up to two points clipped as Box2D clips them, and the
   sequential-impulse solver pushes at each point — restitution along the normal, Coulomb friction
@@ -750,7 +753,7 @@ categories recur throughout and are called out once here rather than per item:
   just its bounds.
 - **The scene receives every touch no descendant takes, anywhere in its view** — it isn't
   bounds-tested, matching Apple, where the scene is the last responder for its whole `SKView`.
-  (It used to be bounds-tested like any other node, so touches on the parts of the view showing
+  (Before 0.3.0 it was bounds-tested like any other node, so touches on the parts of the view showing
   content outside the scene's `(0, 0)..size` rect — routine once an `SKCameraNode` pans or the
   content is centered on the origin — were silently dropped, and a scene-level tap handler simply
   never fired there.)
@@ -864,3 +867,9 @@ categories recur throughout and are called out once here rather than per item:
 - **`SKLightNode`** / normal-map lighting and shadows — deferred with the rest of the shader system.
 - **`SKReferenceNode`** file-based scene loading — no equivalent to Apple's `.sks` scene archive
   serialization format.
+- **`SKTransformNode`** — 3D rotation of a 2D subtree (`xRotation`/`yRotation`, quaternions).
+- **`SK3DNode`** — SceneKit content inside a scene; there is no SceneKit on Android.
+- **`SKRenderer`** — rendering a scene into a caller-supplied Metal command buffer; this library
+  draws only through `SKView`.
+- **`SKMutableTexture`** — textures whose pixels are rewritten in place.
+- **`SKReachConstraints`** / `SKAction.reach(to:…)` — inverse kinematics.
