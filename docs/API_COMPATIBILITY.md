@@ -739,11 +739,22 @@ categories recur throughout and are called out once here rather than per item:
   simulators).
 - **`SKTileMapNode.numberOfColumns`/`numberOfRows` are fixed at construction** — Apple allows
   resizing a live map (preserving existing tiles); this port doesn't.
-- **Automapping's rule-matching algorithm is *contract-conformant, not bit-identical*** with
-  Apple's own (undocumented) version: it scores each candidate `SKTileGroupRule` by how many
-  adjacency bits it shares with the tile's actual same-group neighbor configuration (8 neighbors
-  for `Grid`, 6 for the hexagonal types — an exact match always wins outright; otherwise the
-  closest by Hamming distance), rather than Apple's unpublished matching/tie-breaking behavior.
+- **Automapping picks rules differently from Apple's.** This port scores each candidate
+  `SKTileGroupRule` by how many adjacency bits it shares with the tile's actual same-group neighbor
+  configuration (8 neighbors for `Grid`, 6 for the hexagonal types). An exact match always wins,
+  and otherwise the closest by Hamming distance. Apple's automapping works more like a paint brush
+  (verified on iOS/tvOS simulators, recorded in the tic-tac-toe sample's `SpriteKitParity`
+  probes):
+  - With a rule for every mask, a tile takes the rule for its four edge neighbors. Diagonal
+    neighbors never count.
+  - With an Xcode adjacency group's 13 rules (center, eight edges, four inner corners), placing one
+    tile also paints its eight neighbors with the edge rules around it.
+  - Placing the group on a cell that already holds it changes nothing, so a block placed tile by
+    tile comes out uneven.
+  - A tile no rule fits keeps its group but gets no definition.
+
+  Apple doesn't document this matching, and its results depend on the order tiles are placed in,
+  so this port keeps its own matching.
   For the hexagonal types, which of the 8 `SKTileAdjacencyMask` bits corresponds to which actual
   neighbor cell depends on the tile's own row (`HexagonalPointy`) or column (`HexagonalFlat`)
   parity, since adjacent rows/columns are offset from each other by half a tile.

@@ -131,9 +131,8 @@ public class SKTileMapNode(
      * placed tile's [SKTileDefinition] by matching its actual neighbor configuration against its
      * group's [SKTileGroupRule]s, and re-evaluates already-tiled neighbors too — Apple's
      * auto-tiling. When `false`, a placed tile always uses its group's first rule. [fill] never
-     * automaps. See `docs/API_COMPATIBILITY.md` for how ties/imperfect matches are resolved — this
-     * is *contract-conformant, not bit-identical* with Apple's own (undocumented) matching
-     * algorithm.
+     * automaps. The rule is the one whose mask is closest to the tile's neighbors, which isn't how
+     * Apple's automapping chooses; see `docs/API_COMPATIBILITY.md`.
      */
     public var enableAutomapping: Boolean = true
 
