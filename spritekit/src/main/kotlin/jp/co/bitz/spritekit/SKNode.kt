@@ -95,6 +95,7 @@ public open class SKNode {
             }
             value?.node?.physicsBody = null // a body belongs to one node at a time
             value?.node = this
+            value?.attachedScale = Vector2(xScale, yScale)
             field = value
         }
 

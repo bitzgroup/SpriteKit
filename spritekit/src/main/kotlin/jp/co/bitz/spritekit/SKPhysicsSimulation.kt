@@ -109,31 +109,6 @@ private fun collectPhysicsBodies(
     return out
 }
 
-/**
- * [shape], transformed from [node]'s local space into [scene]'s space. A circle's world radius is
- * approximated from where its local +x edge lands after the transform -- exact under uniform
- * scale/rotation, an approximation (treating an ellipse as a circle) under non-uniform scale.
- */
-internal fun worldShape(
-    node: SKNode,
-    scene: SKScene,
-    shape: SKPhysicsShape,
-): SKWorldShape =
-    when (shape) {
-        is SKPhysicsShape.Circle -> {
-            val center = node.convertTo(shape.center, scene)
-            val edge = node.convertTo(shape.center + Vector2(shape.radius, 0f), scene)
-            SKWorldShape.Circle(center, (edge - center).length())
-        }
-        is SKPhysicsShape.Polygon -> SKWorldShape.Polygon(shape.vertices.map { node.convertTo(it, scene) })
-        is SKPhysicsShape.EdgeChain ->
-            SKWorldShape.EdgeChain(
-                shape.vertices.map { node.convertTo(it, scene) },
-                shape.closed,
-            )
-        is SKPhysicsShape.Compound -> SKWorldShape.Compound(shape.parts.map { worldShape(node, scene, it) })
-    }
-
 private fun dampingFactor(
     damping: Float,
     dt: Float,
@@ -185,7 +160,7 @@ private fun integrateVelocity(
     if (body.allowsRotation) node.zRotation += body.angularVelocity * dt
     val center = body.centerOfMass
     if (!body.pinned && center != Vector2.Zero && node.zRotation != oldRotation) {
-        val scaled = Vector2(center.x * node.xScale, center.y * node.yScale)
+        val scaled = unscaled(Vector2(center.x * node.xScale, center.y * node.yScale), body.attachedScale)
         node.position += scaled.rotated(oldRotation) - scaled.rotated(node.zRotation)
     }
 }
