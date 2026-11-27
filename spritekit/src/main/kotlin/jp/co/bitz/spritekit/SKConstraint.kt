@@ -17,7 +17,8 @@ public class SKConstraint internal constructor(
      * The node whose coordinate system this constraint's ranges are measured in, or `null` (the
      * default) for the constrained node's parent's. Position and distance ranges are measured in
      * this node's coordinates; a [zRotation] range is measured relative to this node's rotation.
-     * [orient]'s facing and offset don't depend on it.
+     * [orient]'s facing and offset don't depend on it. Apple's rotation results with a reference
+     * node don't always follow this; see `docs/API_COMPATIBILITY.md`.
      */
     public var referenceNode: SKNode? = null
 
