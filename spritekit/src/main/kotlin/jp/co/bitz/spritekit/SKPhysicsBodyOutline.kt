@@ -25,7 +25,8 @@ private const val CIRCLE_OUTLINE_VERTICES = 8
  *   (which is several convex parts). It is also `null` for a node with no physics body, or one
  *   that isn't in a scene. Apple's framework crashes for a node outside a scene.
  *
- * Vertices go through the node's current transform and its ancestors', up to the scene. Apple's
+ * Vertices go through the node's current transform and its ancestors', up to the scene, with the
+ * node's own scale counted only from when the body was attached, as for collisions. Apple's
  * framework uses the transform its physics engine last synced from the node, so it lags behind a
  * node moved, rotated or scaled after its body joined the scene, until the next frame.
  *

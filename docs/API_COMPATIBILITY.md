@@ -558,10 +558,13 @@ categories recur throughout and are called out once here rather than per item:
   itself is this library's own, so the motion matches Apple's closely but not exactly.
 - **Broad phase is O(n²)** (every body pair's AABBs are tested each step) — not scoped to scale to
   very large body counts; a spatial partition (grid/quadtree) is a possible future optimization.
-- **A body's world-space shape ignores non-uniform scale for circles**: the world radius is
-  measured from where the local shape's +x edge lands after the node's transform, which is exact
-  under uniform scale/rotation but treats a non-uniformly-scaled circle as a (slightly wrong-sized)
-  circle rather than the ellipse it should become.
+- **Bodies under scale match Apple's** (since 0.5.0; verified on iOS/tvOS simulators, for
+  collisions, contacts, queries and `physicsBodyOutline`). A node's own scale counts only
+  relative to its scale when the body was attached: a body put on a node already at scale 2
+  keeps its given size, and scaling that node back to 1 halves it. This holds for a copied node
+  and for a body moved to another node, each measured from the node it's attached to then. Its
+  ancestors' scale always counts in full. A rectangle or polygon stretches along each axis; a
+  circle stays a circle of radius `r·√((sx² + sy²)/2)` under a non-uniform scale `sx`, `sy`.
 - **`SKPhysicsWorld` queries** follow Apple's observed behavior (verified on iOS/tvOS
   simulators): `body(at:)` tests exact shapes and never finds an edge body; `body(in:)` (renamed
   `body(rect)`, since `in` is a Kotlin keyword) tests bounding boxes widened by 15 points (Box2D's
@@ -636,7 +639,8 @@ categories recur throughout and are called out once here rather than per item:
   vertices counterclockwise from the first one given, a circle as an octagon at scene-space angles,
   an edge chain as given (a loop repeats its first vertex), a one-part `bodies` as that part, and
   `null` for a single edge, several parts or a concave polygon (recorded on iOS/tvOS simulators).
-  It uses the node's current transform, while Apple's obstacles use the one its physics engine
+  It uses the node's current transform (with its own scale counted as for collisions, see above),
+  while Apple's obstacles use the one its physics engine
   last synced, which lags behind a node moved after its body joined the scene until the next
   frame. Recording it also showed that a clockwise polygon outline keeps its first vertex when
   reversed, which this port now does too.

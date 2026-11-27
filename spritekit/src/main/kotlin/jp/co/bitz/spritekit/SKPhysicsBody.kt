@@ -135,6 +135,13 @@ public class SKPhysicsBody internal constructor(
             }
         }
 
+    /**
+     * The owning node's own `xScale`/`yScale` when this body was attached to it. Like Apple's, a
+     * body follows only the changes to that scale since then (its ancestors' scale applies in
+     * full), so a body attached to a node already at scale `2` keeps its given size.
+     */
+    internal var attachedScale: Vector2 = Vector2(1f, 1f)
+
     /** The bodies [allContactedBodies] reports, refreshed every simulation step. */
     internal var contactedBodies: List<SKPhysicsBody> = emptyList()
 
